@@ -460,20 +460,63 @@ function handPose(world,blend){
 function releaseHand(){for(const m of reachMeshes)m.setEnabled(false);bodyParts[4].setEnabled(true);}
 // Pose the actual 3D limbs around hip and shoulder pivots, driven by distance walked.
 const gait={phase:0,distance:0,moving:false,stride:0};
+const WALK_SPEED=5,RUN_SPEED=8.4;
+const sprint={held:false,speed:WALK_SPEED,active:false,wasRunning:false,brake:0,coast:false,dx:0,dz:0,lean:0,bursts:0};
+entity('run dust');
+const dustMaterial=mat('soft warm earth dust','#d9c39a');dustMaterial.alpha=.60;dustMaterial.disableLighting=true;dustMaterial.emissiveColor=Color3.FromHexString('#b29b72');
+const dustPool=Array.from({length:8},(_,i)=>{
+ const mesh=sphere('foot dust '+i,0,0,0,.1,.1,.1,dustMaterial,false);mesh.receiveShadows=false;mesh.setEnabled(false);
+ return {mesh,life:0,max:.5,dx:0,dz:0};
+});
+function emitBrakeDust(){
+ // Dust only on outdoor soil, not on interior boards or across the bridge.
+ const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
+ if(entry.inside||(Math.abs(p.x)<home.w*.385&&p.z>=f-3.725&&p.z<=f+.25)||onBridge(avatar.position.x,avatar.position.z))return;
+ sprint.bursts++;
+ for(let i=0;i<dustPool.length;i++){
+  const d=dustPool[i],side=(i%2?1:-1)*(.10+.045*(i%4)),back=.04+.065*Math.floor(i/2);
+  d.mesh.position.copyFromFloats(avatar.position.x-sprint.dx*back+sprint.dz*side,avatar.position.y+.085,avatar.position.z-sprint.dz*back-sprint.dx*side);
+  d.life=d.max=.40+.035*i;d.dx=-sprint.dx*(.42+.07*i)+sprint.dz*side;d.dz=-sprint.dz*(.42+.07*i)-sprint.dx*side;
+  d.mesh.scaling.copyFromFloats(.12,.075,.12);d.mesh.setEnabled(true);
+ }
+}
+function updateDust(dt){
+ for(const p of dustPool){if(p.life<=0)continue;p.life=Math.max(0,p.life-dt);if(p.life===0){p.mesh.setEnabled(false);continue;}
+  const age=1-p.life/p.max,size=(.13+.25*age)*Math.min(1,p.life/.16);
+  p.mesh.position.x+=p.dx*dt;p.mesh.position.z+=p.dz*dt;p.mesh.position.y+=dt*.21;
+  p.mesh.scaling.copyFromFloats(size,size*.62,size);
+ }
+}
+function resetSprint(){
+ sprint.speed=WALK_SPEED;sprint.active=false;sprint.wasRunning=false;sprint.brake=0;sprint.coast=false;sprint.lean=0;avatar.rotation.x=0;
+}
+
 const limbRest=bodyParts.map(m=>m.position.clone());
 function walkPose(distance,dt){
  gait.distance+=distance;gait.moving=distance>0.0001;gait.phase=(gait.phase+distance*2*Math.PI/1.45)%(Math.PI*2);
  const target=Math.min(1,distance/Math.max(.001,dt)/3.5);
  gait.stride+=(target-gait.stride)*(1-Math.exp(-dt*18));if(gait.stride<.003)gait.stride=0;
- const swing=Math.sin(gait.phase)*gait.stride;
+ const swing=Math.sin(gait.phase)*gait.stride,runStyle=entry.action?0:Math.max(0,Math.min(1,(sprint.speed-WALK_SPEED)/(RUN_SPEED-WALK_SPEED)));
  for(let i=1;i<5;i++){
-  const limb=bodyParts[i],rest=limbRest[i],isLeg=i<=2,pivot=isLeg?.29:.22,angle=swing*(isLeg?.53:.39)*(i===1||i===4?1:-1);
+  const limb=bodyParts[i],rest=limbRest[i],isLeg=i<=2,pivot=isLeg?.29:.22,angle=swing*(isLeg?.53+.24*runStyle:.39+.27*runStyle)*(i===1||i===4?1:-1);
   limb.rotation.x=angle;limb.position.y=rest.y+pivot*(1-Math.cos(angle));limb.position.z=rest.z-pivot*Math.sin(angle);
  }
  const bob=Math.abs(Math.sin(gait.phase))*gait.stride*.045;bodyParts[0].position.y=limbRest[0].y+bob;head.position.y=1.5+bob;hat.position.y=1.72+bob;hatTop.position.y=1.82+bob;
 }
 let joy={x:0,z:0},keys=new Set(),follow=false;
-let pointer=null,stickCenter=null;const pad=$('joy'),knob=$('knob');
+let pointer=null,stickCenter=null;const pad=$('joy'),knob=$('knob'),runButton=$('run-action');
+let runPointer=null;
+function setRunHeld(held){sprint.held=held;runButton.setAttribute('aria-pressed',String(held));}
+function releaseRun(){
+ const old=runPointer;runPointer=null;setRunHeld(false);
+ if(old!==null&&runButton.hasPointerCapture(old))try{runButton.releasePointerCapture(old);}catch{}
+}
+runButton.addEventListener('pointerdown',e=>{
+ if(runPointer!==null||e.button!==0||entry.action)return;
+ runPointer=e.pointerId;runButton.setPointerCapture(e.pointerId);setRunHeld(true);e.preventDefault();
+});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])runButton.addEventListener(name,e=>{if(e.pointerId===runPointer)releaseRun();});
+
 const motion={manualFrames:0,blockedFrames:0,steps:0,requested:0,travelled:0,peakDeltaMs:0};
 const DEADZONE=.10;
 function shapeStick(x,z){const len=Math.hypot(x,z);if(len<=DEADZONE)return {x:0,z:0};const strength=(Math.min(1,len)-DEADZONE)/(1-DEADZONE);return {x:x/len*strength,z:z/len*strength};}
@@ -481,10 +524,10 @@ function reset(){
  const old=pointer;pointer=null;stickCenter=null;joy.x=joy.z=0;knob.style.transform='';
  if(old!==null&&pad.hasPointerCapture(old))try{pad.releasePointerCapture(old);}catch{}
 }
-function cancelInput(){keys.clear();reset();}
+function cancelInput(){keys.clear();reset();releaseRun();resetSprint();}
 window.addEventListener('keydown',e=>{keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-window.addEventListener('blur',cancelInput);window.addEventListener('resize',reset);
+window.addEventListener('blur',cancelInput);window.addEventListener('resize',cancelInput);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelInput()});
 function move(e){
  if(e.pointerId!==pointer||!stickCenter)return;
@@ -517,6 +560,7 @@ function stance(side){
 function doorNearby(){const p=homeLocal(avatar.position.x,avatar.position.z);return Math.abs(p.x)<2.25&&Math.abs(p.z+home.d/2)<2.55;}
 function toggleDoor(){
  if(entry.action||!doorNearby())return false;
+ releaseRun();resetSprint();
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
  const side=p.z>f+.23?1:-1,target=entry.door>.5?0:1;
  setDoorPose(0);
@@ -666,17 +710,46 @@ function moveAvatar(dx,dz,dt,interacting=false){
 }
 // Preserve movement speed through moderately late frames without tunneling.
 // Door actions keep their own existing bounded animation clock.
-function advanceManual(x,z,dt){
+function advanceManual(x,z,dt,speed=WALK_SPEED){
  const duration=Math.max(0,Math.min(.12,dt)),len=Math.hypot(x,z);
  if(len<1e-8||duration===0){walkPose(0,Math.min(.05,duration));return 0;}
  const n=Math.ceil(duration/(1/60)),step=duration/n;
- let total=0;motion.manualFrames++;motion.requested+=len*5*duration;motion.steps+=n;
- for(let i=0;i<n;i++)total+=moveAvatar(x*step*5,z*step*5,step);
+ let total=0;motion.manualFrames++;motion.requested+=len*speed*duration;motion.steps+=n;
+ for(let i=0;i<n;i++)total+=moveAvatar(x*step*speed,z*step*speed,step);
  motion.travelled+=total;if(total<1e-4)motion.blockedFrames++;
  return total;
 }
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);if(!entry.action)advanceManual(dx,dz,rawDt);else walkPose(0,dt);updateEntry(dt);updateGarden();
- const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/30){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
+// The run modifier is independent of joystick input; coast is bounded and collision-tested.
+function updateLocomotion(x,z,rawDt,held=sprint.held||keys.has('shift')){
+ const dt=Math.max(0,Math.min(.12,rawDt)),len=Math.hypot(x,z),moving=len>1e-5;
+ if(entry.action||!gardenPanel.hidden){resetSprint();walkPose(0,Math.min(.05,dt));return 0;}
+ const running=held&&moving;
+ if(running){sprint.brake=0;sprint.coast=false;}
+ else if(sprint.wasRunning&&sprint.active&&sprint.speed>WALK_SPEED+.65){
+  sprint.brake=.24;sprint.coast=!moving;emitBrakeDust();
+ }
+ if(moving){sprint.dx=x/len;sprint.dz=z/len;sprint.coast=false;}
+ const target=running?RUN_SPEED:WALK_SPEED;
+ sprint.speed+=(target-sprint.speed)*(1-Math.exp(-dt*13));
+ if(Math.abs(sprint.speed-target)<.015)sprint.speed=target;
+ let travel=0;
+ if(moving)travel=advanceManual(x,z,dt,sprint.speed);
+ else if(sprint.coast&&sprint.brake>0){
+  const before=sprint.brake,used=Math.min(dt,before),after=before-used;
+  // integrate the linear deceleration exactly, with a max total coast of .30m
+  const coastSpeed=2.5*(before+after)/(.48);
+  travel=advanceManual(sprint.dx,sprint.dz,used,coastSpeed);
+ }else walkPose(0,Math.min(.05,dt));
+ sprint.active=running&&travel>1e-5;sprint.wasRunning=running;
+ const braking=sprint.brake>0;
+ const leanTarget=braking?-.20*Math.sin(Math.PI*Math.min(1,sprint.brake/.24)):sprint.active?.14:0;
+ sprint.lean+=(leanTarget-sprint.lean)*(1-Math.exp(-dt*20));if(Math.abs(sprint.lean)<.001)sprint.lean=0;
+ avatar.rotation.x=sprint.lean;
+ sprint.brake=Math.max(0,sprint.brake-dt);if(sprint.brake===0)sprint.coast=false;
+ return travel;
+}
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);updateLocomotion(dx,dz,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();
+ const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/30){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
 scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];perf.maxMs=a.at(-1);perf.slowFrames=a.filter(ms=>ms>33.33).length;$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros · pico '+perf.maxMs.toFixed(1)+' ms · lentos '+perf.slowFrames;perf.samples=[];perf.windowStart=now;}});
@@ -700,7 +773,7 @@ if(waterMotion.length){
 const animated=new Set(flowBatch?[flowBatch]:[]);
 const casters=new Set(shadow.getShadowMap().renderList||[]);
 for(const [id,parts] of Object.entries(groups)){
- if(['terrain','grass details','farm visitor','porch cultivated flowers'].includes(id))continue;
+ if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust'].includes(id))continue;
  const buckets=new Map(),kept=[];
  for(const m of parts){
   if(animated.has(m)||m.parent||!m.material||m.getTotalVertices()===0||m.hasThinInstances){kept.push(m);continue}
@@ -720,4 +793,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

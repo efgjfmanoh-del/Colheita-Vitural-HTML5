@@ -35,6 +35,28 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(Math.abs(motionCheck.late-.5)<.015&&Math.abs(motionCheck.steady-motionCheck.late)<.015,'100ms frame must preserve displacement using substeps');
  assert.deepEqual(motionCheck.dead,{x:0,z:0});assert.deepEqual(motionCheck.full,{x:1,z:0});assert(Math.abs(Math.hypot(motionCheck.diagonal.x,motionCheck.diagonal.z)-1)<1e-9);
  fs.writeFileSync('qa/movimento.json',JSON.stringify(motionCheck,null,2));console.log('PASS movement time, analog deadzone and river query equivalence',JSON.stringify(motionCheck));
+ // Controlled, frame-independent sprint/brake test on a clear piece of outdoor terrain.
+ const runTest=await page.evaluate(()=>{
+  const q=cvQA,original=q.avatar.position.clone(),yaw=q.avatar.rotation.y;
+  const dir=[[1,0],[-1,0],[0,1],[0,-1]].find(([x,z])=>Array.from({length:16},(_,i)=>(i+1)*.10).every(k=>!q.blocked(original.x+x*k,original.z+z*k)&&Math.abs(q.surfaceHeight(original.x+x*k,original.z+z*k)-original.y)<.2));
+  if(!dir)throw Error('No clear sprint test direction');
+  const [x,z]=dir;q.resetSprint();
+  let walk=0;for(let i=0;i<8;i++)walk+=q.updateLocomotion(x,z,1/60,false);
+  q.avatar.position.copyFrom(original);q.resetSprint();
+  let run=0;for(let i=0;i<8;i++)run+=q.updateLocomotion(x,z,1/60,true);
+  const speed=q.sprint.speed,lean=q.sprint.lean,bursts=q.sprint.bursts;
+  let coast=0,minLean=0;for(let i=0;i<15;i++){coast+=q.updateLocomotion(0,0,1/60,false);minLean=Math.min(minLean,q.sprint.lean);}
+  const burstCount=q.sprint.bursts-bursts,particles=q.dustPool.filter(p=>p.mesh.isEnabled()).length;
+  const stop=q.updateLocomotion(0,0,.05,false);
+  for(let i=0;i<50;i++){q.updateDust(.02);q.updateLocomotion(0,0,.02,false);}
+  const cleared=q.dustPool.every(p=>!p.mesh.isEnabled());
+  q.avatar.position.copyFrom(original);q.avatar.rotation.y=yaw;q.resetSprint();
+  return {walk,run,speed,lean,coast,minLean,burstCount,particles,stop,cleared};
+ });
+ assert(runTest.run>runTest.walk*1.20&&runTest.speed>6.5&&runTest.lean>.04,'sprint must be faster and lean forward');
+ assert(runTest.coast>0&&runTest.coast<=.31&&runTest.minLean<-.04&&runTest.stop===0,'bounded brake and body lean');
+ assert(runTest.burstCount===1&&runTest.particles>0&&runTest.cleared,'bounded foot dust burst must expire');
+ fs.writeFileSync('qa/corrida.json',JSON.stringify(runTest,null,2));console.log('PASS sprint, bounded braking and pooled dust',JSON.stringify(runTest));
  await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);
  // Confirm movement in the running 3D scene, not just static mesh existence.
  await page.evaluate(()=>{document.getElementById('wide').click();cvQA.engine.runRenderLoop(()=>cvQA.scene.render());});
@@ -130,6 +152,19 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const touchMoved=await mobile.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz),touchStart);
  assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1&&cvQA.joy.x===0&&cvQA.joy.z===0));
+ // Multi-touch: independent right-hand sprint pointer and left-hand stick pointer.
+ const runRect=await mobile.locator('#run-action').boundingBox();
+ const runTap={x:runRect.x+runRect.width/2,y:runRect.y+runRect.height/2,id:22};
+ const stickTap={x:touchStart.cx,y:touchStart.cy,id:11};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[stickTap]});
+ try{
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[stickTap,runTap]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...stickTap,x:stickTap.x+touchStart.dx,y:stickTap.y+touchStart.dy},runTap]});
+  await mobile.waitForFunction(()=>cvQA.sprint.held&&Math.hypot(cvQA.joy.x,cvQA.joy.z)>.2,null,{timeout:10000});
+  assert(await mobile.locator('#run-action').getAttribute('aria-pressed')==='true');
+ }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});}
+ assert(await mobile.evaluate(()=>!cvQA.sprint.held&&cvQA.joy.x===0&&cvQA.joy.z===0),'both pointers must release on cancel');
+ console.log('PASS simultaneous native touch on sprint and joystick');
  // Physical input path in an emulated mobile browser, not a programmatic button.click().
  // Set up a known start on the porch; actual door input and traversal use touch events.
  await mobile.evaluate(()=>{const q=cvQA,H=q.home,p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});

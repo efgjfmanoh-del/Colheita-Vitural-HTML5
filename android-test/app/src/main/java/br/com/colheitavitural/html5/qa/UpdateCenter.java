@@ -164,7 +164,7 @@ final class UpdateCenter {
         boolean report=showReport;
         if(report){showReport=false;history.edit().putLong("seenVersion",installed).apply();}
         LinearLayout content=new LinearLayout(a);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(10));
-        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nNesta rodada: joystick com zona morta, movimento em subpassos, giro suave e otimização de colisões e sombras. Bancos, cercas e vasos cultiváveis da varanda preservados.");reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
+        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nNesta rodada: botão de corrida, passadas rápidas, inclinação corporal e frenagem com poeira nos pés. Ajustes de fluidez, porta animada, bancos e vasos preservados.");reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
         detail=new TextView(a);detail.setTextSize(15);content.addView(detail);bar=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);content.addView(bar,new LinearLayout.LayoutParams(-1,dp(24)));
         checkButton=new Button(a);checkButton.setText("Verificar atualizações");checkButton.setOnClickListener(v->check());content.addView(checkButton);
         downloadButton=new Button(a);downloadButton.setText("Baixar em segundo plano");downloadButton.setOnClickListener(v->start());content.addView(downloadButton);
