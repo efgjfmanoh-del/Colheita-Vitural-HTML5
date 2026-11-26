@@ -29,7 +29,10 @@ export function calendarAt(elapsedMs){
 export const gameHoursToRealMs=hours=>hours*60*REAL_MS_PER_GAME_MINUTE;
 // These are game balance values, not agronomic recommendations.
 export const CROP_CALENDAR=Object.freeze({
- wheat:Object.freeze({name:'Trigo',preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:4,offSeasonMultiplier:1.5})
+ wheat:Object.freeze({name:'Trigo',preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:4,offSeasonMultiplier:1.5,temperature:19,moisture:.48,yield:3,regrow:0}),
+ corn:Object.freeze({name:'Milho',preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:6,offSeasonMultiplier:1.5,temperature:26,moisture:.58,yield:4,regrow:0}),
+ rice:Object.freeze({name:'Arroz',preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:8,offSeasonMultiplier:1.5,temperature:25,moisture:.88,yield:5,regrow:0}),
+ strawberry:Object.freeze({name:'Morango',preferredMonths:Object.freeze([4,5,6,7,8,9]),hours:5,offSeasonMultiplier:1.5,temperature:18,moisture:.60,yield:3,regrow:2})
 });
 export function cropSchedule(id,month){
  const crop=CROP_CALENDAR[id];if(!crop||!Number.isInteger(month)||month<1||month>12)throw Error('invalid crop calendar');

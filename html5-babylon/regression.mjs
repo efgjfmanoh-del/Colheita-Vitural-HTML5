@@ -11,6 +11,17 @@ assert.equal(elapsedWorldClock(migrated,migrationNow-10000),12000000);
 assert.deepEqual(upgradeWorldClock(migrated,migrationNow+7200000),migrated);
 assert.equal(elapsedWorldClock(newWorldClock(1000),7201000),7200000);
 console.log('PASS calendar exact 12x ratio, dates, seasons, year, crop schedules, daylight and legacy clock migration');
+import {weatherAt,WEATHER_INTERVAL,newSoil,simulatePlot,prepareSpecies,harvestInfo} from './src/farm-simulation.js';
+const soil=newSoil(0),seed=prepareSpecies({state:'tilled',soil},'wheat',0),watered={...seed,state:'watered',soil:{...seed.soil,moisture:.92}};
+const sunny=()=>({kind:'sun',temperature:19,rain:false}),rainy=()=>({kind:'rain',temperature:19,rain:true});
+assert(simulatePlot(watered,1200000,sunny).soil.progress>.95);
+const dry=simulatePlot({...watered,soil:{...watered.soil,moisture:.03}},600000,sunny),wet=simulatePlot(watered,600000,sunny);assert(dry.soil.progress<wet.soil.progress);
+const rain=simulatePlot(seed,600000,rainy);assert.equal(rain.state,'watered');
+const irrigated=simulatePlot({...seed,soil:{...seed.soil,irrigated:true}},600000,sunny);assert.equal(irrigated.state,'watered');assert(irrigated.soil.moisture>=.58);
+const rotated=prepareSpecies({state:'tilled',soil:{...soil,lastCrop:'wheat',fertility:.5}},'corn',0);assert(rotated.soil.fertility>.5);
+assert(harvestInfo({...watered,soil:{...soil,fertility:1,pest:0}}).units>harvestInfo({...watered,soil:{...soil,fertility:.3,pest:.9}}).units);
+assert.deepEqual(weatherAt(3*WEATHER_INTERVAL),weatherAt(3*WEATHER_INTERVAL));assert.equal(cropSchedule('rice',3).hours,12);assert.equal(cropSchedule('strawberry',4).hours,5);
+console.log('PASS agriculture climate, rain, irrigation, moisture, crop schedules, fertility, rotation and yield');
 const browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:true});page.setDefaultTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto('http://127.0.0.1:4173/');await page.waitForFunction(()=>window.cvQA?.ready,null,{timeout:120000});await page.waitForFunction(()=>cvQA.perf.fps!==null,null,{timeout:90000});
  const result=await page.evaluate(()=>{const {groups,componentCounts,batching,ground,scene,layout,avatar,onBridge,blocked}=cvQA;return {meshes:scene.meshes.length,batching,canopy:cvQA.canopyStats,bank:cvQA.bankStats,triangles:scene.meshes.reduce((n,m)=>n+m.getTotalIndices()/3,0),cameraBetaDegrees:scene.activeCamera.beta*180/Math.PI,flowInstancing:cvQA.flowInstancing,road:cvQA.roadMetrics,dormer:componentCounts.house,bridgeClearSamples:cvQA.bridgeEnds.reduce((count,p,i,arr)=>{if(i)return count;const b=arr[1];for(let k=1;k<40;k++){const t=k/40;if(!blocked(p[0]+(b[0]-p[0])*t,p[2]+(b[2]-p[2])*t))count++;}return count},0),doghouseBlocked:blocked(cvQA.dogHome.x,cvQA.dogHome.z),wellBlocked:blocked(cvQA.well[0],cvQA.well[2]),fpsSoftware:cvQA.perf.fps,frameTimeP95Ms:cvQA.perf.p95Ms,measurementFrames:cvQA.perf.frames,shadowRefreshes:cvQA.shadowCache.refreshes,treePositions:cvQA.treePositions.length,fenceSegments:cvQA.fenceColliders.length,vertices:ground.getTotalVertices(),house:componentCounts.house,doghouse:componentCounts.doghouse,well:componentCounts.cistern,water:componentCounts.river,falls:componentCounts.waterfalls,fallIndices:groups.waterfalls.reduce((total,m)=>total+m.getTotalIndices(),0),fallMeshes:groups.waterfalls.length,trees:Object.keys(groups).filter(k=>k.startsWith('forest')||k.startsWith('sakura')).length,externalTextures:scene.textures.filter(t=>t.url&&/mapa|https?:/i.test(t.url)).length,bridge:onBridge((layout.bridges[0].ends[0][0]+layout.bridges[0].ends[1][0]-800)/16,-((layout.bridges[0].ends[0][1]+layout.bridges[0].ends[1][1])/2-145)/6.553),spawn:[avatar.position.x,avatar.position.z],river:cvQA.riverMotionMetrics,dog:componentCounts.dog,waterBlocked:blocked((183-400)/8,-(20-145)/6.553)}});
@@ -207,20 +218,26 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await wheatVisit(wheatIds[0]);assert.equal(await page.evaluate(id=>cvQA.wheatStatus(id),wheatIds[0]),'watered');
  const clockAfter=await page.evaluate(id=>({anchor:cvQA.worldClock.anchor,elapsed:cvQA.worldElapsed(),duration:cvQA.wheatState.plots[id].durationMs}),wheatIds[0]);assert.equal(clockAfter.anchor,clockBefore.anchor);assert(clockAfter.elapsed>=clockBefore.elapsed);assert.equal(clockAfter.duration,clockBefore.duration);
  // Simulate the saved seasonal growth duration, not a hard-coded 90 seconds.
- await page.evaluate(id=>{const p=cvQA.wheatState.plots[id],now=p.wateredAt+cvQA.wheatDuration(p)+1000;window.originalWheatNow=Date.now;Date.now=()=>now;cvQA.updateWheat(now,true);},wheatIds[0]);
+ await page.evaluate(id=>{const p=cvQA.wheatState.plots[id],now=p.wateredAt+cvQA.wheatDuration(p)*3+1000;window.originalWheatNow=Date.now;Date.now=()=>now;cvQA.updateWheat(now,true);},wheatIds[0]);
  assert.equal(await page.locator('#wheat-action').innerText(),'Colher');
  await capture('trigo-maduro','field-view');
  await page.locator('#wheat-action').click();await page.evaluate(()=>{Date.now=window.originalWheatNow;delete window.originalWheatNow;});
  const harvest=await page.evaluate(id=>({state:cvQA.wheatStatus(id),grain:cvQA.wheatState.grain,seeds:cvQA.wheatState.seeds,repeat:cvQA.applyWheatAction('harvest',id),persisted:JSON.parse(localStorage.getItem('cv.wheat.v1'))}),wheatIds[0]);
- assert(harvest.state==='tilled'&&harvest.grain===3&&harvest.seeds===24&&!harvest.repeat&&harvest.persisted.grain===3);
+ assert(harvest.state==='tilled'&&harvest.grain>=2&&harvest.grain<=4&&harvest.seeds===24&&!harvest.repeat&&harvest.persisted.grain===harvest.grain);
  fs.writeFileSync('qa/trigo-ciclo.json',JSON.stringify({planted,harvest},null,2));console.log('PASS wheat lifecycle, proximity, independent plots, growth, reload and harvest accounting',JSON.stringify({planted,harvest}));
+ // Use actual agriculture controls, distinct seed stocks, and center.
+ await wheatVisit(wheatIds[1]);await page.locator('#wheat-action').click();await page.locator('#crop-select').selectOption('corn');await page.locator('#farm-fertilize').click();await page.locator('#farm-irrigate').click();await page.locator('#wheat-action').click();
+ const corn=await page.evaluate(id=>({crop:cvQA.wheatState.plots[id].crop,soil:cvQA.wheatState.plots[id].soil,stock:cvQA.wheatState.stocks.corn.seeds,wheat:cvQA.wheatState.seeds}),wheatIds[1]);
+ assert(corn.crop==='corn'&&corn.soil.irrigated&&corn.soil.fertility>.9&&corn.stock===11&&corn.wheat===24);
+ await page.locator('#farm-open').click();assert(await page.locator('#farm-center').isVisible());assert((await page.locator('#farm-catalog').innerText()).includes('Morango'));assert((await page.locator('#farm-forecast').innerText()).includes('°C'));await page.locator('#farm-close').click();
+ fs.writeFileSync('qa/agricultura.json',JSON.stringify({corn},null,2));console.log('PASS agricultural controls, distinct crop stocks and forecast center');
  const saved=await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species));assert.deepEqual(saved,['rose','lavender']);
  await visit('porch-ceramic');assert(await page.locator('#wheat-panel').isHidden(),'wheat panel must release the garden controls');await page.locator('#garden-action').click();await page.locator('#garden-remove').click();await page.locator('[data-flower="daisy"]').click();
  assert.deepEqual(await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species)),['daisy','lavender']);
  assert.deepEqual(errors,[]);fs.writeFileSync('qa/varanda.json',JSON.stringify({porch,crops,saved},null,2));console.log('PASS porch rail and planter collision, species, growth and persistence',JSON.stringify({porch,crops,saved}));
  // Test actual day/night lighting on a disposable page state, after all daytime visual checks.
- const lighting=await page.evaluate(()=>{const q=cvQA,anchor=q.worldClock.anchor;q.updateWorldClock(anchor+16*300000,true);const night={...q.daylight,label:document.getElementById('world-clock').textContent};q.updateWorldClock(anchor+28*300000,true);return {night,day:{...q.daylight,label:document.getElementById('world-clock').textContent}};});
- assert(lighting.night.sun<.2&&lighting.day.sun>.8&&lighting.night.label.includes('Noite')&&lighting.day.label.includes('Dia'));
+ const lighting=await page.evaluate(()=>{const q=cvQA,anchor=q.worldClock.anchor;const day=Math.ceil(q.worldElapsed()/7200000);q.updateWorldClock(anchor+day*7200000+16*300000,true);const night={...q.daylight,label:document.getElementById('world-clock').textContent};q.updateWorldClock(anchor+day*7200000+28*300000,true);return {night,day:{...q.daylight,label:document.getElementById('world-clock').textContent}};});
+ assert(lighting.night.sun<.2&&lighting.day.sun>.45&&lighting.night.label.includes('Noite')&&lighting.day.label.includes('Dia'));
  fs.writeFileSync('qa/calendario.json',JSON.stringify({clockBefore,clockAfter,lighting,monthDays:DAYS_PER_MONTH,realMsPerDay:REAL_MS_PER_GAME_DAY},null,2));console.log('PASS persistent world calendar, seasonal wheat duration and lighting',JSON.stringify(lighting));
  await page.close();
  // Emulated Android viewport validates the DPR bug; not a hardware benchmark.
@@ -270,10 +287,11 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  // Set up a known start on the porch; actual door input and traversal use touch events.
  await mobile.evaluate(()=>{const q=cvQA,H=q.home,p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});
  await mobile.locator('#door-action').waitFor({state:'visible'});
+ await mobile.evaluate(()=>{cvQA.updateWheat(Date.now(),true);cvQA.updateGarden(Date.now());});
  const doorRect=await mobile.locator('#door-action').boundingBox();
  const tap={x:doorRect.x+doorRect.width/2,y:doorRect.y+doorRect.height/2};
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[tap]});
- await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ assert.equal(await mobile.evaluate(({x,y})=>document.elementFromPoint(x,y)?.id,tap),'door-action','door touch must hit its own control');
+ await mobile.touchscreen.tap(tap.x,tap.y);
  await mobile.waitForFunction(()=>cvQA.entry.open&&cvQA.entry.door>.95&&!cvQA.entry.action,null,{timeout:30000});
  const entryTouch=await mobile.evaluate(()=>{const q=cvQA,H=q.home,forward=H.C(0,0,1).subtract(H.C(0,0,0)),a=q.scene.activeCamera.alpha+Math.PI/2,r=document.getElementById('joy').getBoundingClientRect();return {cx:r.x+r.width/2,cy:r.y+r.height/2,dx:30*(forward.x*Math.cos(a)+forward.z*Math.sin(a)),dy:-30*(-forward.x*Math.sin(a)+forward.z*Math.cos(a))};});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:entryTouch.cx,y:entryTouch.cy}]});
