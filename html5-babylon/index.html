@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Colheita Vitural — Teste 1K.7c · 0.1.17</title>
+<title>Colheita Vitural — Teste 2A · 0.1.18</title>
 <style>
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#34552c;font:13px system-ui;color:#fff;overscroll-behavior:none;touch-action:none}
@@ -30,9 +30,9 @@ button:disabled{opacity:.7}button[aria-pressed=true]{background:#d9e5b8;color:#2
 </style>
 </head>
 <body><canvas id="view"></canvas>
-<div id="hud"><div id="hud-head"><div><strong>COLHEITA VITURAL · 1K.7c · 0.1.17</strong><small><span id="fps">…</span> · <span id="quality-label">Equilibrado</span></small></div><button id="hud-toggle" aria-expanded="true" aria-controls="hud-panel">Painel</button></div>
+<div id="hud"><div id="hud-head"><div><strong>COLHEITA VITURAL · 2A · 0.1.18</strong><small><span id="fps">…</span> · <span id="quality-label">Equilibrado</span></small></div><button id="hud-toggle" aria-expanded="true" aria-controls="hud-panel">Painel</button></div>
 <div id="hud-panel"><span id="entry-status"></span><small id="metrics">Medindo tempo de quadro…</small>
-<div class="controls"><button id="wide">Geral</button><button id="close">Casa</button><button id="follow">Personagem</button><button id="rotate">Girar</button></div>
+<div class="controls"><button id="wide">Geral</button><button id="close">Casa</button><button id="follow">Personagem</button><button id="rotate">Girar</button><button id="field-view">Campo</button></div>
 <div class="controls" aria-label="Qualidade gráfica"><button id="quality-economico" aria-pressed="false">540p</button><button id="quality-equilibrado" aria-pressed="true">720p</button><button id="quality-alto" aria-pressed="false">1080p</button></div></div></div>
 <button id="run-action" aria-label="Segure para correr" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="15.6" cy="4.2" r="2"/><path d="m9 10 4-3 3 4 4 1M13 7l-3 7 5 3-2 5M10 14l-3 4H3M8 8l-4 3"/></svg><span>Correr</span></button><button id="seat-action" hidden>Sentar</button><button id="door-action" hidden>Abrir porta</button><button id="garden-action" hidden>Cultivar flores</button><section id="garden-panel" hidden aria-label="Cultivo ornamental"><strong id="garden-title">Vaso</strong><small id="garden-state"></small><div id="garden-species"></div><div class="controls"><button id="garden-remove">Retirar flor</button><button id="garden-close">Voltar ao jogo</button></div><small>Sementes livres neste teste · crescimento inicial em 90 segundos</small></section><div id="joy"><div id="knob"></div></div><div id="loading">Construindo a fazenda…</div>
 <script>addEventListener('error',e=>{const el=document.getElementById('loading');if(el)el.textContent='Falha ao iniciar: '+e.message});setTimeout(()=>{const el=document.getElementById('loading');if(el)el.textContent='O motor 3D ainda não iniciou. Verifique o suporte WebGL.'},30000);</script>

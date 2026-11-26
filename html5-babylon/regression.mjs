@@ -12,6 +12,18 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   assert(Math.abs(frame.beta-expectedBeta)<.25,'camera tilt changed during '+name);assert(frame.width>=640&&frame.height>=360,'capture dimensions');assert(frame.colors>100,'capture must contain real varied scene pixels');
   assert(frame.png.startsWith('data:image/png;base64,'));const bytes=Buffer.from(frame.png.split(',')[1],'base64');assert(bytes.length>10000,'capture PNG size');fs.writeFileSync('qa/'+name+'.png',bytes);console.log('Captured '+name+' '+frame.width+'x'+frame.height+' '+bytes.length+' bytes');
  }
+ // Check actual full-width deck overlap, field entry, fences and central aisle.
+ const links=await page.evaluate(()=>{
+ const q=cvQA,c=q.connectionQA,axis=c.bridgeAxis,side=c.bridgeSide;
+ const evaluate=(row,end)=>{const project=(p,v)=>(p.x-end[0])*v.x+(p.z-end[2])*v.z;return {centerError:Math.hypot(row[1].x-end[0],row[1].z-end[2]),axisError:Math.max(...row.map(p=>Math.abs(project(p,axis)))),left:project(row[0],side),right:project(row[2],side),overlap:c.bridgePlankDepth/2};};
+ const entry=evaluate(c.bridgeEntryRow,q.bridgeEnds[0]),exit=evaluate(c.bridgeExitRow,q.bridgeEnds[1]),gate=q.wheatGate;
+ return {entry,exit,clearGate:!q.blocked(gate.x,gate.z),fence:q.fieldRails.every(([a,b])=>q.blocked((a.x+b.x)/2,(a.z+b.z)/2)),traversable:q.approachCurve.filter((p,i)=>i%2===0).every(p=>!q.blocked(p.x,p.z)),inside:q.inWheat(c.fieldEnd.x,c.fieldEnd.z),beds:q.wheatBeds.length,aisle:q.wheatBeds.every(b=>b.x2<=gate.x-1.65||b.x1>=gate.x+1.65)};
+ });
+ console.log('Physical connection and wheat sector',JSON.stringify(links));fs.writeFileSync('qa/conexoes-campo.json',JSON.stringify(links,null,2));
+ for(const p of [links.entry,links.exit])assert(p.centerError<1e-6&&p.axisError<1e-6&&Math.abs(p.left+1.575)<1e-6&&Math.abs(p.right-1.575)<1e-6&&p.overlap>.15,'bridge full-width overlap required');
+ assert(links.clearGate&&links.fence&&links.traversable&&links.inside&&links.beds>=6&&links.aisle,'wheat field must be connected and accessible');
+ await capture('campo-trigo','field-view');
+ await capture('visao-geral-retorno','wide');
  // Verify the optimized nearest-river calculation against the previous hypot algorithm.
  const motionCheck=await page.evaluate(()=>{
   const q=cvQA;let maxError=0;

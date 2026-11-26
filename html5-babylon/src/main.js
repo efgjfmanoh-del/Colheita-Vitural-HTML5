@@ -61,7 +61,7 @@ const cyl=(name,x,y,z,r,h,m,top=r,cast=true)=>{const b=MeshBuilder.CreateCylinde
 const beam=(name,a,b,w,m,depth=w,cast=true)=>{const d=b.subtract(a);const obj=box(name,...a.add(b).scale(.5).asArray(),w,d.length(),depth,m,0,cast);const n=d.normalize(),axis=Vector3.Cross(Vector3.Up(),n),dot=Vector3.Dot(Vector3.Up(),n);obj.rotationQuaternion=dot<-.99999?Quaternion.RotationAxis(Vector3.Right(),Math.PI):new Quaternion(axis.x,axis.y,axis.z,1+dot).normalize();return obj};
 const quad=(name,pts,m,cast=false)=>{const q=new Mesh(name,scene),v=new VertexData();v.positions=pts.flatMap(p=>p.asArray());const u=Vector3.Distance(pts[0],pts[1]),vv=Vector3.Distance(pts[1],pts[2]);v.uvs=[0,0,u/2,0,u/2,vv/2,0,vv/2];v.indices=[0,1,2,0,2,3];v.normals=[];VertexData.ComputeNormals(v.positions,v.indices,v.normals);if(v.normals[1]<-0.001){v.indices=[0,2,1,0,3,2];VertexData.ComputeNormals(v.positions,v.indices,v.normals);}m.backFaceCulling=false;v.applyToMesh(q);return own(q,m,cast)};
 const poly=(name,pts,indices,m,cast=true)=>{const q=new Mesh(name,scene),v=new VertexData();v.positions=pts.flatMap(p=>p.asArray());v.uvs=[0,0,2,0,1,1];v.indices=indices.slice(0,3);v.normals=[];VertexData.ComputeNormals(v.positions,v.indices,v.normals);m.backFaceCulling=false;v.applyToMesh(q);return own(q,m,cast)};
-const rawChannel=layout.water.channels[0].points.filter(p=>p[0]<=741).map(([u,v,y,w])=>({p:P(u,v,y),w:w/8}));
+const rawChannel=layout.water.channels[0].points.filter(p=>p[0]<=925).map(([u,v,y,w])=>({p:P(u,v,y),w:w/8}));
 const channel=[];for(let i=0;i<rawChannel.length-1;i++){const a=rawChannel[i],b=rawChannel[i+1],p0=rawChannel[Math.max(0,i-1)].p,p3=rawChannel[Math.min(rawChannel.length-1,i+2)].p;
  const n=Math.max(6,Math.ceil(Vector3.Distance(a.p,b.p)/.85)),fall=i===1||i===3;const ts=Array.from({length:n},(_,j)=>j/n).filter(t=>!fall||t<.45||t>.55);if(fall)ts.push(.45,.47,.49,.51,.53,.55);ts.sort((a,b)=>a-b);for(const t of ts){const p=Vector3.CatmullRom(p0,a.p,b.p,p3,t);let ht=t;if(fall)ht=Math.max(0,Math.min(1,(t-.47)/.06));p.y=a.p.y+(b.p.y-a.p.y)*ht;channel.push({p,w:a.w+(b.w-a.w)*t,fall});}}
 channel.push(rawChannel.at(-1));
@@ -81,7 +81,7 @@ function nearRiver(x,z){
  const result={dist:Math.sqrt(best),y,w};riverCache={x,z,result};return result;
 }
 function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const west=x<-20?Math.max(0,Math.min(1,(z-5)/16))*2.2:0;const flat=2.65+west+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
-entity('terrain');const minX=X(20),maxX=X(750),minZ=Z(330),maxZ=Z(-20),nx=170,nz=110,pos=[],idx=[],colors=[],uvs=[];
+entity('terrain');const minX=X(20),maxX=X(20+730*204/170),minZ=Z(-20+350*121/110),maxZ=Z(-20),nx=204,nz=121,pos=[],idx=[],colors=[],uvs=[];
 for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=minX+(maxX-minX)*i/nx,z=minZ+(maxZ-minZ)*j/nz,y=height(x,z),n=nearRiver(x,z),d=n.dist-n.w/2;pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
 for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){let a=j*(nx+1)+i;idx.push(a,a+nx+1,a+1,a+1,a+nx+1,a+nx+2)}
 const ground=new Mesh('sculpted terrain mesh',scene),gd=new VertexData();gd.positions=pos;gd.indices=idx;gd.colors=colors;gd.uvs=uvs;gd.normals=[];VertexData.ComputeNormals(pos,idx,gd.normals);if(gd.normals[1]<0){for(let i=0;i<idx.length;i+=3)[idx[i+1],idx[i+2]]=[idx[i+2],idx[i+1]];gd.indices=idx;VertexData.ComputeNormals(pos,idx,gd.normals);}gd.applyToMesh(ground);own(ground,M.grass,false);
@@ -115,7 +115,9 @@ for(let i=0;i<fencePoints.length;i++){let a=fencePoints[i],b=fencePoints[(i+1)%f
 // Preserve random sequence for unchanged scenery; replace only the residence walkway.
 const oldPath=layout.residence.path.map(p=>P(...p));
 for(let i=1;i<oldPath.length;i++)for(let k=0;k<Math.ceil(Vector3.Distance(oldPath[i-1],oldPath[i])/.72)*2;k++)random();
-const stairFoot=houseXZ(0,-HOUSE.d/2-3.725-porchExtension),bridgeEntry=P(...layout.bridges[0].ends[0],2.85);
+const stairFoot=houseXZ(0,-HOUSE.d/2-3.725-porchExtension),bridgeEntry=P(...layout.bridges[0].ends[0],2.85),bridgeExit=P(...layout.bridges[0].ends[1],2.85);
+const bridgeAxis=bridgeExit.subtract(bridgeEntry);bridgeAxis.y=0;bridgeAxis.normalize();const bridgeSide=V(-bridgeAxis.z,0,bridgeAxis.x),bridgeHalf=1.575;
+const wheatSpec=layout.fields.find(f=>f.id==='trigo'),wheatGate=P(...wheatSpec.gate.at);
 const pathControls=[stairFoot,houseXZ(0,-HOUSE.d/2-4.20-porchExtension),P(466,185),P(496,190),P(515,195),bridgeEntry];
 const pathPoints=[];
 for(let i=1;i<pathControls.length;i++){
@@ -146,11 +148,11 @@ const pavingStats={residence:0,approach:0,colors:new Set(),maxStoneSize:0};
 let pathLengthHome=0;
 for(let i=0;i<pathPoints.length;i++){
  const p=pathPoints[i],dir=i===0?houseXZ(0,-1).subtract(houseXZ(0,0)):pathPoints[Math.min(i+1,pathPoints.length-1)].subtract(pathPoints[i-1]);dir.y=0;dir.normalize();
- const side=V(-dir.z,0,dir.x),half=1.10+.14*Math.min(1,i/8);if(i)pathLengthHome+=Math.hypot(p.x-pathPoints[i-1].x,p.z-pathPoints[i-1].z);
+ const endBlend=Math.max(0,1-(pathPoints.length-1-i)/5),side=Vector3.Lerp(V(-dir.z,0,dir.x),bridgeSide,endBlend).normalize(),half=(1.10+.14*Math.min(1,i/8))*(1-endBlend)+bridgeHalf*endBlend;if(i)pathLengthHome+=Math.hypot(p.x-pathPoints[i-1].x,p.z-pathPoints[i-1].z);
  const row=[];
  for(const k of [-1,0,1]){
   const v=p.add(side.scale(k*half));v.y=Math.max(renderedTerrainY(v.x,v.z),height(v.x,v.z))+.095;
-  if(i===pathPoints.length-1)v.y=Math.max(v.y,2.945);
+  if(i===pathPoints.length-1)v.y=2.945;
   row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);pathColors.push(.35,.30,.23,1);
  }
  pathRows.push(row);
@@ -177,7 +179,7 @@ function makeStoneRoad(name,rows,positions,indices,uvs,colors,kind){
   while(at<length-.001){
    let step=(serial===0&&lane%2)?.36:.57+.24*noise(lane,serial,1);
    let next=Math.min(length,at+step);if(length-next<.24)next=length;
-   const gap=Math.min(.024,(next-at)*.11),a=at+gap,b=next-gap,u0=lane/3+.010,u1=(lane+1)/3-.010;
+   const gap=Math.min(.024,(next-at)*.11),a=at+(at===0?0:gap),b=next-(next===length?0:gap),u0=lane/3+.010,u1=(lane+1)/3-.010;
    const cut=Math.min(.075,(b-a)*.16),ch=.035+.018*noise(lane,serial,2);
    const shape=[[a+cut,u0],[b-cut,u0],[b,u0+ch],[b,u1-ch],[b-cut,u1],[a+cut,u1],[a,u1-ch],[a,u0+ch]];
    const col=Color3.FromHexString(palette[Math.floor(noise(lane,serial,3)*palette.length)]),edge=col.scale(.72);
@@ -196,18 +198,56 @@ function makeStoneRoad(name,rows,positions,indices,uvs,colors,kind){
 }
 const pathMesh=makeStoneRoad('residential individual stone paving',pathRows,pathVertices,pathIndices,pathUV,pathColors,'residence');
 // Exterior approach is a physical ground-following ribbon, not a painted road.
-entity('bridge approach');const approach=[[575,248],[597,256],[616,270],[635,290],[644,305],[658,327]].map(p=>P(...p));
+entity('bridge approach');const approach=[[575,248],[597,256],[616,270],[635,290],[644,305],[658,327],[686,320],[720,318],[752.5,318],[752.5,310],[752.5,302],[752.5,296]].map(p=>P(...p));
 const approachCurve=[];for(let i=1;i<approach.length;i++){const a=approach[i-1],b=approach[i],n=Math.ceil(Vector3.Distance(a,b)/.42);for(let j=0;j<n;j++)approachCurve.push(Vector3.CatmullRom(approach[Math.max(0,i-2)],a,b,approach[Math.min(approach.length-1,i+1)],j/n));}approachCurve.push(approach.at(-1));
 const rp=[],ri=[],rc=[],ru=[],sections=[];let pathLength=0;
-for(let i=0;i<approachCurve.length;i++){const p=approachCurve[i],d=approachCurve[Math.min(i+1,approachCurve.length-1)].subtract(approachCurve[Math.max(0,i-1)]);d.y=0;d.normalize();if(i)pathLength+=Vector3.Distance(p,approachCurve[i-1]);const side=V(-d.z,0,d.x);
- const row=[];for(const offset of [-1.65,-1.35,-.75,0,.75,1.35,1.65]){const q=p.add(side.scale(offset));q.y=Math.max(renderedTerrainY(q.x,q.z),height(q.x,q.z))+.095;row.push(q);rp.push(...q.asArray());ru.push((offset+1.65)/3.3,pathLength/3);rc.push(.35,.30,.23,1);}
+for(let i=0;i<approachCurve.length;i++){const p=approachCurve[i],d=approachCurve[Math.min(i+1,approachCurve.length-1)].subtract(approachCurve[Math.max(0,i-1)]);d.y=0;d.normalize();if(i)pathLength+=Vector3.Distance(p,approachCurve[i-1]);const joinBlend=Math.max(0,1-i/5),side=Vector3.Lerp(V(-d.z,0,d.x),bridgeSide,joinBlend).normalize(),half=1.65*(1-joinBlend)+bridgeHalf*joinBlend;
+ const row=[];for(const offset of [-1.65,-1.35,-.75,0,.75,1.35,1.65]){const q=p.add(side.scale(offset*half/1.65));q.y=i===0?2.945:Math.max(renderedTerrainY(q.x,q.z),height(q.x,q.z))+.095;row.push(q);rp.push(...q.asArray());ru.push((offset+1.65)/3.3,pathLength/3);rc.push(.35,.30,.23,1);}
  sections.push(row);
  if(i)for(let j=0;j<6;j++){const k=(i-1)*7+j;ri.push(k,k+7,k+1,k+1,k+7,k+8);}
 }
 const road=makeStoneRoad('farm approach individual stone paving',sections.map(r=>[r[0],r[3],r[6]]),rp,ri,ru,rc,'approach');
 const roadMetrics={sections:sections.length,vertices:road.getTotalVertices(),indices:road.getTotalIndices(),segments:approachCurve.length-1,stones:pavingStats.approach,stoneColors:pavingStats.colors.size,maxStoneSize:pavingStats.maxStoneSize};
 entity('bridge home');const [ba,bb]=layout.bridges[0].ends.map(p=>P(...p,2.85));const bd=bb.subtract(ba),bl=bd.length(),ang=Math.atan2(bd.x,bd.z),bs=V(Math.cos(ang),0,-Math.sin(ang));
-for(let k=0;k<Math.ceil(bl/.36);k++){let p=Vector3.Lerp(ba,bb,k/Math.ceil(bl/.36));box('bridge plank',p.x,p.y,p.z,3.15,.19,.35,k%3?M.woodLight:M.wood,ang);for(let s of [-1,1]){let q=p.add(bs.scale(s*1.48));if(k%4===0){box('bridge rail post',q.x,q.y+.55,q.z,.20,1.1,.20,M.woodDark);box('bridge pier',q.x,q.y-.75,q.z,.27,1.6,.27,M.woodDark)}}}for(let s of [-1,1])beam('bridge railing',ba.add(bs.scale(s*1.48)).add(V(0,.91,0)),bb.add(bs.scale(s*1.48)).add(V(0,.91,0)),.14,M.woodLight);
+const bridgePlankCount=Math.ceil(bl/.36),bridgePlankDepth=bl/bridgePlankCount+.012;
+for(let k=0;k<=bridgePlankCount;k++){let p=Vector3.Lerp(ba,bb,k/bridgePlankCount);box('bridge plank',p.x,p.y,p.z,3.15,.19,bridgePlankDepth,k%3?M.woodLight:M.wood,ang);for(let s of [-1,1]){let q=p.add(bs.scale(s*1.48));if(k%4===0){box('bridge rail post',q.x,q.y+.55,q.z,.20,1.1,.20,M.woodDark);box('bridge pier',q.x,q.y-.75,q.z,.27,1.6,.27,M.woodDark)}}}for(let s of [-1,1])beam('bridge railing',ba.add(bs.scale(s*1.48)).add(V(0,.91,0)),bb.add(bs.scale(s*1.48)).add(V(0,.91,0)),.14,M.woodLight);
+// Stage 2A: first agricultural sector from the traced reference.
+const wheatPolygon=wheatSpec.polygon.map(p=>P(...p));
+const wheatBounds={minX:Math.min(...wheatPolygon.map(p=>p.x)),maxX:Math.max(...wheatPolygon.map(p=>p.x)),minZ:Math.min(...wheatPolygon.map(p=>p.z)),maxZ:Math.max(...wheatPolygon.map(p=>p.z))};
+const wheatBeds=[],fieldRails=[];
+function inWheat(x,z){let inside=false;for(let i=0,k=wheatPolygon.length-1;i<wheatPolygon.length;k=i++){const a=wheatPolygon[i],b=wheatPolygon[k];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)inside=!inside;}return inside;}
+entity('wheat sector fence');
+function fieldRail(a,b){
+ const len=Math.hypot(b.x-a.x,b.z-a.z),n=Math.max(1,Math.ceil(len/1.65));
+ for(let i=0;i<n;i++){const p=Vector3.Lerp(a,b,i/n),q=Vector3.Lerp(a,b,(i+1)/n);p.y=height(p.x,p.z);q.y=height(q.x,q.z);fieldRails.push([p.clone(),q.clone()]);fenceColliders.push([p.clone(),q.clone()]);box('wheat fence post',p.x,p.y+.59,p.z,.16,1.18,.16,M.woodDark);for(const y of [.38,.83])beam('wheat fence rail',p.add(V(0,y,0)),q.add(V(0,y,0)),.12,M.woodLight);}
+ const q=b.clone();q.y=height(q.x,q.z);box('wheat fence end post',q.x,q.y+.59,q.z,.16,1.18,.16,M.woodDark);
+}
+for(let i=0;i<wheatPolygon.length;i++){
+ const a=wheatPolygon[i],b=wheatPolygon[(i+1)%wheatPolygon.length],dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz),u=((wheatGate.x-a.x)*dx+(wheatGate.z-a.z)*dz)/(l*l);
+ if(u>0&&u<1&&Math.hypot(wheatGate.x-a.x-u*dx,wheatGate.z-a.z-u*dz)<.05){const gap=wheatSpec.gate.width/8/2/l;fieldRail(a,Vector3.Lerp(a,b,u-gap));fieldRail(Vector3.Lerp(a,b,u+gap),b);}else fieldRail(a,b);
+}
+entity('wheat prepared soil');
+{
+ const soilColors=['#73503a','#876047','#936b4d','#79533d'].map(Color3.FromHexString),pv=[],pi=[],pc=[],pu=[];
+ function soilQuad(x1,z1,x2,z2,color,rise){const start=pv.length/3;for(const [x,z] of [[x1,z1],[x2,z1],[x2,z2],[x1,z2]]){pv.push(x,Math.max(height(x,z),renderedTerrainY(x,z))+rise,z);pc.push(color.r,color.g,color.b,1);pu.push(x,z);}pi.push(start,start+1,start+2,start,start+2,start+3);}
+ for(const side of [-1,1]){
+  const x1=side<0?wheatBounds.minX+1.15:wheatGate.x+1.65,x2=side<0?wheatGate.x-1.65:wheatBounds.maxX-1.15;
+  for(let z=wheatBounds.minZ+1.65;z+1.35<wheatBounds.maxZ-1.1;z+=2.25){wheatBeds.push({id:'trigo-'+wheatBeds.length,x1,x2,z1:z,z2:z+1.35});for(let x=x1;x<x2-.005;x+=.5){const end=Math.min(x+.5,x2);soilQuad(x,z,end,z+1.35,soilColors[0],.055);for(let k=0;k<3;k++){const za=z+.12+k*.41;soilQuad(x,za,end,za+.24,soilColors[1+k],.095);}}}
+ }
+ const mesh=new Mesh('prepared wheat beds and furrows',scene),data=new VertexData();data.positions=pv;data.indices=pi;data.colors=pc;data.uvs=pu;data.normals=Array.from({length:pv.length},(_,i)=>i%3===1?1:0);data.applyToMesh(mesh);
+ const soil=mat('wheat fertile earth','#ffffff');soil.backFaceCulling=false;soil.emissiveColor=new Color3(.025,.018,.01);own(mesh,soil,false);
+}
+entity('wheat sector sign');
+const fieldSignCollider={x:wheatGate.x+2.2,z:wheatGate.z-.65};
+{
+ const x=fieldSignCollider.x,z=fieldSignCollider.z,y=height(x,z);
+ for(const side of [-1,1])box('field sign leg',x+side*.64,y+.62,z,.12,1.24,.12,M.woodDark);
+ box('field sign board',x,y+1.25,z,1.85,.63,.12,M.woodLight);
+ const tex=new DynamicTexture('local field sign trigo',{width:256,height:96},scene,true),ctx=tex.getContext();ctx.fillStyle='#c38b50';ctx.fillRect(0,0,256,96);ctx.strokeStyle='#805631';ctx.lineWidth=7;ctx.strokeRect(5,5,246,86);ctx.fillStyle='#372718';ctx.font='bold 43px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('TRIGO',128,48);tex.update();
+ const material=mat('field sign text','#ffffff');material.diffuseTexture=tex;material.emissiveColor=new Color3(.15,.12,.08);material.backFaceCulling=false;const sign=MeshBuilder.CreatePlane('trigo label',{width:1.72,height:.53},scene);sign.position=V(x,y+1.25,z-.067);own(sign,material,false);
+}
+const approachRows=sections.map(r=>[r[0],r[3],r[6]]);
+const connectionQA={bridgeEntryRow:pathRows.at(-1),bridgeExitRow:approachRows[0],bridgePlankDepth,bridgeHalf,bridgeAxis,bridgeSide,fieldEnd:approachCurve.at(-1),fieldGate:wheatGate};
 function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=height(x,z),C=(a,b,c)=>V(x+a*Math.cos(angle)+c*Math.sin(angle),y+b,z-a*Math.sin(angle)+c*Math.cos(angle));const B=(n,a,b,c,ww,hh,dd,m)=>{let p=C(a,b,c);return box(n,p.x,p.y,p.z,ww,hh,dd,m,angle)};const L=(n,a,b,ww,m)=>beam(n,C(...a),C(...b),ww,m);
  const doorW=small?w*.47:1.35,doorH=small?h*.65:2.2,wall=.22;let doorRoot=null;const handles={};
  B('stone foundation',0,.22,0,w+.25,.44,d+.25,M.stoneLight);
@@ -419,7 +459,12 @@ function surfaceHeight(x,z){
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return home.y+.53;
  if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85-porchExtension&&p.z<=f)return home.y+.53;
  if(Math.abs(p.x)<=1.1&&p.z>=f-3.725-porchExtension&&p.z<f-2.85-porchExtension){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725+porchExtension)/.35)));return home.y+[.18,.35,.53][i];}
- return onBridge(x,z)?2.96:height(x,z);
+ if(onBridge(x,z))return 2.96;
+ const groundY=height(x,z);let closest=Infinity,roadY=groundY;
+ for(const [rows,half] of [[pathRows,1.24],[approachRows,1.65]]){
+ if(x<Math.min(rows[0][1].x,rows.at(-1)[1].x)-4||x>Math.max(rows[0][1].x,rows.at(-1)[1].x)+4)continue;
+ for(let i=1;i<rows.length;i++){const a=rows[i-1][1],b=rows[i][1],dx=b.x-a.x,dz=b.z-a.z,u=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1))),dist=Math.hypot(x-a.x-u*dx,z-a.z-u*dz);if(dist<half&&dist<closest){closest=dist;roadY=Math.max(groundY,a.y+(b.y-a.y)*u+.08);}}}
+ return roadY;
 }
 function homeBlocked(x,z,interacting=false){
  const p=homeLocal(x,z),f=-home.d/2,half=home.w/2,r=.20,wall=.22;
@@ -544,7 +589,7 @@ for(const side of [-1,1]){
 }
 entity('dog');const dog=P(325,183);dog.y=height(dog.x,dog.z);const dogFur=mat('dog caramel','#ba713c'),dogWhite=mat('dog ivory','#f1dcb9');sphere('dog body',dog.x,dog.y+.41,dog.z,.41,.30,.63,dogFur);sphere('dog chest',dog.x,dog.y+.48,dog.z-.38,.30,.34,.29,dogWhite);sphere('dog head',dog.x,dog.y+.78,dog.z-.50,.31,.32,.32,dogFur);sphere('dog muzzle',dog.x,dog.y+.63,dog.z-.77,.22,.16,.22,dogWhite);sphere('dog nose',dog.x,dog.y+.67,dog.z-.92,.10,.08,.09,M.black);for(let a of [-1,1]){sphere('dog ear',dog.x+a*.27,dog.y+.71,dog.z-.50,.10,.23,.13,M.woodDark);sphere('dog eye',dog.x+a*.13,dog.y+.84,dog.z-.73,.042,.046,.035,M.black);for(let b of [-1,1])sphere('dog leg',dog.x+a*.23,dog.y+.17,dog.z+b*.34,.11,.21,.12,dogWhite)}beam('dog tail',V(dog.x,dog.y+.5,dog.z+.55),V(dog.x+.1,dog.y+.91,dog.z+.79),.12,dogFur);cyl('dog bowl',dog.x+.68,dog.y+.09,dog.z-.6,.23,.16,M.red);
 entity('garden border');for(let k=0;k<30;k++){const u=350+k*4.1,v=181+3*Math.sin(k*.5),p=P(u,v);p.y=height(p.x,p.z)+.07;if(pathDistance(p.x,p.z)>1.55)rock('garden edging',p,.20,.13,.17,M.stoneLight)}
-entity('grass details');const grassBase=MeshBuilder.CreateCylinder('grass tuft', {diameterTop:0,diameterBottom:.10,height:.36,tessellation:3},scene);grassBase.material=M.leaf2;grassBase.isPickable=false;const mats=[];for(let i=0;i<1800;i++){let u=35+random()*700,v=8+random()*310,x=X(u),z=Z(v),nr=nearRiver(x,z);if(nr.dist<nr.w/2+1.5||(u>320&&u<490&&v>96&&v<183)||pathPoints.some(p=>Math.hypot(x-p.x,z-p.z)<1.4))continue;let y=height(x,z)+.13;let matrix=Matrix.Compose(V(.7+random()*.8,.55+random()*.75,.7+random()*.8),Quaternion.RotationYawPitchRoll(random()*6.28,0,(random()-.5)*.4),V(x,y,z));mats.push(...matrix.asArray())}grassBase.thinInstanceSetBuffer('matrix',new Float32Array(mats),16,true);grassBase.receiveShadows=false;groups['grass details'].push(grassBase);
+entity('grass details');const grassBase=MeshBuilder.CreateCylinder('grass tuft', {diameterTop:0,diameterBottom:.10,height:.36,tessellation:3},scene);grassBase.material=M.leaf2;grassBase.isPickable=false;const mats=[];for(let i=0;i<1800;i++){let u=35+random()*700,v=8+random()*310,x=X(u),z=Z(v),nr=nearRiver(x,z);if(nr.dist<nr.w/2+1.5||(u>320&&u<490&&v>96&&v<183)||(pathPoints.some(p=>Math.hypot(x-p.x,z-p.z)<1.4)||approachCurve.some(p=>Math.hypot(x-p.x,z-p.z)<1.8)||inWheat(x,z)))continue;let y=height(x,z)+.13;let matrix=Matrix.Compose(V(.7+random()*.8,.55+random()*.75,.7+random()*.8),Quaternion.RotationYawPitchRoll(random()*6.28,0,(random()-.5)*.4),V(x,y,z));mats.push(...matrix.asArray())}grassBase.thinInstanceSetBuffer('matrix',new Float32Array(mats),16,true);grassBase.receiveShadows=false;groups['grass details'].push(grassBase);
 entity('farm visitor');const player=P(538,205);player.y=surfaceHeight(player.x,player.z);const avatar=new Mesh('visitor root',scene);avatar.position=player.clone();const bodyParts=[];for(const [n,x,y,z,w,h,d,m] of [['body',0,.97,0,.42,.63,.30,M.woodLight],['leg L',-.13,.36,0,.15,.62,.17,M.woodDark],['leg R',.13,.36,0,.15,.62,.17,M.woodDark],['arm L',-.29,.95,0,.14,.52,.16,M.plaster],['arm R',.29,.95,0,.14,.52,.16,M.plaster]]){let p=box(n,x,y,z,w,h,d,m);p.parent=avatar;bodyParts.push(p)}let head=sphere('head',0,1.5,0,.22,.25,.22,M.plaster);head.parent=avatar;let hat=cyl('straw hat',0,1.72,0,.37,.09,M.sand);hat.parent=avatar;let hatTop=cyl('hat crown',0,1.82,0,.21,.20,M.woodLight);hatTop.parent=avatar;
 // Articulated arm used for grasping: two segments, elbow and a separate hand.
 const reachUpper=box('interaction upper arm',0,0,0,.145,1,.155,M.plaster),reachLower=box('interaction forearm',0,0,0,.125,1,.135,M.plaster),reachHand=sphere('interaction hand',0,0,0,.085,.085,.09,M.plaster);
@@ -719,8 +764,8 @@ pad.addEventListener('pointerdown',e=>{
 pad.addEventListener('pointermove',move);
 for(const e of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(e,v=>{if(v.pointerId===pointer)reset()});
 
-function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz);return t>=0&&t<=1&&Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<1.28}
-function blocked(x,z,interacting=false){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const bridge=onBridge(x,z);if(!bridge){const nr=nearRiver(x,z);if(nr.dist<nr.w*.54+.12)return true;}if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!bridge&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z,interacting))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;return false}
+function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz);return t>=-bridgePlankDepth/(2*bl)&&t<=1+bridgePlankDepth/(2*bl)&&Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<1.28}
+function blocked(x,z,interacting=false){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const bridge=onBridge(x,z);if(!bridge){const nr=nearRiver(x,z);if(nr.dist<nr.w*.54+.12)return true;}if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!bridge&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z,interacting))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;if(Math.abs(x-fieldSignCollider.x)<1.08&&Math.abs(z-fieldSignCollider.z)<.26)return true;return false}
 function setHouseGroup(id,visible){for(const mesh of groups[id]||[])mesh.setEnabled(visible);}
 // Interaction state owns the leaf: proximity and the button never drive it directly.
 const doorAngle=()=>home.angle-entry.door*Math.PI*.49;
@@ -863,6 +908,7 @@ function setView(newSpan,target,tracking){
 $('wide').onclick=()=>setView(94,V(-2,2.7,0),false);
 $('close').onclick=()=>setView(66,V(0,3.5,0),false);
 $('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
+$('field-view').onclick=()=>setView(45,V(wheatGate.x,3.5,wheatGate.z+5),false);
 $('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
 function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
@@ -971,4 +1017,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,wheatBounds,wheatBeds,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
