@@ -164,7 +164,7 @@ final class UpdateCenter {
         boolean report=showReport;
         if(report){showReport=false;history.edit().putLong("seenVersion",installed).apply();}
         LinearLayout content=new LinearLayout(a);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(10));
-        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nNesta rodada: estrada de terra após a ponte, encaixes sem peças sobrepostas e trigo funcional com preparo, sementes, rega, crescimento e colheita. Dados salvos no aparelho.");reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
+        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nNesta rodada: relógio, calendário agrícola, estações, dia e noite, trigo com tempo de crescimento sazonal, estrada de terra e salvamento local.");reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
         detail=new TextView(a);detail.setTextSize(15);content.addView(detail);bar=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);content.addView(bar,new LinearLayout.LayoutParams(-1,dp(24)));
         checkButton=new Button(a);checkButton.setText("Verificar atualizações");checkButton.setOnClickListener(v->check());content.addView(checkButton);
         downloadButton=new Button(a);downloadButton.setText("Baixar em segundo plano");downloadButton.setOnClickListener(v->start());content.addView(downloadButton);
