@@ -10,3 +10,8 @@
 - Repositório público exclusivo para este jogo; outros projetos e repositório original permanecem privados conforme suas configurações. Não habilitar serviços pagos.
 - CI consolidada: build inclui checagem de sintaxe e planta, teste de navegador e três capturas; artefatos com retenção curta. Não há agente de correção automática habilitado.
 - EFG Master Standard 2.1: implementar, testar, avaliar, corrigir e revalidar, com evidências e proteção da versão estável.
+
+## Etapa 1H.1 — validação pública e correção de câmera
+- Run público 45785457509 / job 139790972817: instalação, compilação e planta passaram, teste falhou em `assert(Math.abs(result.cameraBetaDegrees-48)<.01)`; beta 47.96776495934084°. Evidência: 166 malhas, 183755 triângulos, 33 copas, 9900 folhas, 3000 pétalas, 6.39716556 FPS software, P95 536.5 ms/26 amostras, 39/39 pontos da ponte livres, 137 junções sem lacunas, colisões de cisterna e casinha positivas. Não foram geradas capturas. Não é FPS físico.
+- Hipótese causal: alterações de alvo do ArcRotateCamera recalculam os parâmetros esféricos. Correção: função retarget conserva alpha e raio e reaplica beta de 48° ao trocar alvo, inclusive no modo seguir. Mantida tolerância de 0.01°; novo teste em cada captura. Métricas gravadas antes das assertivas para diagnóstico de falhas futuras. Sintaxe verificada nesta sessão (imports excluídos). Revalidação remota pendente.
+- Nenhum APK publicado; não avançar artisticamente antes de analisar capturas e desempenho.
