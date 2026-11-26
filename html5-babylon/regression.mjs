@@ -34,6 +34,20 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  // The 1E run exhausted Playwright's screenshot budget with the continuous render loop.
  // Record the benchmark first, then freeze the loop and capture actual rendered canvas frames.
  await page.evaluate(()=>cvQA.engine.stopRenderLoop());
+ const chimney=await page.evaluate(()=>{
+  const q=cvQA,old=q.quality;q.selectQuality('equilibrado');q.updateChimneySmoke(0,true);
+  const p=q.smokePuffs[0];p.phase=.20;q.updateChimneySmoke(0,true);const y=p.mesh.position.y,size=p.mesh.scaling.x;
+  q.updateChimneySmoke(.1,true);const rising=p.mesh.position.y>y&&p.mesh.scaling.x>size;
+  const all=q.smokePuffs.every(p=>p.mesh.isEnabled()&&p.mesh.position.y>=q.smokeOrigin.y&&p.mesh.visibility>=0&&p.mesh.visibility<=1);
+  q.updateChimneySmoke(0,false);const hidden=q.smokePuffs.every(p=>!p.mesh.isEnabled());
+  q.selectQuality('economico');q.updateChimneySmoke(0,true);const economical=q.smokePuffs.filter(p=>p.mesh.isEnabled()).length;
+  q.selectQuality(old);q.updateChimneySmoke(0,true);
+  return {count:q.smokePuffs.length,rising,all,hidden,economical};
+ });
+ console.log('Chimney smoke pool',JSON.stringify(chimney));
+ assert.equal(chimney.count,6);assert(chimney.rising&&chimney.all&&chimney.hidden);assert.equal(chimney.economical,3);
+ // Quality selection resets the measured FPS window; retain the prior benchmark in result.
+
  async function capture(name,control,expectedBeta=48){
   const frame=await page.evaluate(control=>{if(control)document.getElementById(control).click();cvQA.scene.render();const canvas=document.getElementById('view');const probe=document.createElement('canvas');probe.width=64;probe.height=36;const ctx=probe.getContext('2d');ctx.drawImage(canvas,0,0,64,36);const data=ctx.getImageData(0,0,64,36).data;const colors=new Set();for(let i=0;i<data.length;i+=4)colors.add((data[i]<<16)|(data[i+1]<<8)|data[i+2]);return {png:canvas.toDataURL('image/png'),width:canvas.width,height:canvas.height,colors:colors.size,beta:cvQA.scene.activeCamera.beta*180/Math.PI};},control);
   assert(Math.abs(frame.beta-expectedBeta)<.25,'camera tilt changed during '+name);assert(frame.width>=640&&frame.height>=360,'capture dimensions');assert(frame.colors>100,'capture must contain real varied scene pixels');
