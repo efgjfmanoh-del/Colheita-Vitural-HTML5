@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {AgentBrain,PROFILES,petGoals,findRoute} from './src/ecosystem-ai.js';
+const b=new AgentBrain(PROFILES.dog,()=>0),goals=petGoals(),p={food:1,water:1,hunger:.1,thirst:.1,energy:.8,night:false,rain:false,inShelter:false,playerNear:false,affinity:0};
+assert.equal(b.choose(goals,{...p,thirst:.9}),'drink');
+assert.equal(b.choose(goals,{...p,hunger:.9}),'eat');
+assert.equal(b.choose(goals,{...p,night:true}),'shelter');
+b.fail('shelter');assert.notEqual(b.choose(goals,{...p,night:true}),'shelter');b.tick(9);assert.equal(b.choose(goals,{...p,night:true}),'shelter');
+assert.equal(b.choose(goals,{...p,night:true,inShelter:true}),'rest');
+const key=n=>n.join(','),dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]),neighbors=([x,z])=>[[x+1,z],[x-1,z],[x,z+1],[x,z-1]].filter(([x,z])=>x>=0&&z>=0&&x<=4&&z<=4&&!(x===2&&z<4));
+const route=findRoute([0,0],[4,0],neighbors,dist,key);
+assert(route&&route.some(p=>p[0]===2&&p[1]===4));assert(!route.some(p=>p[0]===2&&p[1]<4));console.log('PASS utility AI needs, weather, memory and obstacle planning');
