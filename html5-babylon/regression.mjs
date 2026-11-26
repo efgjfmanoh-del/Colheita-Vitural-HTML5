@@ -186,6 +186,11 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  return {initial,leafBlocked,routeErrors,mode,restored,partialBeta,beta:q.scene.activeCamera.beta*180/Math.PI,blend:q.entry.blend};});
  console.log('Exit route diagnostics',JSON.stringify(exit));assert(exit.leafBlocked,'open leaf must still block its physical footprint');assert(exit.routeErrors.every(e=>e<.06),'walk around open leaf, not through it');assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
  // Camera coverage behind and beside major buildings, then restore the original view.
+ const stability=await page.evaluate(()=>{
+  const q=cvQA;q.worldInput(0,0,0);const a=q.worldInput(0,1,0),b=q.worldInput(0,1,Math.PI),c=q.worldInput(0,1,Math.PI/2);q.worldInput(0,0,Math.PI);const d=q.worldInput(0,1,Math.PI);q.worldInput(0,0,0);
+  const rocks=q.rockColliders.filter(r=>!q.onBridge(r.x,r.z));return {a,b,c,d,rocks:rocks.length,blocked:rocks.every(r=>q.rockBlocked(r.x,r.z)),escape:q.obstacleEntered(-.1,-.2)===false&&q.obstacleEntered(-.2,-.1)===true};
+ });
+ console.log('Stable input frame and rock collision',JSON.stringify(stability));assert.deepEqual(stability.a,stability.b);assert.deepEqual(stability.a,stability.c);assert(Math.hypot(stability.a.x-stability.d.x,stability.a.z-stability.d.z)>1.99);assert(stability.rocks>100&&stability.blocked&&stability.escape);
  const orbitQA=await page.evaluate(()=>{
   const q=cvQA,H=q.home,cam=q.scene.activeCamera,base=cam.alpha,initialBeta=cam.beta,old=q.avatar.position.clone();
   const angle=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -346,6 +351,19 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});}
  assert(await mobile.evaluate(()=>!cvQA.sprint.held&&cvQA.joy.x===0&&cvQA.joy.z===0),'both pointers must release on cancel');
  console.log('PASS simultaneous native touch on sprint and joystick');
+ // Native floating touch from the canvas, not the existing fixed pad.
+ await mobile.evaluate(()=>{document.getElementById('controls-open').click();document.getElementById('stick-floating').click();document.getElementById('controls-close').click();});
+ const floating=await mobile.evaluate(()=>({x:innerWidth*.28,y:innerHeight*.69,mode:cvQA.controls.mode,saved:JSON.parse(localStorage.getItem('cv.controls.v1')).mode}));
+ assert.equal(floating.mode,'floating');assert.equal(floating.saved,'floating');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:floating.x,y:floating.y}]});
+ try{
+  const center=await mobile.evaluate(()=>({center:cvQA.stickCenter,joy:{...cvQA.joy}}));assert(center.center&&Math.abs(center.center.x-floating.x)<2&&Math.hypot(center.joy.x,center.joy.z)<.01);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:floating.x+60,y:floating.y}]});
+  await mobile.waitForFunction(()=>cvQA.joy.x>.9&&cvQA.stickCenter.x>innerWidth*.28+10,null,{timeout:10000});
+ }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+ assert(await mobile.evaluate(()=>cvQA.stickCenter===null&&cvQA.joy.x===0&&cvQA.joy.z===0));
+ await mobile.evaluate(()=>cvQA.setStickMode('fixed'));console.log('PASS native floating joystick and saved mode');
+
  // Physical input path in an emulated mobile browser, not a programmatic button.click().
  // Set up a known start on the porch; actual door input and traversal use touch events.
  // Isolate actual native touch from SwiftShader render throughput; step the same
