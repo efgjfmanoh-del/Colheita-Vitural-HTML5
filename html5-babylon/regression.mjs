@@ -12,6 +12,29 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   assert(Math.abs(frame.beta-expectedBeta)<.25,'camera tilt changed during '+name);assert(frame.width>=640&&frame.height>=360,'capture dimensions');assert(frame.colors>100,'capture must contain real varied scene pixels');
   assert(frame.png.startsWith('data:image/png;base64,'));const bytes=Buffer.from(frame.png.split(',')[1],'base64');assert(bytes.length>10000,'capture PNG size');fs.writeFileSync('qa/'+name+'.png',bytes);console.log('Captured '+name+' '+frame.width+'x'+frame.height+' '+bytes.length+' bytes');
  }
+ // Verify the optimized nearest-river calculation against the previous hypot algorithm.
+ const motionCheck=await page.evaluate(()=>{
+  const q=cvQA;let maxError=0;
+  for(let i=0;i<240;i++){
+   const x=-44+(i%20)*4.4,z=-25+Math.floor(i/20)*4.2;
+   let best={dist:1e9,y:1.8,w:4};
+   for(const a of q.riverSegments){const px=x-a.x,pz=z-a.z,t=Math.max(0,Math.min(1,(px*a.dx+pz*a.dz)/a.den)),dist=Math.hypot(px-t*a.dx,pz-t*a.dz);if(dist<best.dist)best={dist,y:a.y+a.dy*t,w:a.w+a.dw*t};}
+   const result=q.nearRiver(x,z);maxError=Math.max(maxError,Math.abs(best.dist-result.dist),Math.abs(best.y-result.y),Math.abs(best.w-result.w));
+  }
+  const saved=q.avatar.position.clone(),yaw=q.avatar.rotation.y;
+  const dir=[[1,0],[-1,0],[0,1],[0,-1]].find(([x,z])=>[.1,.2,.3,.4,.5,.6].every(k=>!q.blocked(saved.x+x*k,saved.z+z*k)&&Math.abs(q.surfaceHeight(saved.x+x*k,saved.z+z*k)-saved.y)<.2));
+  if(!dir)throw new Error('No walkable speed test direction');
+  const [x,z]=dir;
+  const late=q.advanceManual(x,z,.10);q.avatar.position.copyFrom(saved);
+  let steady=0;for(let k=0;k<6;k++)steady+=q.advanceManual(x,z,1/60);
+  q.avatar.position.copyFrom(saved);q.avatar.rotation.y=yaw;
+  const hits=q.riverStats.cacheHits;q.nearRiver(saved.x,saved.z);q.nearRiver(saved.x,saved.z);
+  return {maxError,late,steady,cacheHits:q.riverStats.cacheHits-hits,dead:q.shapeStick(.05,.03),full:q.shapeStick(2,0),diagonal:q.shapeStick(1,1)};
+ });
+ assert(motionCheck.maxError<1e-8&&motionCheck.cacheHits>0);
+ assert(Math.abs(motionCheck.late-.5)<.015&&Math.abs(motionCheck.steady-motionCheck.late)<.015,'100ms frame must preserve displacement using substeps');
+ assert.deepEqual(motionCheck.dead,{x:0,z:0});assert.deepEqual(motionCheck.full,{x:1,z:0});assert(Math.abs(Math.hypot(motionCheck.diagonal.x,motionCheck.diagonal.z)-1)<1e-9);
+ fs.writeFileSync('qa/movimento.json',JSON.stringify(motionCheck,null,2));console.log('PASS movement time, analog deadzone and river query equivalence',JSON.stringify(motionCheck));
  await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);
  // Confirm movement in the running 3D scene, not just static mesh existence.
  await page.evaluate(()=>{document.getElementById('wide').click();cvQA.engine.runRenderLoop(()=>cvQA.scene.render());});
@@ -97,11 +120,16 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(touchStart,'mobile spawn must permit movement');
  const cdp=await mobile.context().newCDPSession(mobile);
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchStart.cx,y:touchStart.cy}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchStart.cx+1,y:touchStart.cy+1}]});
+ assert(await mobile.evaluate(()=>cvQA.joy.x===0&&cvQA.joy.z===0),'touch jitter must stay in deadzone');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+ assert(await mobile.evaluate(()=>cvQA.joy.x===0&&cvQA.joy.z===0));
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchStart.cx,y:touchStart.cy}]});
  try{await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchStart.cx+touchStart.dx,y:touchStart.cy+touchStart.dy}]});
  await mobile.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz)>.1,touchStart,{timeout:30000});
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const touchMoved=await mobile.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz),touchStart);
- assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1));
+ assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1&&cvQA.joy.x===0&&cvQA.joy.z===0));
  // Physical input path in an emulated mobile browser, not a programmatic button.click().
  // Set up a known start on the porch; actual door input and traversal use touch events.
  await mobile.evaluate(()=>{const q=cvQA,H=q.home,p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});

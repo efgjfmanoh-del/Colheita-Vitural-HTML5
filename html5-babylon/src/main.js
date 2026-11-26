@@ -66,7 +66,20 @@ const channel=[];for(let i=0;i<rawChannel.length-1;i++){const a=rawChannel[i],b=
  const n=Math.max(6,Math.ceil(Vector3.Distance(a.p,b.p)/.85)),fall=i===1||i===3;const ts=Array.from({length:n},(_,j)=>j/n).filter(t=>!fall||t<.45||t>.55);if(fall)ts.push(.45,.47,.49,.51,.53,.55);ts.sort((a,b)=>a-b);for(const t of ts){const p=Vector3.CatmullRom(p0,a.p,b.p,p3,t);let ht=t;if(fall)ht=Math.max(0,Math.min(1,(t-.47)/.06));p.y=a.p.y+(b.p.y-a.p.y)*ht;channel.push({p,w:a.w+(b.w-a.w)*t,fall});}}
 channel.push(rawChannel.at(-1));
 
-function nearRiver(x,z){let best={dist:1e9,y:1.8,w:4};for(let i=1;i<channel.length;i++){const a=channel[i-1],b=channel[i],dx=b.p.x-a.p.x,dz=b.p.z-a.p.z;let t=Math.max(0,Math.min(1,((x-a.p.x)*dx+(z-a.p.z)*dz)/(dx*dx+dz*dz)));let dist=Math.hypot(x-a.p.x-t*dx,z-a.p.z-t*dz),w=a.w+(b.w-a.w)*t;if(dist<best.dist)best={dist,y:a.p.y+(b.p.y-a.p.y)*t,w};}return best}
+// Static river geometry: cache exact repeated queries and compare squared distances.
+const riverSegments=channel.slice(1).map((b,i)=>{const a=channel[i],dx=b.p.x-a.p.x,dz=b.p.z-a.p.z;return {x:a.p.x,z:a.p.z,y:a.p.y,w:a.w,dx,dz,dy:b.p.y-a.p.y,dw:b.w-a.w,den:dx*dx+dz*dz};}).filter(a=>a.den>0);
+const riverStats={queries:0,scans:0,cacheHits:0};
+let riverCache=null;
+function nearRiver(x,z){
+ riverStats.queries++;
+ if(riverCache&&riverCache.x===x&&riverCache.z===z){riverStats.cacheHits++;return riverCache.result;}
+ riverStats.scans++;let best=1e18,y=1.8,w=4;
+ for(const a of riverSegments){
+  const px=x-a.x,pz=z-a.z,t=Math.max(0,Math.min(1,(px*a.dx+pz*a.dz)/a.den)),ex=px-t*a.dx,ez=pz-t*a.dz,d2=ex*ex+ez*ez;
+  if(d2<best){best=d2;y=a.y+a.dy*t;w=a.w+a.dw*t;}
+ }
+ const result={dist:Math.sqrt(best),y,w};riverCache={x,z,result};return result;
+}
 function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const west=x<-20?Math.max(0,Math.min(1,(z-5)/16))*2.2:0;const flat=2.65+west+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
 entity('terrain');const minX=X(20),maxX=X(750),minZ=Z(330),maxZ=Z(-20),nx=170,nz=110,pos=[],idx=[],colors=[],uvs=[];
 for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=minX+(maxX-minX)*i/nx,z=minZ+(maxZ-minZ)*j/nz,y=height(x,z),n=nearRiver(x,z),d=n.dist-n.w/2;pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
@@ -311,7 +324,7 @@ function closeGarden(){gardenPanel.hidden=true;selectedPlanter=null;}
 $('garden-close').addEventListener('click',closeGarden);$('garden-remove').addEventListener('click',()=>changeCrop(null));
 for(const p of planters){rebuildCrop(p);updateCrop(p);}
 function updateGarden(now=Date.now()){
- const near=nearbyPlanter();gardenAction.hidden=!near||!gardenPanel.hidden;
+ const near=nearbyPlanter(),hide=!near||!gardenPanel.hidden;if(gardenAction.hidden!==hide)gardenAction.hidden=hide;
  if(selectedPlanter&&selectedPlanter!==near)closeGarden();
  if(now-lastGardenTick>=250){lastGardenTick=now;for(const p of planters)updateCrop(p,now);if(selectedPlanter)renderGarden();}
 }
@@ -431,7 +444,7 @@ flowerbed('front garden',449,188,110,2.7);flowerbed('well garden',616,165,72,1.8
 entity('dog');const dog=P(325,183);dog.y=height(dog.x,dog.z);const dogFur=mat('dog caramel','#ba713c'),dogWhite=mat('dog ivory','#f1dcb9');sphere('dog body',dog.x,dog.y+.41,dog.z,.41,.30,.63,dogFur);sphere('dog chest',dog.x,dog.y+.48,dog.z-.38,.30,.34,.29,dogWhite);sphere('dog head',dog.x,dog.y+.78,dog.z-.50,.31,.32,.32,dogFur);sphere('dog muzzle',dog.x,dog.y+.63,dog.z-.77,.22,.16,.22,dogWhite);sphere('dog nose',dog.x,dog.y+.67,dog.z-.92,.10,.08,.09,M.black);for(let a of [-1,1]){sphere('dog ear',dog.x+a*.27,dog.y+.71,dog.z-.50,.10,.23,.13,M.woodDark);sphere('dog eye',dog.x+a*.13,dog.y+.84,dog.z-.73,.042,.046,.035,M.black);for(let b of [-1,1])sphere('dog leg',dog.x+a*.23,dog.y+.17,dog.z+b*.34,.11,.21,.12,dogWhite)}beam('dog tail',V(dog.x,dog.y+.5,dog.z+.55),V(dog.x+.1,dog.y+.91,dog.z+.79),.12,dogFur);cyl('dog bowl',dog.x+.68,dog.y+.09,dog.z-.6,.23,.16,M.red);
 entity('garden border');for(let k=0;k<30;k++){const u=350+k*4.1,v=181+3*Math.sin(k*.5),p=P(u,v);p.y=height(p.x,p.z)+.07;rock('garden edging',p,.20,.13,.17,M.stoneLight)}
 entity('grass details');const grassBase=MeshBuilder.CreateCylinder('grass tuft', {diameterTop:0,diameterBottom:.10,height:.36,tessellation:3},scene);grassBase.material=M.leaf2;grassBase.isPickable=false;const mats=[];for(let i=0;i<1800;i++){let u=35+random()*700,v=8+random()*310,x=X(u),z=Z(v),nr=nearRiver(x,z);if(nr.dist<nr.w/2+1.5||(u>320&&u<490&&v>96&&v<183)||pathPoints.some(p=>Math.hypot(x-p.x,z-p.z)<1.4))continue;let y=height(x,z)+.13;let matrix=Matrix.Compose(V(.7+random()*.8,.55+random()*.75,.7+random()*.8),Quaternion.RotationYawPitchRoll(random()*6.28,0,(random()-.5)*.4),V(x,y,z));mats.push(...matrix.asArray())}grassBase.thinInstanceSetBuffer('matrix',new Float32Array(mats),16,true);grassBase.receiveShadows=false;groups['grass details'].push(grassBase);
-entity('farm visitor');const player=P(538,205);player.y=height(player.x,player.z);const avatar=new Mesh('visitor root',scene);avatar.position=player.clone();const bodyParts=[];for(const [n,x,y,z,w,h,d,m] of [['body',0,.97,0,.42,.63,.30,M.woodLight],['leg L',-.13,.36,0,.15,.62,.17,M.woodDark],['leg R',.13,.36,0,.15,.62,.17,M.woodDark],['arm L',-.29,.95,0,.14,.52,.16,M.plaster],['arm R',.29,.95,0,.14,.52,.16,M.plaster]]){let p=box(n,x,y,z,w,h,d,m);p.parent=avatar;bodyParts.push(p)}let head=sphere('head',0,1.5,0,.22,.25,.22,M.plaster);head.parent=avatar;let hat=cyl('straw hat',0,1.72,0,.37,.09,M.sand);hat.parent=avatar;let hatTop=cyl('hat crown',0,1.82,0,.21,.20,M.woodLight);hatTop.parent=avatar;
+entity('farm visitor');const player=P(538,205);player.y=surfaceHeight(player.x,player.z);const avatar=new Mesh('visitor root',scene);avatar.position=player.clone();const bodyParts=[];for(const [n,x,y,z,w,h,d,m] of [['body',0,.97,0,.42,.63,.30,M.woodLight],['leg L',-.13,.36,0,.15,.62,.17,M.woodDark],['leg R',.13,.36,0,.15,.62,.17,M.woodDark],['arm L',-.29,.95,0,.14,.52,.16,M.plaster],['arm R',.29,.95,0,.14,.52,.16,M.plaster]]){let p=box(n,x,y,z,w,h,d,m);p.parent=avatar;bodyParts.push(p)}let head=sphere('head',0,1.5,0,.22,.25,.22,M.plaster);head.parent=avatar;let hat=cyl('straw hat',0,1.72,0,.37,.09,M.sand);hat.parent=avatar;let hatTop=cyl('hat crown',0,1.82,0,.21,.20,M.woodLight);hatTop.parent=avatar;
 // Articulated arm used for grasping: two segments, elbow and a separate hand.
 const reachUpper=box('interaction upper arm',0,0,0,.145,1,.155,M.plaster),reachLower=box('interaction forearm',0,0,0,.125,1,.135,M.plaster),reachHand=sphere('interaction hand',0,0,0,.085,.085,.09,M.plaster);
 const reachMeshes=[reachUpper,reachLower,reachHand];for(const m of reachMeshes){m.parent=avatar;m.setEnabled(false);}
@@ -459,10 +472,35 @@ function walkPose(distance,dt){
  }
  const bob=Math.abs(Math.sin(gait.phase))*gait.stride*.045;bodyParts[0].position.y=limbRest[0].y+bob;head.position.y=1.5+bob;hat.position.y=1.72+bob;hatTop.position.y=1.82+bob;
 }
-let joy={x:0,z:0},keys=new Set(),follow=false;window.addEventListener('keydown',e=>{keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{keys.clear();joy.x=joy.z=0});
-let pointer=null;const pad=$('joy'),knob=$('knob');function reset(){pointer=null;joy.x=joy.z=0;knob.style.transform=''}function move(e){if(e.pointerId!==pointer)return;const r=pad.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,k=Math.min(1,36/Math.max(1,Math.hypot(dx,dy)));joy.x=dx*k/36;joy.z=-dy*k/36;knob.style.transform='translate('+dx*k+'px,'+dy*k+'px)'}pad.addEventListener('pointerdown',e=>{if(pointer!==null)return;pointer=e.pointerId;pad.setPointerCapture(pointer);move(e)});pad.addEventListener('pointermove',move);for(const e of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(e,v=>{if(v.pointerId===pointer)reset()});
+let joy={x:0,z:0},keys=new Set(),follow=false;
+let pointer=null,stickCenter=null;const pad=$('joy'),knob=$('knob');
+const motion={manualFrames:0,blockedFrames:0,steps:0,requested:0,travelled:0,peakDeltaMs:0};
+const DEADZONE=.10;
+function shapeStick(x,z){const len=Math.hypot(x,z);if(len<=DEADZONE)return {x:0,z:0};const strength=(Math.min(1,len)-DEADZONE)/(1-DEADZONE);return {x:x/len*strength,z:z/len*strength};}
+function reset(){
+ const old=pointer;pointer=null;stickCenter=null;joy.x=joy.z=0;knob.style.transform='';
+ if(old!==null&&pad.hasPointerCapture(old))try{pad.releasePointerCapture(old);}catch{}
+}
+function cancelInput(){keys.clear();reset();}
+window.addEventListener('keydown',e=>{keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});
+window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',cancelInput);window.addEventListener('resize',reset);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelInput()});
+function move(e){
+ if(e.pointerId!==pointer||!stickCenter)return;
+ const dx=e.clientX-stickCenter.x,dy=e.clientY-stickCenter.y,r=stickCenter.r,len=Math.hypot(dx,dy),k=Math.min(1,r/Math.max(1,len)),v=shapeStick(dx/r,-dy/r);
+ joy.x=v.x;joy.z=v.z;knob.style.transform='translate('+dx*k+'px,'+dy*k+'px)';
+}
+pad.addEventListener('pointerdown',e=>{
+ if(pointer!==null||e.button!==0)return;const r=pad.getBoundingClientRect();
+ stickCenter={x:r.left+r.width/2,y:r.top+r.height/2,r:Math.max(12,(r.width-knob.offsetWidth)/2-2)};
+ pointer=e.pointerId;pad.setPointerCapture(pointer);move(e);e.preventDefault();
+});
+pad.addEventListener('pointermove',move);
+for(const e of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(e,v=>{if(v.pointerId===pointer)reset()});
+
 function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz);return t>=0&&t<=1&&Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<1.28}
-function blocked(x,z,interacting=false){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const nr=nearRiver(x,z);if(!onBridge(x,z)&&nr.dist<nr.w*.54+.12)return true;if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!onBridge(x,z)&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z,interacting))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;return false}
+function blocked(x,z,interacting=false){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const bridge=onBridge(x,z);if(!bridge){const nr=nearRiver(x,z);if(nr.dist<nr.w*.54+.12)return true;}if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!bridge&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z,interacting))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;return false}
 function setHouseGroup(id,visible){for(const mesh of groups[id]||[])mesh.setEnabled(visible);}
 // Interaction state owns the leaf: proximity and the button never drive it directly.
 const doorAngle=()=>home.angle-entry.door*Math.PI*.49;
@@ -572,7 +610,7 @@ function updateEntry(dt){
  if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
  entry.inside=inside;
  const nearDoor=doorNearby()||!!entry.action,doorLabel=entry.action?(entry.action.target?'Abrindo…':'Fechando…'):(entry.door>.5?'Fechar porta':'Abrir porta');
- doorAction.disabled=!!entry.action;
+ if(doorAction.disabled!==!!entry.action)doorAction.disabled=!!entry.action;
  if(doorAction.hidden===nearDoor)doorAction.hidden=!nearDoor;
  if(doorAction.textContent!==doorLabel)doorAction.textContent=doorLabel;
  const status=$('entry-status'),statusText=inside?'Interior':near?'Entrada da casa':'';
@@ -606,21 +644,43 @@ $('close').onclick=()=>setView(66,V(0,3.5,0),false);
 $('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
 $('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
 function moveAvatar(dx,dz,dt,interacting=false){
+ if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
- // A raised deck can be reached only via the stairs; prevent jumping through its edge.
- const can=(x,z)=>!blocked(x,z,interacting)&&Math.abs(surfaceHeight(x,z)-surfaceHeight(avatar.position.x,avatar.position.z))<=.34;
- if(can(oldX+dx,oldZ+dz)){avatar.position.x+=dx;avatar.position.z+=dz;}
- else{if(can(oldX+dx,oldZ))avatar.position.x+=dx;if(can(avatar.position.x,oldZ+dz))avatar.position.z+=dz;}
+ let floor=surfaceHeight(oldX,oldZ);
+ const attempt=(x,z)=>{
+  if(blocked(x,z,interacting))return false;
+  const next=surfaceHeight(x,z);if(Math.abs(next-floor)>.34)return false;
+  avatar.position.x=x;avatar.position.z=z;floor=next;return true;
+ };
+ if(!attempt(oldX+dx,oldZ+dz)){
+  if(Math.abs(dx)>1e-8)attempt(oldX+dx,oldZ);
+  if(Math.abs(dz)>1e-8)attempt(avatar.position.x,oldZ+dz);
+ }
  const mx=avatar.position.x-oldX,mz=avatar.position.z-oldZ,travel=Math.hypot(mx,mz);
- avatar.position.y=surfaceHeight(avatar.position.x,avatar.position.z);
- if(travel>.0001)avatar.rotation.y=Math.atan2(mx,mz);walkPose(travel,dt);return travel;
+ avatar.position.y=floor;
+ if(travel>.0001){
+  const target=Math.atan2(mx,mz);
+  avatar.rotation.y=interacting?target:avatar.rotation.y+angleDelta(avatar.rotation.y,target)*(1-Math.exp(-dt*22));
+ }
+ walkPose(travel,dt);return travel;
 }
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;if(!entry.action)moveAvatar(dx,dz,dt);else walkPose(0,dt);updateEntry(dt);updateGarden();
- const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
+// Preserve movement speed through moderately late frames without tunneling.
+// Door actions keep their own existing bounded animation clock.
+function advanceManual(x,z,dt){
+ const duration=Math.max(0,Math.min(.12,dt)),len=Math.hypot(x,z);
+ if(len<1e-8||duration===0){walkPose(0,Math.min(.05,duration));return 0;}
+ const n=Math.ceil(duration/(1/60)),step=duration/n;
+ let total=0;motion.manualFrames++;motion.requested+=len*5*duration;motion.steps+=n;
+ for(let i=0;i<n;i++)total+=moveAvatar(x*step*5,z*step*5,step);
+ motion.travelled+=total;if(total<1e-4)motion.blockedFrames++;
+ return total;
+}
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);if(!entry.action)advanceManual(dx,dz,rawDt);else walkPose(0,dt);updateEntry(dt);updateGarden();
+ const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/30){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
-const perf={fps:null,p95Ms:null,frames:0,last:null,windowStart:null,samples:[]};
-scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros';perf.samples=[];perf.windowStart=now;}});
-function resetPerf(){perf.samples=[];perf.last=null;perf.windowStart=null;perf.fps=null;perf.p95Ms=null;perf.frames=0;$('fps').textContent='Medindo…';$('metrics').textContent='Nova janela de medição';}
+const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
+scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];perf.maxMs=a.at(-1);perf.slowFrames=a.filter(ms=>ms>33.33).length;$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros · pico '+perf.maxMs.toFixed(1)+' ms · lentos '+perf.slowFrames;perf.samples=[];perf.windowStart=now;}});
+function resetPerf(){perf.samples=[];perf.last=null;perf.windowStart=null;perf.fps=null;perf.p95Ms=null;perf.maxMs=null;perf.slowFrames=0;perf.frames=0;$('fps').textContent='Medindo…';$('metrics').textContent='Nova janela de medição';}
 document.addEventListener('visibilitychange',resetPerf);
 span=94;fit();retarget(V(-2,2.7,0));
 // Keep entity boundaries and material boundaries. Only static pieces are batched.
@@ -660,4 +720,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
