@@ -218,6 +218,8 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   q.avatar.position.copyFrom(old);q.avatar.position.y=q.surfaceHeight(old.x,old.z);for(let i=0;i<160;i++)q.updateEntry(.05);
   return {rear,right,left,restored:angle(cam.alpha,base),betaError:Math.abs(cam.beta-initialBeta),blend:q.entry.blend,registry:q.cameraBuildings.length};
  });
+ const camStability=await page.evaluate(()=>{const q=cvQA,c=q.cameraStability;c.zone=null;c.hold=0;const start=c.switches;const zones=[];for(let i=0;i<120;i++){const v=i%2?.09:.11;zones.push(q.stableCameraZone(v,{weight:.1,side:'left',alpha:0,id:'house'},false,.016)?.kind);}const switches=c.switches-start;for(let i=0;i<40;i++)q.stableCameraZone(0,null,false,.016);return {switches,unique:new Set(zones).size,cleared:c.zone===null,maxTurnRate:c.maxTurnRate};});
+ console.log('Camera hysteresis and angular speed',JSON.stringify(camStability));assert(camStability.switches<=2&&camStability.unique===1&&camStability.cleared&&camStability.maxTurnRate<=1.800001);
  console.log('Major-building exterior camera',JSON.stringify(orbitQA));for(const side of ['rear','right','left']){assert.equal(orbitQA[side].side,side);assert(orbitQA[side].weight>.75&&orbitQA[side].error<.08&&orbitQA[side].roofVisible&&!orbitQA[side].interior);}assert(orbitQA.restored<.02&&orbitQA.betaError<.02&&orbitQA.blend===0);
  const terrainQA=await page.evaluate(()=>{
   const q=cvQA,old=q.avatar.position.clone();let candidate=null;
@@ -378,6 +380,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
    }
   }return results;
  });
+ const routePerf=await page.evaluate(()=>({...cvQA.petSystem.stats}));console.log('Cooperative AI route slices',JSON.stringify(routePerf));assert(routePerf.routeSlices>0&&routePerf.routeCompleted>0&&Number.isFinite(routePerf.routeMaxSliceMs));
  console.log('Autonomous preventive care',JSON.stringify(preventive));assert(preventive.every(p=>!p.early&&p.planned&&p.untouched&&p.arrived&&p.recovered&&p.consumed));
  fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals,portal,preventive},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
  // QA-only closeups, not a permanent camera control.

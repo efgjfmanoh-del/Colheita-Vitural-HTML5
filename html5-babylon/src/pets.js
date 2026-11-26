@@ -61,17 +61,34 @@ export function createPets(api){
  function inside(x,z){let hit=false;for(let i=0,j=fencePoints.length-1;i<fencePoints.length;j=i++){const a=fencePoints[i],b=fencePoints[j];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)hit=!hit;}return hit;}
  function valid(x,z){const l=homeLocal(x,z);return inside(x,z)&&!(Math.abs(l.x)<home.w/2&&Math.abs(l.z)<home.d/2)&&!blocked(x,z);}
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
- function segment(a,b){const n=Math.max(1,Math.ceil(dist(a,b)/.045));let y=surfaceHeight(a.x,a.z);for(let i=1;i<=n;i++){const t=i/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,h=surfaceHeight(x,z);if(!valid(x,z)||Math.abs(h-y)>.34)return false;y=h;}return true;}
- const grid=.32;
- function route(a,b){
-  if(!valid(b.x,b.z))return null;if(segment(a,b))return [b.clone()];
-  const cache=new Map(),key=n=>n.i+':'+n.j,at=(i,j)=>{const k=i+':'+j;if(!cache.has(k))cache.set(k,valid(i*grid,j*grid)?{i,j,p:point(i*grid,j*grid)}:null);return cache.get(k);};
-  function snap(p){let best=null,dd=Infinity;const i=Math.round(p.x/grid),j=Math.round(p.z/grid);for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++){const n=at(i+x,j+z);if(n&&dist(p,n.p)<dd&&segment(p,n.p)){best=n;dd=dist(p,n.p);}}return best;}
-  const start=snap(a),goal=snap(b);if(!start||!goal)return null;
-  const nodes=findRoute(start,goal,n=>[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]].map(([i,j])=>at(n.i+i,n.j+j)).filter(q=>q&&segment(n.p,q.p)),(a,b)=>dist(a.p,b.p),key);
-  if(!nodes)return null;const raw=nodes.map(n=>n.p).concat([b.clone()]),out=[];let last=a;
-  for(let i=0;i<raw.length;){let j=raw.length-1;while(j>i&&!segment(last,raw[j]))j--;out.push(raw[j].clone());last=raw[j];i=j+1;}return out;
+ // Cooperative route search: yield during line checks and every graph expansion.
+ function* segmentSteps(a,b){
+  const n=Math.max(1,Math.ceil(dist(a,b)/.045));let y=surfaceHeight(a.x,a.z);
+  for(let i=1;i<=n;i++){const t=i/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,h=surfaceHeight(x,z);if(!valid(x,z)||Math.abs(h-y)>.34)return false;y=h;if(i%8===0)yield;}return true;
  }
+ const grid=.32;
+ function* routeSteps(a,b){
+  if(!valid(b.x,b.z))return null;
+  if(yield* segmentSteps(a,b))return [b.clone()];
+  const cache=new Map(),edges=new Map(),key=n=>n.i+':'+n.j,at=(i,j)=>{const k=i+':'+j;if(!cache.has(k))cache.set(k,valid(i*grid,j*grid)?{i,j,p:point(i*grid,j*grid)}:null);return cache.get(k);};
+  function* snap(p){let best=null,dd=Infinity;const i=Math.round(p.x/grid),j=Math.round(p.z/grid);for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++){const n=at(i+x,j+z);if(n&&dist(p,n.p)<dd&&(yield* segmentSteps(p,n.p))){best=n;dd=dist(p,n.p);}yield;}return best;}
+  const start=yield* snap(a),goal=yield* snap(b);if(!start||!goal)return null;
+  const goalKey=key(goal),open=[{node:start,g:0,f:dist(start.p,goal.p),prev:null}],best=new Map([[key(start),0]]);let end=null;
+  for(let iter=0;open.length&&iter<2800;iter++){
+   let i=0;for(let j=1;j<open.length;j++)if(open[j].f<open[i].f)i=j;
+   const c=open.splice(i,1)[0],k=key(c.node);if(c.g!==best.get(k)){yield;continue;}if(k===goalKey){end=c;break;}
+   for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
+    const q=at(c.node.i+di,c.node.j+dj);if(!q){yield;continue;}const nk=key(q),g=c.g+dist(c.node.p,q.p);if(g>=(best.get(nk)??Infinity)){yield;continue;}
+    const ek=k<nk?k+'|'+nk:nk+'|'+k;
+    if(!edges.has(ek))edges.set(ek,yield* segmentSteps(c.node.p,q.p));
+    if(edges.get(ek)){best.set(nk,g);open.push({node:q,g,f:g+dist(q.p,goal.p),prev:c});}yield;
+   }
+  }
+  if(!end)return null;const raw=[b.clone()];for(let n=end;n;n=n.prev)raw.unshift(n.node.p);
+  const out=[];let last=a;
+  for(let i=0;i<raw.length;){let j=raw.length-1;while(j>i&&!(yield* segmentSteps(last,raw[j]))){j--;yield;}out.push(raw[j].clone());last=raw[j];i=j+1;yield;}return out;
+ }
+ function route(a,b){const gen=routeSteps(a,b);let n;do{n=gen.next();}while(!n.done);return n.value;}
  function safe(origin,offsets){for(const [x,z] of offsets){const p=point(origin.x+x,origin.z+z);if(valid(p.x,p.z))return p;}return origin.clone();}
  const dogOut0=dogHome.C(0,0,-dogHome.d/2-1.12),dogOut=safe(dogOut0,[[0,0],[-.2,-.4],[.2,-.5],[0,-1]]);
  const catOut0=catAt(0,0,-.99),catOut=safe(catOut0,[[0,0],[0,-.15],[.15,-.12]]);
@@ -81,14 +98,29 @@ export function createPets(api){
   {id:'dog',label:'Cachorro',rig:rig('dog',dogCoat,dogLight,false),out:dogOut,curtain:dogCurtain,threshold:dogHome.C(0,.51,-dogHome.d/2+.02),bed:dogHome.C(0,.51,.42),food:bowl('dog',dp2,false),water:bowl('dog',dp1,true)},
   {id:'cat',label:'Gato',rig:rig('cat',catCoat,catLight,true),out:catOut,curtain:catCurtain,threshold:catAt(0,.11,-.49),bed:catAt(0,.18,.12),food:bowl('cat',point(cp2.x,cp2.z),false),water:bowl('cat',point(cp1.x,cp1.z),true)}
  ];
- const stats={decisions:0,paths:0,failed:0,arrivals:0,distance:0,care:0},goals=petGoals();
+ const stats={decisions:0,paths:0,failed:0,arrivals:0,distance:0,care:0,routeSlices:0,routeMaxSliceMs:0,routeOverBudget:0,routeCompleted:0},goals=petGoals();
  function state(p,s,t){p.state=s;p.timer=t;}
+ function* routeCandidates(origin,targets){for(const target of targets){const path=yield* routeSteps(origin,target);if(path)return path;yield;}return null;}
  function plan(p,target,after,homeward=false){
-  const r=route(p.rig.root.position,target);if(!r){stats.failed++;p.brain.fail(p.brain.goal);return false;}
-  p.path=r.map(v=>({v,private:false}));if(homeward)p.path.push({v:p.threshold.clone(),private:true},{v:p.bed.clone(),private:true});
-  p.after=after;stats.paths++;state(p,'walk',0);return true;
+  const candidates=Array.isArray(target)?target:[target];if(!candidates.length)return false;
+  p.path=[];p.pending=routeCandidates(p.rig.root.position.clone(),candidates);p.routeGoal=p.brain.goal;
+  if(homeward)p.path.push({v:p.threshold.clone(),private:true},{v:p.bed.clone(),private:true});
+  p.after=after;state(p,'walk',0);return true;
  }
- function leave(p){p.path=[{v:p.threshold.clone(),private:true},{v:p.out.clone(),private:true}];p.after='idle';state(p,'walk',0);}
+ let routeCursor=0;
+ function pumpRoutes(budgetMs=2){
+  const start=performance.now();let steps=0;
+  while(steps<96&&performance.now()-start<budgetMs){
+   const p=pets[routeCursor++%pets.length];if(!pets.some(q=>q.pending&&q.state==='walk'))break;
+   if(!p.pending||p.state!=='walk'){steps++;continue;}
+   const n=p.pending.next();steps++;if(!n.done)continue;
+   p.pending=null;stats.routeCompleted++;
+   if(n.value){p.path=n.value.map(v=>({v,private:false})).concat(p.path);stats.paths++;}
+   else{stats.failed++;p.brain.fail(p.routeGoal);p.path=[];state(p,'idle',2);}
+  }
+  if(steps){const ms=performance.now()-start;stats.routeSlices++;stats.routeMaxSliceMs=Math.max(stats.routeMaxSliceMs,ms);if(ms>budgetMs+1)stats.routeOverBudget++;}
+ }
+ function leave(p){p.pending=null;p.path=[{v:p.threshold.clone(),private:true},{v:p.out.clone(),private:true}];p.after='idle';state(p,'walk',0);}
  for(const p of pets){p.brain=new AgentBrain(PROFILES[p.id],rnd);p.rig.root.position.copyFrom(p.out);p.path=[];p.after='idle';p.inShelter=false;p.inHouse=false;p.needCheck=0;p.phase=0;p.lastCare=-100;state(p,'idle',p.id==='dog'?2:4);}
  // Stand beside the bowl rather than placing the animal's body inside it.
  function mealPlan(p,kind){
@@ -100,7 +132,7 @@ export function createPets(api){
    if(!valid(x,z)||Math.abs(surfaceHeight(x,z)-bowl.point.y)>.18||dist({x,z},other)<(p.id==='dog'?.45:.32))continue;
    candidates.push(point(x,z));
   }
-  for(const target of candidates){if(plan(p,target,kind)){p.mealTarget=bowl.point.clone();return true;}}
+  if(candidates.length&&plan(p,candidates,kind)){p.mealTarget=bowl.point.clone();return true;}
   p.brain.fail(kind);return false;
  }
  // A dedicated portal connects the porch to a bounded indoor route, even with the human door closed.
@@ -113,7 +145,7 @@ export function createPets(api){
  }
  function exitHouse(p){
   if(doorState().active)return false;
-  p.path=[{v:houseThreshold.clone(),private:true,portal:-1},{v:houseOut.clone(),private:true,portal:-1}];p.after='idle';state(p,'walk',0);return true;
+  p.pending=null;p.path=[{v:houseThreshold.clone(),private:true,portal:-1},{v:houseOut.clone(),private:true,portal:-1}];p.after='idle';state(p,'walk',0);return true;
  }
  function choose(p){
   const d=data[p.id],w=weather(),per={...d,night:!!w.night,rain:!!w.rain,inShelter:p.inShelter,playerNear:dist(p.rig.root.position,avatar.position)<3.0};
@@ -131,7 +163,7 @@ export function createPets(api){
   state(p,'sit',3+rnd()*3);
  }
  function pose(p,dt){
-  const r=p.rig,s=r.s,walking=p.state==='walk',playing=p.state==='play',sleep=p.state==='sleep',sit=p.state==='sit',eat=p.state==='eat'||p.state==='drink',pet=p.state==='pet';
+  const r=p.rig,s=r.s,walking=p.state==='walk'&&!p.pending,playing=p.state==='play',sleep=p.state==='sleep',sit=p.state==='sit',eat=p.state==='eat'||p.state==='drink',pet=p.state==='pet';
   p.phase+=dt*(walking?10:playing?13:2.8);const a=p.phase,e=1-Math.exp(-dt*10);
   const y=s*(sleep?-.24:sit?-.10:walking?.035*Math.abs(Math.sin(a)):playing?.11*Math.abs(Math.sin(a)):.012*Math.sin(a));
   r.body.position.y+=(y-r.body.position.y)*e;r.body.rotation.x+=((sit?-.20:0)-r.body.rotation.x)*e;
@@ -152,7 +184,7 @@ export function createPets(api){
   p.brain.goal=need.id;
   if(p.inShelter){leave(p);return true;}
   if(p.inHouse)return exitHouse(p);
-  const prior={path:p.path,after:p.after,state:p.state,timer:p.timer};
+  const prior={path:p.path,pending:p.pending,after:p.after,state:p.state,timer:p.timer};
   if(mealPlan(p,need.id))return true;
   Object.assign(p,prior);return false;
  }
@@ -160,10 +192,11 @@ export function createPets(api){
   const d=data[p.id];p.brain.tick(dt);d.hunger=clamp01(d.hunger+dt*p.brain.profile.hungerRate);d.thirst=clamp01(d.thirst+dt*p.brain.profile.thirstRate);d.energy=clamp01(d.energy+dt*(p.state==='sleep'?.028:p.state==='walk'||p.state==='play'?-.004:.002));
   p.needCheck+=dt;if(p.needCheck>=.5){p.needCheck=0;reconsiderCare(p);}
   if(p.state==='walk'){
-   const step=p.path[0];if(!step){p.inShelter=p.after==='sleep';p.inHouse=p.after==='house';stats.arrivals++;state(p,p.after,p.after==='sleep'?12:p.after==='house'?8:p.after==='eat'||p.after==='drink'?4:2);}
+   const step=p.path[0];if(p.pending){/* Wait for bounded route slices. */}
+   else if(!step){p.inShelter=p.after==='sleep';p.inHouse=p.after==='house';stats.arrivals++;state(p,p.after,p.after==='sleep'?12:p.after==='house'?8:p.after==='eat'||p.after==='drink'?4:2);}
    else if(step.portal&&doorState().active){/* Wait until the moving human door is stable. */}
    else{const root=p.rig.root,dx=step.v.x-root.position.x,dz=step.v.z-root.position.z,dd=Math.hypot(dx,dz),k=Math.min(1,p.brain.profile.speed*dt/Math.max(.0001,dd)),x=root.position.x+dx*k,z=root.position.z+dz*k;
-    if(!step.private&&!valid(x,z)){const target=p.path.at(-1)?.v,again=target&&route(root.position,target);if(again&&again.length&&p.path.every(q=>!q.private)){p.path=again.map(v=>({v,private:false}));}else{p.brain.fail(p.brain.goal);p.path=[];state(p,'idle',2);}}
+    if(!step.private&&!valid(x,z)){const target=p.path.at(-1)?.v;if(target&&p.path.every(q=>!q.private)){plan(p,target,p.after);}else{p.brain.fail(p.brain.goal);p.path=[];state(p,'idle',2);}}
     else{root.position.set(x,step.private?root.position.y+(step.v.y-root.position.y)*k:surfaceHeight(x,z),z);if(dd>.012)root.rotation.y+=angleDelta(root.rotation.y,Math.atan2(-dx,-dz))*(1-Math.exp(-dt*10));stats.distance+=dd*k;if(k===1)p.path.shift();}
    }
   }else if((p.timer-=dt)<=0){
@@ -185,7 +218,7 @@ export function createPets(api){
   else if(['pet','play'].includes(action)&&!p.inShelter&&dist(avatar.position,p.rig.root.position)<1.65&&p.brain.time-p.lastCare>=8)d.affinity=clamp01(d.affinity+(action==='pet'?.025:.04));
   else return false;
   if(!save()){Object.assign(d,before);return false;}
-  if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);}
+  if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.pending=null;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);}
   stats.care++;return true;
  }
  const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando',house:'Visitando a casa'};
@@ -194,9 +227,9 @@ export function createPets(api){
  button.onclick=()=>{const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));if(!n.length)return;cancelInput();selected=n[0];ui('pet-name').value=data[selected.id].name;panel.hidden=false;refresh();};
  ui('pet-close').onclick=()=>{panel.hidden=true;selected=null;cancelInput();};
  for(const [id,action] of [['pet-food','food'],['pet-water','water'],['pet-pet','pet'],['pet-play','play'],['pet-rename','name']])ui(id).onclick=()=>{if(selected){care(selected.id,action,ui('pet-name').value);refresh();}};
- function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;if(uiClock<.15)return;uiClock=0;
+ function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);pumpRoutes();const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;if(uiClock<.15)return;uiClock=0;
   const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));button.hidden=!allowUI||!n.length||!panel.hidden;if(n.length)button.textContent='Pet · '+(data[n[0].id].name||n[0].label);if(selected&&!near(selected))ui('pet-close').click();else if(!panel.hidden)refresh();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,route,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,get data(){return data}};
+ return {pets,stats,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,get data(){return data}};
 }
