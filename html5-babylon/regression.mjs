@@ -114,7 +114,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('Exit route diagnostics',JSON.stringify(exit));assert(exit.leafBlocked,'open leaf must still block its physical footprint');assert(exit.routeErrors.every(e=>e<.06),'walk around open leaf, not through it');assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
  // Shared real collision volumes, including lateral rails and the narrow stair access.
  const porch=await page.evaluate(()=>{
- const q=cvQA,H=q.home,f=-H.d/2,half=H.w*.385;
+ const q=cvQA,H=q.home,f=-H.d/2,half=q.porchHalf;
  const at=(x,z)=>{const p=H.C(x,0,z);return q.homeBlocked(p.x,p.z);};
  const rails=q.porchRails.every(r=>at((r.x1+r.x2)/2,(r.z1+r.z2)/2));
  const fixtures=q.porchFixtures.every(r=>at(r.x,r.z));
@@ -126,6 +126,22 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  return {rails,fixtures,clearStair,stopped,half};
  });
  assert(porch.rails&&porch.fixtures&&porch.clearStair&&porch.stopped.x> -porch.half,'porch rails and fixture collisions');
+ // Validate exact physical path endpoints and side flower clearance.
+ const walkway=await page.evaluate(()=>{const q=cvQA,H=q.home,first=q.pathRows[0],last=q.pathRows.at(-1),local=first.map(p=>q.homeLocal(p.x,p.z));return {width:q.porchHalf*2,depth:2.8,stairError:Math.hypot(first[1].x-q.stairFoot.x,first[1].z-q.stairFoot.z),bridgeError:Math.hypot(last[1].x-q.bridgeEntry.x,last[1].z-q.bridgeEntry.z),stairWidth:Math.abs(local[2].x-local[0].x),flowers:q.pathFlowerPositions.length,sides:[...new Set(q.pathFlowerPositions.map(p=>p.side))],minClearance:Math.min(...q.pathFlowerPositions.map(p=>q.pathDistance(p.x,p.z))),benches:q.benches.map(b=>({x:b.x,windowClear:Math.abs(b.x)+b.hx< H.w*.3-.775})),pots:q.planters.map(p=>({id:p.id,clear:Math.abs(p.x)+p.config.hx<q.porchHalf-.11}))};});
+ console.log('Walkway diagnostics',JSON.stringify(walkway));assert(walkway.width>12&&walkway.stairError<1e-6&&walkway.bridgeError<1e-6&&Math.abs(walkway.stairWidth-2.2)<.001&&walkway.flowers>10&&walkway.sides.length===2&&walkway.minClearance>=1.66&&walkway.benches.every(b=>b.windowClear)&&walkway.pots.every(p=>p.clear));
+ // Walk to the two benches, use actual buttons and inspect jointed poses and state.
+ const seats=[];
+ for(const id of ['bench-left','bench-right']){
+  await page.evaluate(id=>{const q=cvQA,b=q.benches.find(x=>x.id===id),p=q.seatStand(b);p.x+=.03;q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);q.updateEntry(.05);},id);
+  await page.locator('#seat-action').click();
+  const seated=await page.evaluate(()=>{const q=cvQA;for(let i=0;i<100;i++)q.updateEntry(.025);const b=q.seating.bench,p=q.seatTarget(b);const before=q.avatar.position.clone();q.updateLocomotion(1,0,.1,true);return {phase:q.seating.phase,blend:q.seating.blend,seatError:Math.hypot(q.avatar.position.x-p.x,q.avatar.position.z-p.z),facing:Math.abs(Math.sin((q.avatar.rotation.y-q.home.angle-Math.PI)/2)),legs:q.seatLegs.every(l=>l.thigh.isEnabled()&&l.shin.isEnabled()),locked:q.avatar.position.subtract(before).length()<1e-8};});
+  assert(seated.phase==='seated'&&seated.blend===1&&seated.seatError<.001&&seated.facing<.001&&seated.legs&&seated.locked);
+  if(id==='bench-right')await capture('banco-sentado',null,await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));
+  await page.locator('#seat-action').click();
+  const stood=await page.evaluate(()=>{const q=cvQA;for(let i=0;i<50;i++)q.updateEntry(.025);return {phase:q.seating.phase,blend:q.seating.blend,last:q.seating.last,legsRestored:q.bodyParts[1].isEnabled()&&q.bodyParts[2].isEnabled(),blocked:q.blocked(q.avatar.position.x,q.avatar.position.z)};});
+  assert(stood.phase==='idle'&&stood.blend===0&&stood.last.success&&stood.last.bench===id&&stood.legsRestored&&!stood.blocked);seats.push({id,seated,stood});
+ }
+ fs.writeFileSync('qa/assentos.json',JSON.stringify({walkway,seats},null,2));console.log('PASS aligned walkway, clear side flowers and animated seating',JSON.stringify({walkway,seats}));
  // Interact with each separate planter via the real UI. No inventory or time simulation claimed.
  const visit=async id=>page.evaluate(id=>{const q=cvQA,p=q.planters.find(x=>x.id===id),v=q.home.C(p.x+(p.x<0?1:-1)*.92,0,p.z);q.avatar.position.copyFrom(v);q.avatar.position.y=q.surfaceHeight(v.x,v.z);q.updateGarden(Date.now()+1000);},id);
  await visit('porch-ceramic');await page.locator('#garden-action').click();await page.locator('[data-flower="rose"]').click();assert(await page.locator('[data-flower="daisy"]').isDisabled());
