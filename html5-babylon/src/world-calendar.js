@@ -1,7 +1,20 @@
 // One time scale for the fictional agricultural calendar and crops.
-export const REAL_MS_PER_GAME_MINUTE=2500;
+export const REAL_MS_PER_GAME_MINUTE=5000;
 export const DAYS_PER_MONTH=7,MONTHS_PER_YEAR=12;
 export const GAME_MINUTES_PER_DAY=1440;
+// Schema 1 was the 24x clock; schema 2 is 12x. Preserve the exact game
+// minute (including fractions) at migration, then continue at the new rate.
+export function newWorldClock(now){return {schema:2,anchor:now,offset:0,floor:0};}
+export function elapsedWorldClock(clock,now){return Math.max(0,clock.floor,clock.offset+now-clock.anchor);}
+export function upgradeWorldClock(saved,now){
+ if(!saved||!Number.isFinite(saved.anchor)||saved.anchor<0||!Number.isFinite(saved.floor)||saved.floor<0)throw Error('invalid world clock');
+ if(saved.schema===1){
+  const elapsed=Math.max(0,saved.floor,now-saved.anchor)*2;
+  return {schema:2,anchor:now,offset:elapsed,floor:elapsed};
+ }
+ if(saved.schema===2&&Number.isFinite(saved.offset)&&saved.offset>=0)return {...saved};
+ throw Error('invalid world clock schema');
+}
 export const REAL_MS_PER_GAME_DAY=GAME_MINUTES_PER_DAY*REAL_MS_PER_GAME_MINUTE;
 export const MONTH_NAMES=Object.freeze(['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']);
 export const WEEKDAYS=Object.freeze(['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo']);

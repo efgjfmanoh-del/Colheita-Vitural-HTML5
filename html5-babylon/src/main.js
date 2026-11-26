@@ -1,6 +1,6 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer} from '@babylonjs/core';
 import layout from '../layout.json';
-import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH} from './world-calendar.js';
+import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
 const $=id=>document.getElementById(id),canvas=$('view');
 const engine=new Engine(canvas,true,{preserveDrawingBuffer:true,stencil:true,adaptToDeviceRatio:false});
 // Render in physical pixels rather than downscaling the CSS viewport on high-DPR phones.
@@ -474,16 +474,16 @@ function updateGarden(now=Date.now()){
 // Independent, transactional wheat save. The existing ornamental garden key is untouched.
 // Independent world clock. No changes to existing flower, quality or wheat keys.
 const WORLD_KEY='cv.worldCalendar.v1',clockBoot=Date.now();
-let worldClock={schema:1,anchor:clockBoot,floor:0},clockLocked=false,clockError='',clockLastSave=clockBoot,lastClockRender=-Infinity,lastCalendarLabel='',lastLightMinute=-1;
+let worldClock=newWorldClock(clockBoot),clockLocked=false,clockError='',clockLastSave=clockBoot,lastClockRender=-Infinity,lastCalendarLabel='',lastLightMinute=-1;
 try{
  const raw=localStorage.getItem(WORLD_KEY);
- if(raw!==null){const v=JSON.parse(raw);if(v.schema!==1||!Number.isFinite(v.anchor)||v.anchor<0||!Number.isFinite(v.floor)||v.floor<0)throw Error('invalid world clock');worldClock=v;}
+ if(raw!==null){const previous=JSON.parse(raw);worldClock=upgradeWorldClock(previous,clockBoot);if(previous.schema!==worldClock.schema)localStorage.setItem(WORLD_KEY,JSON.stringify(worldClock));}
  else localStorage.setItem(WORLD_KEY,JSON.stringify(worldClock));
 }catch{clockLocked=true;clockError='Relógio local indisponível';}
-function worldElapsed(now=Date.now()){return Math.max(0,worldClock.floor,now-worldClock.anchor);}
+function worldElapsed(now=Date.now()){return elapsedWorldClock(worldClock,now);}
 function saveWorldClock(now=Date.now()){
  if(clockLocked)return false;
- const next={schema:1,anchor:worldClock.anchor,floor:worldElapsed(now)};
+ const next={...worldClock,floor:worldElapsed(now)};
  try{localStorage.setItem(WORLD_KEY,JSON.stringify(next));worldClock=next;clockLastSave=now;clockError='';return true;}catch{clockError='Relógio: falha ao salvar';return false;}
 }
 function updateWorldClock(now=Date.now(),force=false){
@@ -494,7 +494,7 @@ function updateWorldClock(now=Date.now(),force=false){
  const daylight=daylightAt(c.hour,c.minute);
  const pad=n=>String(n).padStart(2,'0'),label=pad(c.hour)+':'+pad(c.minute)+' · '+daylight.phase+' | '+c.weekday+', '+pad(c.day)+'/'+pad(c.month)+' · Ano '+c.year+' · '+c.season;
  if(label!==lastCalendarLabel){$('world-clock').textContent=label;lastCalendarLabel=label;}
- $('world-clock-error').textContent=clockError;
+ if($('world-clock-error').textContent!==clockError)$('world-clock-error').textContent=clockError;
  const minute=c.hour*60+c.minute;
  if(minute!==lastLightMinute){
   lastLightMinute=minute;const k=daylight.daylight;
@@ -514,7 +514,7 @@ let wheatState=freshWheat(),wheatSaveError='',wheatSaveLocked=false;
 try{
  const raw=localStorage.getItem(WHEAT_SAVE);
  if(raw!==null){const v=JSON.parse(raw);if(v.schema!==1||!Number.isSafeInteger(v.seeds)||v.seeds<0||!Number.isSafeInteger(v.grain)||v.grain<0||!v.plots||typeof v.plots!=='object'||Array.isArray(v.plots))throw Error('invalid wheat save');
- for(const [id,p] of Object.entries(v.plots)){if(!p||!wheatPlots.some(q=>q.id===id)||!['tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>900000)))throw Error('invalid plot');}
+ for(const [id,p] of Object.entries(v.plots)){if(!p||!wheatPlots.some(q=>q.id===id)||!['tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>1800000)))throw Error('invalid plot');}
  wheatState=v;}
 }catch{wheatSaveLocked=true;wheatSaveError='Dados de trigo indisponíveis; cultivo bloqueado para preservar o save.';}
 const wheatStatus=(id,now=Date.now(),state=wheatState)=>{const p=state.plots[id];return !p?'raw':p.state==='watered'&&now-p.wateredAt>=wheatDuration(p)?'ripe':p.state;};
