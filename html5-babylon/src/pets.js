@@ -1,6 +1,6 @@
 import {AgentBrain,PROFILES,petGoals,findRoute,clamp01} from './ecosystem-ai.js';
 export function createPets(api){
- const {V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather,ui,cancelInput}=api;
+ const {V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather,doorState,ui,cancelInput}=api;
  const SAVE='cv.pets.v1',defaults=()=>({name:'',food:1,water:1,hunger:.28,thirst:.35,affinity:0,energy:.8});
  let data={dog:defaults(),cat:defaults()},error='',seed=9213,selected=null,uiClock=0,saveClock=0;
  const rnd=()=>((seed=Math.imul(1664525,seed)+1013904223|0)>>>0)/4294967296;
@@ -8,13 +8,25 @@ export function createPets(api){
  function save(){if(error)return false;try{localStorage.setItem(SAVE,JSON.stringify(data));return true;}catch{error='Falha ao salvar os pets.';return false;}}
  const dogCoat=mat('dog caramel','#ba713c'),dogLight=mat('dog cream','#f1dcb9'),catCoat=mat('cat grey tabby','#92908a'),catLight=mat('cat cream','#e8dcc6'),stripe=mat('cat charcoal','#50514e'),nose=mat('cat nose','#b77a76'),ceramic=mat('pet ceramic','#4b7990'),waterMat=mat('pet water','#78b5c5',.18),foodMat=mat('pet kibble','#8e5934'),cushion=mat('cat cushion','#a76f4b');
  const f=-home.d/2;
- // Place cat shelter in the spare rear-right corner of the porch, opening towards the aisle.
- entity('cat shelter');const catHome={x:4.60,z:f-.58,hx:.46,hz:.44};
+ // Replace the former left bench; opening faces the front of the veranda.
+ entity('cat shelter');const catHome={x:-2.45,z:f-.66,hx:.62,hz:.51};
  const catAt=(x,y,z)=>home.C(catHome.x+x,.53+y,catHome.z+z);
  const cb=(n,x,y,z,w,h,d,m)=>{const p=catAt(x,y,z);return box(n,p.x,p.y,p.z,w,h,d,m,home.angle);};
- cb('cat shelter floor',0,.055,0,.92,.11,.88,M.woodLight);cb('cat shelter rear',.42,.42,0,.08,.74,.88,M.wood);
- for(const k of [-1,1])cb('cat shelter wall',0,.42,k*.40,.92,.74,.08,M.woodLight);
- cb('cat shelter lintel',-.42,.70,0,.08,.18,.88,M.wood);cb('cat shelter roof',0,.86,0,1.05,.14,1.01,M.roof);cb('cat cushion',.04,.14,0,.67,.08,.65,cushion);
+ cb('cat shelter floor',0,.055,0,1.24,.11,1.02,M.woodLight);cb('cat shelter rear',0,.45,.47,1.24,.80,.08,M.wood);
+ for(const k of [-1,1])cb('cat shelter wall',k*.58,.45,0,.08,.80,1.02,M.woodLight);
+ cb('cat shelter lintel',0,.76,-.47,1.24,.18,.08,M.wood);
+ for(const k of [-1,1])cb('cat shelter front jamb',k*.49,.42,-.47,.22,.64,.08,M.wood);
+ cb('cat shelter roof',0,.94,0,1.38,.16,1.17,M.roof);cb('cat cushion',0,.14,.04,.90,.08,.76,cushion);
+ // Cloth curtains are articulated at their top, not solid wooden doors.
+ const cloth=mat('warm canvas pet curtain','#b7a27b');cloth.alpha=.93;
+ function curtain(id,pos,angle,w,h){
+  entity(id+' curtain');const hinge=new Mesh(id+' curtain hinge',scene);hinge.position.copyFrom(pos);hinge.rotation.y=angle;
+  const strips=[];for(let i=0;i<3;i++){const strip=new Mesh(id+' cloth joint '+i,scene);strip.parent=hinge;strip.position.x=(i-1)*w/3;
+   const mesh=box(id+' hanging cloth '+i,0,-h/2,0,w/3-.025,h,.025,cloth,0,false);mesh.parent=strip;strips.push(strip);}
+  return {hinge,strips};
+ }
+ const dogCurtain=curtain('dog',dogHome.C(0,1.80,-dogHome.d/2-.08),dogHome.angle,1.35,.88);
+ const catCurtain=curtain('cat',catAt(0,.67,-.51),home.angle,.72,.53);
  porchFixtures.push({kind:'cat shelter',...catHome});
  function rig(id,coat,light,cat){
   entity(id);const s=cat?.70:1,root=new Mesh(id+' root',scene),body=new Mesh(id+' torso pivot',scene);body.parent=root;
@@ -49,8 +61,8 @@ export function createPets(api){
  function inside(x,z){let hit=false;for(let i=0,j=fencePoints.length-1;i<fencePoints.length;j=i++){const a=fencePoints[i],b=fencePoints[j];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)hit=!hit;}return hit;}
  function valid(x,z){const l=homeLocal(x,z);return inside(x,z)&&!(Math.abs(l.x)<home.w/2&&Math.abs(l.z)<home.d/2)&&!blocked(x,z);}
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
- function segment(a,b){const n=Math.max(1,Math.ceil(dist(a,b)/.20));let y=surfaceHeight(a.x,a.z);for(let i=1;i<=n;i++){const t=i/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,h=surfaceHeight(x,z);if(!valid(x,z)||Math.abs(h-y)>.34)return false;y=h;}return true;}
- const grid=.45;
+ function segment(a,b){const n=Math.max(1,Math.ceil(dist(a,b)/.045));let y=surfaceHeight(a.x,a.z);for(let i=1;i<=n;i++){const t=i/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,h=surfaceHeight(x,z);if(!valid(x,z)||Math.abs(h-y)>.34)return false;y=h;}return true;}
+ const grid=.32;
  function route(a,b){
   if(!valid(b.x,b.z))return null;if(segment(a,b))return [b.clone()];
   const cache=new Map(),key=n=>n.i+':'+n.j,at=(i,j)=>{const k=i+':'+j;if(!cache.has(k))cache.set(k,valid(i*grid,j*grid)?{i,j,p:point(i*grid,j*grid)}:null);return cache.get(k);};
@@ -62,12 +74,12 @@ export function createPets(api){
  }
  function safe(origin,offsets){for(const [x,z] of offsets){const p=point(origin.x+x,origin.z+z);if(valid(p.x,p.z))return p;}return origin.clone();}
  const dogOut0=dogHome.C(0,0,-dogHome.d/2-1.12),dogOut=safe(dogOut0,[[0,0],[-.2,-.4],[.2,-.5],[0,-1]]);
- const catOut0=catAt(-.85,0,0),catOut=safe(catOut0,[[0,0],[0,-.2],[-.1,-.2]]);
+ const catOut0=catAt(0,0,-.99),catOut=safe(catOut0,[[0,0],[0,-.15],[.15,-.12]]);
  const dp1=safe(dogOut,[[-1.05,-.35],[1.1,-.2],[0,-1.25]]),dp2=safe(dogOut,[[1.1,-.35],[-1.25,-.7],[0,-1.7]]);
- const cp1=home.C(2.8,.53,f-1.9),cp2=home.C(2.0,.53,f-2.0);
+ const cp1=home.C(-3.62,.53,f-1.18),cp2=home.C(-1.30,.53,f-1.18);
  const pets=[
-  {id:'dog',label:'Cachorro',rig:rig('dog',dogCoat,dogLight,false),out:dogOut,threshold:dogHome.C(0,.51,-dogHome.d/2+.02),bed:dogHome.C(0,.51,.42),food:bowl('dog',dp2,false),water:bowl('dog',dp1,true)},
-  {id:'cat',label:'Gato',rig:rig('cat',catCoat,catLight,true),out:catOut,threshold:catAt(-.44,.11,0),bed:catAt(.02,.18,0),food:bowl('cat',point(cp2.x,cp2.z),false),water:bowl('cat',point(cp1.x,cp1.z),true)}
+  {id:'dog',label:'Cachorro',rig:rig('dog',dogCoat,dogLight,false),out:dogOut,curtain:dogCurtain,threshold:dogHome.C(0,.51,-dogHome.d/2+.02),bed:dogHome.C(0,.51,.42),food:bowl('dog',dp2,false),water:bowl('dog',dp1,true)},
+  {id:'cat',label:'Gato',rig:rig('cat',catCoat,catLight,true),out:catOut,curtain:catCurtain,threshold:catAt(0,.11,-.49),bed:catAt(0,.18,.12),food:bowl('cat',point(cp2.x,cp2.z),false),water:bowl('cat',point(cp1.x,cp1.z),true)}
  ];
  const stats={decisions:0,paths:0,failed:0,arrivals:0,distance:0,care:0},goals=petGoals();
  function state(p,s,t){p.state=s;p.timer=t;}
@@ -77,7 +89,7 @@ export function createPets(api){
   p.after=after;stats.paths++;state(p,'walk',0);return true;
  }
  function leave(p){p.path=[{v:p.threshold.clone(),private:true},{v:p.out.clone(),private:true}];p.after='idle';state(p,'walk',0);}
- for(const p of pets){p.brain=new AgentBrain(PROFILES[p.id],rnd);p.rig.root.position.copyFrom(p.out);p.path=[];p.after='idle';p.inShelter=false;p.phase=0;p.lastCare=-100;state(p,'idle',p.id==='dog'?2:4);}
+ for(const p of pets){p.brain=new AgentBrain(PROFILES[p.id],rnd);p.rig.root.position.copyFrom(p.out);p.path=[];p.after='idle';p.inShelter=false;p.inHouse=false;p.phase=0;p.lastCare=-100;state(p,'idle',p.id==='dog'?2:4);}
  // Stand beside the bowl rather than placing the animal's body inside it.
  function mealPlan(p,kind){
   const bowl=kind==='drink'?p.water:p.food,origin=p.rig.root.position,reach=p.id==='dog'?.68:.49;
@@ -91,15 +103,29 @@ export function createPets(api){
   for(const target of candidates){if(plan(p,target,kind)){p.mealTarget=bowl.point.clone();return true;}}
   p.brain.fail(kind);return false;
  }
+ // A dedicated portal connects the porch to a bounded indoor route, even with the human door closed.
+ const houseOut=home.C(0,.53,f-.85),houseThreshold=home.C(0,.53,f-.055),houseIn=home.C(0,.53,f+.95);
+ function visitHouse(p){
+  if(p.inShelter||p.inHouse||doorState().active)return false;
+  if(!plan(p,houseOut,'house'))return false;
+  p.path.push({v:houseThreshold.clone(),private:true,portal:1},{v:houseIn.clone(),private:true,portal:1});
+  return true;
+ }
+ function exitHouse(p){
+  if(doorState().active)return false;
+  p.path=[{v:houseThreshold.clone(),private:true,portal:-1},{v:houseOut.clone(),private:true,portal:-1}];p.after='idle';state(p,'walk',0);return true;
+ }
  function choose(p){
   const d=data[p.id],w=weather(),per={...d,night:!!w.night,rain:!!w.rain,inShelter:p.inShelter,playerNear:dist(p.rig.root.position,avatar.position)<3.0};
   const goal=p.brain.choose(goals,per);stats.decisions++;
+  if(p.inHouse){if(!exitHouse(p))state(p,'house',1);return;}
   if(p.inShelter){if(goal==='rest'){state(p,'sleep',8);return;}leave(p);return;}
   if(goal==='drink'&&mealPlan(p,'drink'))return;
   if(goal==='eat'&&mealPlan(p,'eat'))return;
   if(goal==='shelter'&&plan(p,p.out,'sleep',true))return;
   if(goal==='social'){p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,'sit',3);return;}
   if(goal==='explore'){
+   if(rnd()<(p.id==='cat'?.40:.22)&&visitHouse(p))return;
    for(let i=0;i<9;i++){const x=p.out.x+(rnd()-.5)*29,z=p.out.z+(rnd()-.5)*20;if(!valid(x,z)||dist(p.rig.root.position,{x,z})<2.5)continue;if(plan(p,point(x,z),'idle'))return;}
   }
   state(p,'sit',3+rnd()*3);
@@ -118,9 +144,10 @@ export function createPets(api){
  function tickPet(p,dt){
   const d=data[p.id];p.brain.tick(dt);d.hunger=clamp01(d.hunger+dt*p.brain.profile.hungerRate);d.thirst=clamp01(d.thirst+dt*p.brain.profile.thirstRate);d.energy=clamp01(d.energy+dt*(p.state==='sleep'?.028:p.state==='walk'||p.state==='play'?-.004:.002));
   if(p.state==='walk'){
-   const step=p.path[0];if(!step){p.inShelter=p.after==='sleep';stats.arrivals++;state(p,p.after,p.after==='sleep'?12:p.after==='eat'||p.after==='drink'?4:2);}
+   const step=p.path[0];if(!step){p.inShelter=p.after==='sleep';p.inHouse=p.after==='house';stats.arrivals++;state(p,p.after,p.after==='sleep'?12:p.after==='house'?8:p.after==='eat'||p.after==='drink'?4:2);}
+   else if(step.portal&&doorState().active){/* Wait until the moving human door is stable. */}
    else{const root=p.rig.root,dx=step.v.x-root.position.x,dz=step.v.z-root.position.z,dd=Math.hypot(dx,dz),k=Math.min(1,p.brain.profile.speed*dt/Math.max(.0001,dd)),x=root.position.x+dx*k,z=root.position.z+dz*k;
-    if(!step.private&&!valid(x,z)){p.brain.fail(p.brain.goal);p.path=[];state(p,'idle',2);}
+    if(!step.private&&!valid(x,z)){const target=p.path.at(-1)?.v,again=target&&route(root.position,target);if(again&&again.length&&p.path.every(q=>!q.private)){p.path=again.map(v=>({v,private:false}));}else{p.brain.fail(p.brain.goal);p.path=[];state(p,'idle',2);}}
     else{root.position.set(x,step.private?root.position.y+(step.v.y-root.position.y)*k:surfaceHeight(x,z),z);if(dd>.012)root.rotation.y+=angleDelta(root.rotation.y,Math.atan2(-dx,-dz))*(1-Math.exp(-dt*10));stats.distance+=dd*k;if(k===1)p.path.shift();}
    }
   }else if((p.timer-=dt)<=0){
@@ -130,6 +157,8 @@ export function createPets(api){
   }
   if((p.state==='drink'||p.state==='eat')&&p.mealTarget){const root=p.rig.root,dx=root.position.x-p.mealTarget.x,dz=root.position.z-p.mealTarget.z;root.rotation.y+=angleDelta(root.rotation.y,Math.atan2(dx,dz))*(1-Math.exp(-dt*12));}
   pose(p,dt);
+  const s=p.path[0],cross=s?.private&&!s.portal&&p.state==='walk',nearDoor=dist(p.rig.root.position,p.threshold)<.85,angle=cross&&nearDoor?(p.after==='sleep'?1.1:-1.1):0;
+  for(let i=0;i<p.curtain.strips.length;i++){const q=p.curtain.strips[i];q.rotation.x+=(angle*(1-i*.07)-q.rotation.x)*(1-Math.exp(-dt*12));}
   for(const [b,l] of [[p.food,d.food],[p.water,d.water]]){b.contents.setEnabled(l>.02);b.contents.position.y=b.point.y+.08+.033*l;for(let i=0;i<b.pieces.length;i++)b.pieces[i].setEnabled(l>(i+.1)/b.pieces.length);}
  }
  const near=(p)=>Math.min(dist(avatar.position,p.rig.root.position),dist(avatar.position,p.out),dist(avatar.position,p.food.point),dist(avatar.position,p.water.point))<2.0;
@@ -143,15 +172,15 @@ export function createPets(api){
   if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);}
   stats.care++;return true;
  }
- const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando'};
+ const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando',house:'Visitando a casa'};
  const panel=ui('pet-panel'),button=ui('pet-action');
  function refresh(){if(!selected)return;const p=selected,d=data[p.id];ui('pet-title').textContent=(d.name||p.label)+' · '+labels[p.state];ui('pet-levels').textContent='Ração '+Math.round(d.food*100)+'% · Água '+Math.round(d.water*100)+'% · Afinidade '+Math.round(d.affinity*100)+'%';ui('pet-needs').textContent='Fome '+Math.round(d.hunger*100)+'% · Sede '+Math.round(d.thirst*100)+'% · Energia '+Math.round(d.energy*100)+'%';ui('pet-error').textContent=error;ui('pet-food').disabled=!!error||dist(avatar.position,p.food.point)>=2;ui('pet-water').disabled=!!error||dist(avatar.position,p.water.point)>=2;for(const k of ['pet-pet','pet-play'])ui(k).disabled=!!error||p.inShelter||dist(avatar.position,p.rig.root.position)>=1.65||p.brain.time-p.lastCare<8;}
  button.onclick=()=>{const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));if(!n.length)return;cancelInput();selected=n[0];ui('pet-name').value=data[selected.id].name;panel.hidden=false;refresh();};
  ui('pet-close').onclick=()=>{panel.hidden=true;selected=null;cancelInput();};
  for(const [id,action] of [['pet-food','food'],['pet-water','water'],['pet-pet','pet'],['pet-play','play'],['pet-rename','name']])ui(id).onclick=()=>{if(selected){care(selected.id,action,ui('pet-name').value);refresh();}};
- function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;if(uiClock<.15)return;uiClock=0;
+ function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;if(uiClock<.15)return;uiClock=0;
   const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));button.hidden=!allowUI||!n.length||!panel.hidden;if(n.length)button.textContent='Pet · '+(data[n[0].id].name||n[0].label);if(selected&&!near(selected))ui('pet-close').click();else if(!panel.hidden)refresh();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,route,valid,plan,mealPlan,leave,care,pose,update,get data(){return data}};
+ return {pets,stats,route,valid,plan,mealPlan,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,get data(){return data}};
 }

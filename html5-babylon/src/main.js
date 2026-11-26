@@ -353,7 +353,7 @@ const fieldSignCollider={x:wheatGate.x+2.2,z:wheatGate.z-.65};
 const approachRows=sections.map(r=>[r[0],r[3],r[6]]);
 const connectionQA={bridgeEntryRow:pathRows.at(-1),bridgeExitRow:approachRows[0],bridgePlankDepth,bridgePlankCount,bridgeHalf,bridgeAxis,bridgeSide,deckLength:bl,deckTop:2.945,fieldEnd:approachCurve.at(-1),fieldGate:wheatGate};
 function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=height(x,z),C=(a,b,c)=>V(x+a*Math.cos(angle)+c*Math.sin(angle),y+b,z-a*Math.sin(angle)+c*Math.cos(angle));const B=(n,a,b,c,ww,hh,dd,m)=>{let p=C(a,b,c);return box(n,p.x,p.y,p.z,ww,hh,dd,m,angle)};const L=(n,a,b,ww,m)=>beam(n,C(...a),C(...b),ww,m);
- const doorW=small?w*.47:1.35,doorH=small?h*.65:2.2,wall=.22;let doorRoot=null;const handles={};
+ const doorW=small?w*.47:1.35,doorH=small?h*.65:2.2,wall=.22;let doorRoot=null,petFlap=null;const handles={};
  B('stone foundation',0,.22,0,w+.25,.44,d+.25,M.stoneLight);
  if(small){
  B('doghouse floor',0,.46,0,w-.12,.10,d-.12,M.woodLight);
@@ -433,9 +433,18 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  B('door header',0,.53+doorH+.065,-d/2-.045,doorW+.26,.13,.30,M.blueJoinery);
  doorRoot=new Mesh('door hinge pivot',scene);doorRoot.position=C(-doorW/2+.035,.53,-d/2-.055);doorRoot.rotation.y=angle;
  const leaf=(n,x,y,z,ww,hh,dd,m)=>{const q=box(n,x,y,z,ww,hh,dd,m);q.parent=doorRoot;return q;};
- const leafW=doorW-.07;leaf('solid swinging door',leafW/2,doorH/2,0,leafW,doorH-.04,.095,M.blueJoinery);
+ const leafW=doorW-.07,flapW=.88,flapH=1.02,flapBottom=.035,flapTop=flapBottom+flapH,flapSide=(leafW-flapW)/2;
+ // The actual door leaf surrounds a cut-out, rather than placing a decal on a solid door.
+ leaf('solid swinging door',leafW/2,(doorH+flapTop)/2,0,leafW,doorH-flapTop,.095,M.blueJoinery);
+ for(const k of [-1,1])leaf('pet door side stile',leafW/2+k*(flapW/2+flapSide/2),(flapTop+flapBottom)/2,0,flapSide,flapTop-flapBottom,.095,M.blueJoinery);
+ leaf('pet door low sill',leafW/2,flapBottom/2,0,leafW,flapBottom,.095,M.blueJoinery);
+ for(const k of [-1,1])leaf('pet flap frame',leafW/2+k*(flapW/2+.025),(flapTop+flapBottom)/2,-.068,.05,flapH,.08,M.blueTrim);
+ leaf('pet flap header',leafW/2,flapTop+.025,-.068,flapW+.10,.05,.08,M.blueTrim);
+ petFlap=new Mesh('main pet flap hinge',scene);petFlap.parent=doorRoot;petFlap.position=V(leafW/2,flapTop,0);
+ const flapMat=mat('smoky translucent pet flap','#91b4ae');flapMat.alpha=.76;
+ const panel=box('main pet flexible flap',0,-flapH/2,0,flapW-.045,flapH-.035,.035,flapMat,0,false);panel.parent=petFlap;
  for(const x of [.13,leafW-.13])leaf('door vertical trim',x,doorH/2,-.07,.075,doorH-.11,.05,M.blueTrim);
- for(const y of [.2,doorH-.2])leaf('door cross trim',leafW/2,y,-.07,leafW-.13,.09,.05,M.blueTrim);
+ for(const y of [doorH-.2])leaf('door cross trim',leafW/2,y,-.07,leafW-.13,.09,.05,M.blueTrim);
  // Both sides have independent real lever geometry and a grip anchor.
  for(const side of [-1,1]){
   const pivot=new Mesh('handle spindle '+side,scene);pivot.parent=doorRoot;pivot.position=V(leafW-.19,1.01,side*.115);
@@ -487,7 +496,7 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55-porchExtension+i*.35,2.2,top,.35,M.stoneLight);}
  entity('house-roof');B('chimney',w*.29,h+1.75,d*.26,.86,3.5,.86,M.stoneLight);for(let i=0;i<7;i++)B('chimney course',w*.29,h+.42+i*.48,d*.26,.89,.045,.89,M.stone);B('chimney cap',w*.29,h+3.55,d*.26,1.1,.20,1.1,M.woodDark);
  }else{B('doghouse name plaque',0,h*.84,-d/2-.11,.59,.24,.09,M.woodDark);for(let xx of [-.19,.19])B('paw mark',xx,h*.85,-d/2-.17,.07,.08,.035,M.woodLight)}
- entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot,handles};
+ entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot,handles,petFlap};
 }
 const home=house('house',HOUSE.u,HOUSE.v,HOUSE.w,HOUSE.d,HOUSE.h,HOUSE.angle);
 // Six reusable, locally textured smoke puffs. No external files or particle allocation per frame.
@@ -541,7 +550,7 @@ for(const side of [-1,1]){
  addRail(side*1.1,porchFront,x,porchFront);
 }
 entity('porch seating');
-for(const side of [-1,1]){
+for(const side of [1]){
  const x=side*2.45,z=-home.d/2-.62;
  const bench={kind:'bench',id:side<0?'bench-left':'bench-right',x,z,hx:1.02,hz:.37,seatY:1.10};benches.push(bench);porchFixtures.push(bench);
  for(const a of [-.77,.77])for(const b of [-.26,.26])porchBox('bench foot',x+a,.78,z+b,.14,.50,.14,M.woodDark);
@@ -1610,7 +1619,7 @@ function updateRain(dt,weather=weatherVisual){
  rainRingMesh.setEnabled(visible>0);splashMesh.setEnabled(visible>0);
  if(count||wasRaining)rainDropMesh.thinInstanceBufferUpdated('matrix');if(visible||wasRaining){rainRingMesh.thinInstanceBufferUpdated('matrix');splashMesh.thinInstanceBufferUpdated('matrix');}wasRaining=raining;
 }
-const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,ui:$,cancelInput});
+const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput});
 let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden);refreshFarmCenter();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/30){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.

@@ -269,7 +269,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  fs.writeFileSync('qa/pavimento.json',JSON.stringify(paving,null,2));
  // Walk to the two benches, use actual buttons and inspect jointed poses and state.
  const seats=[];
- for(const id of ['bench-left','bench-right']){
+ for(const id of ['bench-right']){
   await page.evaluate(id=>{const q=cvQA,b=q.benches.find(x=>x.id===id),p=q.seatStand(b);p.x+=.03;q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);q.updateEntry(.05);},id);
   await page.locator('#seat-action').click();
   const seated=await page.evaluate(()=>{const q=cvQA;for(let i=0;i<100;i++)q.updateEntry(.025);const b=q.seating.bench,p=q.seatTarget(b);const before=q.avatar.position.clone();q.updateLocomotion(1,0,.1,true);return {phase:q.seating.phase,blend:q.seating.blend,seatError:Math.hypot(q.avatar.position.x-p.x,q.avatar.position.z-p.z),facing:Math.abs(Math.sin((q.avatar.rotation.y-q.home.angle-Math.PI)/2)),legs:q.seatLegs.every(l=>l.thigh.isEnabled()&&l.shin.isEnabled()),locked:q.avatar.position.subtract(before).length()<1e-8};});
@@ -346,7 +346,20 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   }return out;
  });
  console.log('Pet meals from beside bowls',JSON.stringify(meals));assert(meals.every(m=>m.planned&&m.arrived&&Math.abs(m.stand-(m.id==='dog'?.68:.49))<.04&&m.facing<.08&&m.consumed&&m.needReduced));
- fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
+ // Both pets must cross the actual central door portal and return, with the main door closed.
+ const portal=await page.evaluate(()=>{
+  const q=cvQA,s=q.petSystem,result=[];q.entry.door=0;
+  for(const p of s.pets){
+   p.rig.root.position.copyFrom(s.houseOut);p.inShelter=false;p.inHouse=false;p.path=[];p.state='idle';p.timer=100;
+   const planned=s.visitHouse(p);let open=0;for(let i=0;i<220&&p.state==='walk';i++){s.update(.05,false);open=Math.max(open,Math.abs(q.home.petFlap.rotation.x));}
+   const entered=p.inHouse&&p.rig.root.position.subtract(s.houseIn).length()<.05;const leaving=s.exitHouse(p);
+   for(let i=0;i<220&&p.state==='walk';i++)s.update(.05,false);
+   const returned=!p.inHouse&&p.rig.root.position.subtract(s.houseOut).length()<.05;result.push({id:p.id,planned,entered,leaving,returned,open});
+  }
+  return {result,leftBenchRemoved:q.benches.length===1&&q.benches[0].id==='bench-right',catLeft:s.catHome.x<0,playerBlocked:q.homeBlocked(q.home.C(0,.53,-q.home.d/2).x,q.home.C(0,.53,-q.home.d/2).z)};
+ });
+ console.log('Functional pet main door',JSON.stringify(portal));assert(portal.leftBenchRemoved&&portal.catLeft&&portal.playerBlocked&&portal.result.every(p=>p.planned&&p.entered&&p.leaving&&p.returned&&p.open>.8));
+ fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals,portal},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
  // QA-only closeups, not a permanent camera control.
  await page.evaluate(()=>{const q=cvQA,p=q.wheatPlots.at(-1);q.avatar.position.set(p.x,q.surfaceHeight(p.x,p.z),p.z);for(let i=0;i<160;i++)q.updateEntry(.05);});
  for(const id of ['dog','cat']){
