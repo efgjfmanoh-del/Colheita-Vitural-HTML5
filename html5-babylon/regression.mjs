@@ -55,6 +55,17 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   assert(Math.abs(frame.beta-expectedBeta)<.25,'camera tilt changed during '+name);assert(frame.width>=640&&frame.height>=360,'capture dimensions');assert(frame.colors>100,'capture must contain real varied scene pixels');
   assert(frame.png.startsWith('data:image/png;base64,'));const bytes=Buffer.from(frame.png.split(',')[1],'base64');assert(bytes.length>10000,'capture PNG size');fs.writeFileSync('qa/'+name+'.png',bytes);console.log('Captured '+name+' '+frame.width+'x'+frame.height+' '+bytes.length+' bytes');
  }
+ // Validate world-space rain, roof/river collisions, bounded pools and actual render.
+ const rainQA=await page.evaluate(()=>{
+  const q=cvQA,H=q.home,old=q.weatherVisual,roof=H.C(0,0,0),deck=q.bridgeEnds.map(v=>v),river=q.riverSegments.find(p=>q.rainSurface(p.x,p.z).kind==='river'),front=q.facadeCraft.upperWindows;
+  for(let i=0;i<180;i++)q.updateRain(.05,{kind:'rain',rain:true});
+  const result={roof:q.rainSurface(roof.x,roof.z),river:river&&q.rainSurface(river.x,river.z),bridge:q.rainSurface((deck[0][0]+deck[1][0])/2,(deck[0][2]+deck[1][2])/2),stats:JSON.parse(JSON.stringify(q.rainStats)),pool:q.rainPool.length,impacts:q.impactPool.length,overlay:!!document.getElementById('rain-overlay'),icon:q.weatherPresentation({kind:'rain',rain:true,slot:1,label:'Chuva'},{daylight:1},12).icon,nightIcon:q.weatherPresentation({kind:'sun',rain:false,slot:1,label:'Sol'},{daylight:0},0).icon,windowGap:Math.min(...front.map(w=>w.bottom-q.facadeCraft.porchRoofHigh)),aligned:front[0].y===front[1].y&&q.facadeCraft.sideWindows.every(w=>w.y===front[0].y),puddles:q.puddles.filter(p=>p.mesh.isEnabled()).length};
+  return result;
+ });
+ console.log('World rain diagnostics',JSON.stringify(rainQA));assert.equal(rainQA.roof.kind,'roof');assert.equal(rainQA.river?.kind,'river');assert.equal(rainQA.bridge.kind,'deck');assert(rainQA.stats.impacts.roof>0&&rainQA.stats.impacts.river>0&&rainQA.stats.impacts.ground>0&&rainQA.stats.runoff>0);assert(rainQA.stats.wetness>.32&&rainQA.puddles>0);assert.equal(rainQA.pool,420);assert.equal(rainQA.impacts,96);assert(!rainQA.overlay&&rainQA.aligned&&rainQA.windowGap>.15);assert.equal(rainQA.icon,'🌦️');assert.equal(rainQA.nightIcon,'🌙');
+ fs.writeFileSync('qa/chuva-3d.json',JSON.stringify(rainQA,null,2));
+ await capture('chuva-3d',null);
+ await page.evaluate(()=>{const q=cvQA;for(let i=0;i<1900;i++)q.updateRain(.1,{kind:'sun',rain:false});q.updateRain(0,q.weatherVisual);});
  // Check actual full-width deck overlap, field entry, fences and central aisle.
  const links=await page.evaluate(()=>{
  const q=cvQA,c=q.connectionQA,axis=c.bridgeAxis,side=c.bridgeSide;

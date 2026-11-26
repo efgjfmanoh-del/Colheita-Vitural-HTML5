@@ -48,7 +48,7 @@ for(let y=0;y<256;y++)for(let x=0;x<256;x++){
 }
 stuccoCtx.putImageData(stuccoPixels,0,0);stuccoTex.update();stuccoTex.wrapU=stuccoTex.wrapV=Texture.WRAP_ADDRESSMODE;
 M.plaster.diffuseTexture=stuccoTex;M.plaster.specularColor=Color3.Black();
-const facadeCraft={exposedGrid:0,plinths:0,sideFlowerBoxes:0};
+const facadeCraft={exposedGrid:0,plinths:0,sideFlowerBoxes:0,upperWindows:[],sideWindows:[],atticWindow:null,porchRoofHigh:3.65+.17};
 M.roof.diffuseTexture=roofTex;M.grass.diffuseTexture=grassTex;
 M.plaster.diffuseColor=Color3.FromHexString('#fffdf6');
 M.blueJoinery=mat('painted rural blue','#245b83');M.blueTrim=mat('weathered blue edge','#397ca4');M.windowPane=mat('cool reflected window','#668fa4',.12);
@@ -430,10 +430,12 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  }
  entity('house-front');
  const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.blueJoinery);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.windowPane);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.blueJoinery);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.blueJoinery);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.blueTrim)};
- for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.blueJoinery);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
+ const upperY=h*.85,atticY=h+1.45;
+ for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,upperY);facadeCraft.upperWindows.push({x:xx,y:upperY,bottom:upperY-.715,top:upperY+.715});}
+ entity('house-roof');window(0,atticY);facadeCraft.atticWindow={x:0,y:atticY,bottom:atticY-.715};entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){facadeCraft.sideWindows.push({x:xx,z:zz,y:upperY});B('side window frame',xx,upperY,zz,.18,1.34,1.36,M.blueJoinery);B('side window glass',xx+Math.sign(xx)*.11,upperY,zz,.10,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,upperY,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,upperY-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
  // Side window flower boxes, above the walkable ground and outside the wall.
  for(const k of [-1,1])for(const zz of [-d*.22,d*.22]){
-  const yy=h*.69-.88,xx=k*(w/2+.27);
+  const yy=upperY-.88,xx=k*(w/2+.27);
   B('side window flower trough',xx,yy,zz,.40,.24,1.42,M.woodLight);
   B('side flower trough soil',xx,yy+.13,zz,.31,.035,1.29,M.earth);
   for(let j=0;j<7;j++){
@@ -643,6 +645,13 @@ function saveWorldClock(now=Date.now()){
  const next={...worldClock,floor:worldElapsed(now)};
  try{localStorage.setItem(WORLD_KEY,JSON.stringify(next));worldClock=next;clockLastSave=now;clockError='';return true;}catch{clockError='Relógio: falha ao salvar';return false;}
 }
+// The simulation's rain flag is unchanged; sunny showers are a visual subtype.
+let weatherVisual={kind:'sun',rain:false,night:false,showers:false};
+function weatherPresentation(w,daylight,hour){
+ const night=daylight.daylight<.20,showers=w.kind==='rain'&&!night&&hour>=7&&hour<18&&w.slot%3===1;
+ const icon=night?({sun:'🌙',cloud:'☁️',rain:'🌙🌧️',storm:'⛈️'}[w.kind]):({sun:'☀️',cloud:'🌤️',rain:showers?'🌦️':'🌧️',storm:'⛈️'}[w.kind]);
+ return {kind:w.kind,rain:w.rain,night,showers,icon:night&&w.kind==='cloud'?'🌙☁️':icon,label:showers?'Sol e chuva':w.kind==='sun'&&night?'Noite limpa':w.kind==='cloud'&&!night?'Sol e nuvens':w.label};
+}
 function updateWorldClock(now=Date.now(),force=false){
  if(!force&&now>=lastClockRender&&now-lastClockRender<500)return;
  lastClockRender=now;const elapsed=worldElapsed(now),c=calendarAt(elapsed);
@@ -654,10 +663,10 @@ function updateWorldClock(now=Date.now(),force=false){
  if($('world-clock-error').textContent!==clockError)$('world-clock-error').textContent=clockError;
  const minute=c.hour*60+c.minute,w=weatherAt(elapsed);
  if(minute!==lastLightMinute||w.slot!==lastWeatherSlot){
-  lastWeatherSlot=w.slot;const weatherLabel=w.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherLabel;document.body.dataset.weather=w.kind;
+  lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherLabel;$('weather-icon').textContent=weatherVisual.icon;document.body.dataset.weather=w.kind;
   lastLightMinute=minute;const k=daylight.daylight;
   // Maintain the existing daytime art. At night keep paths and controls readable.
-  const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?.65:.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;
+  const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;
   scene.clearColor=new Color4(.08+.28*k,.13+.43*k,.19+.10*k,1);
  }
 }
@@ -1346,7 +1355,108 @@ function updateLocomotion(x,z,rawDt,held=sprint.held||keys.has('shift')){
  sprint.brake=Math.max(0,sprint.brake-dt);if(sprint.brake===0)sprint.coast=false;
  return travel;
 }
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);updateLocomotion(dx,dz,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);updateWorldClock();refreshFarmCenter();
+// Local 3D precipitation. Each droplet travels in world coordinates to a surface,
+// with a pooled impact ring and two small airborne splash droplets. No screen overlay.
+entity('world precipitation');
+const rainStats={capacity:420,active:0,impacts:{ground:0,roof:0,river:0,deck:0},runoff:0,wetness:0,puddles:0};
+let rainSeed=76531;const rainRnd=()=>((rainSeed=Math.imul(1664525,rainSeed)+1013904223|0)>>>0)/4294967296;
+const rainMaterial=mat('world rain droplet','#c6e4ee');rainMaterial.disableLighting=true;rainMaterial.emissiveColor=Color3.FromHexString('#91c4d8');rainMaterial.alpha=.67;rainMaterial.disableDepthWrite=true;
+const rippleMaterial=mat('water impact ripples','#c1e6ed');rippleMaterial.disableLighting=true;rippleMaterial.emissiveColor=Color3.FromHexString('#80b9ce');rippleMaterial.alpha=.52;rippleMaterial.disableDepthWrite=true;
+const rainDropMesh=MeshBuilder.CreateSphere('world falling drops',{diameter:2,segments:5},scene);
+const splashMesh=MeshBuilder.CreateSphere('world splash beads',{diameter:2,segments:4},scene);
+const rainRingMesh=MeshBuilder.CreateTorus('horizontal rain impact rings',{diameter:2,thickness:.055,tessellation:12},scene);
+const rainPool=Array.from({length:rainStats.capacity},()=>({life:0,x:0,y:0,z:0,speed:0,target:null,runoff:false}));
+const impactPool=Array.from({length:96},()=>({life:0,x:0,y:0,z:0,kind:'ground'}));
+const dropMatrices=new Float32Array(rainPool.length*16),ringMatrices=new Float32Array(impactPool.length*16),splashMatrices=new Float32Array(impactPool.length*2*16);
+for(const [mesh,material,buffer] of [[rainDropMesh,rainMaterial,dropMatrices],[splashMesh,rainMaterial,splashMatrices],[rainRingMesh,rippleMaterial,ringMatrices]]){
+ own(mesh,material,false);mesh.receiveShadows=false;mesh.alwaysSelectAsActiveMesh=true;mesh.thinInstanceSetBuffer('matrix',buffer,16,false);mesh.setEnabled(false);
+}
+function rainMatrix(buffer,i,x,y,z,sx,sy,sz){
+ const o=i*16;buffer[o]=sx;buffer[o+5]=sy;buffer[o+10]=sz;buffer[o+12]=x;buffer[o+13]=y;buffer[o+14]=z;buffer[o+15]=1;
+}
+function rainSurface(x,z){
+ const p=homeLocal(x,z),ow=home.w/2+.55,od=home.d/2+.65,e=HOUSE.h+.5,r=e+home.w*.26;
+ if(Math.abs(p.x)<=ow&&Math.abs(p.z)<=od){
+  let y=home.y+r+(e-r)*Math.abs(p.x)/ow+.13;
+  const side=-1,z0=-.85,dw=2.35,front=side*ow*.78,back=side*ow*.26;
+  if(p.x>=front-.32&&p.x<=back+.26&&Math.abs(p.z-z0)<=dw/2+.25){const top=e+(r-e)*.73,edge=top-.05,crest=top+1.03;y=Math.max(y,home.y+crest+(edge-crest)*Math.abs(p.z-z0)/(dw/2+.25));}
+  return {y,kind:'roof',hidden:entry.inside};
+ }
+ const depth=3+porchExtension,half=home.w*(HOUSE.porchRatio/2+.035);
+ if(Math.abs(p.x)<=half&&p.z<=-home.d/2&&p.z>=-home.d/2-depth)return {y:home.y+3.65-.53*(-home.d/2-p.z)/depth+.13,kind:'roof',hidden:entry.mode!=='exterior'};
+ if(onBridge(x,z))return {y:2.945,kind:'deck',hidden:false};
+ const nr=nearRiver(x,z);if(nr.dist<nr.w*.49)return {y:nr.y+.025,kind:'river',hidden:false};
+ const dh=dogHome,dx=x-dh.x,dz=z-dh.z,lx=dx*Math.cos(dh.angle)-dz*Math.sin(dh.angle),lz=dx*Math.sin(dh.angle)+dz*Math.cos(dh.angle);
+ if(Math.abs(lx)<dh.w/2+.55&&Math.abs(lz)<dh.d/2+.65)return {y:dh.y+2.5+dh.w*.26*(1-Math.abs(lx)/(dh.w/2+.55))+.08,kind:'roof',hidden:false};
+ return {y:Math.max(surfaceHeight(x,z),renderedTerrainY(x,z))+.025,kind:'ground',hidden:false};
+}
+const puddleMat=mat('shallow accumulated rainwater','#58747a',.30);puddleMat.alpha=.55;puddleMat.backFaceCulling=false;puddleMat.disableDepthWrite=true;
+const puddles=[];
+for(let i=0;i<180&&puddles.length<12;i++){
+ const x=home.x+(rainRnd()-.5)*46,z=home.z+(rainRnd()-.5)*32,r=.38+rainRnd()*.45;
+ if(x<minX+2||x>maxX-2||z<minZ+2||z>maxZ-2||blocked(x,z)||nearRiver(x,z).dist<nearRiver(x,z).w*.6+1||rainSurface(x,z).kind!=='ground'||pathDistance(x,z)<1.65||inWheat(x,z))continue;
+ if(puddles.some(p=>Math.hypot(p.x-x,p.z-z)<2.1))continue;
+ const y=renderedTerrainY(x,z),pts=[x,y+.035,z],ind=[],norm=[];
+ let valid=true;for(let j=0;j<16;j++){const a=j*Math.PI/8,rr=r*(.76+.24*rainRnd()),px=x+Math.cos(a)*rr,pz=z+Math.sin(a)*rr*.65,py=renderedTerrainY(px,pz);
+ if(Math.abs(py-y)>.09||blocked(px,pz)||rainSurface(px,pz).kind!=='ground'){valid=false;break;}pts.push(px,py+.035,pz);ind.push(0,1+j,1+(j+1)%16);}
+ if(!valid)continue;
+ const mesh=new Mesh('irregular shallow rain puddle',scene),data=new VertexData();data.positions=pts;data.indices=ind;VertexData.ComputeNormals(pts,ind,norm);data.normals=norm;data.applyToMesh(mesh);own(mesh,puddleMat,false);mesh.receiveShadows=false;mesh.setEnabled(false);puddles.push({x,z,mesh});
+}
+rainStats.puddles=puddles.length;
+const wetMaterials=[M.grass,M.earth,M.wood,M.woodLight,ceramicMat,road.material,scene.materials.find(m=>m.name==='continuous fertile earth')].filter(Boolean).map(m=>({m,dry:m.diffuseColor.clone(),shine:m.specularColor.clone()}));
+let impactCursor=0,wasRaining=false,wetTick=0;
+function respawnRain(p,i,initial=false){
+ const runoff=i<12;let x,z,y;
+ if(runoff){
+  const local=home.C((i-5.5)/5.5*home.w*.39,3.17,-home.d/2-(3+porchExtension)-.12);
+  x=local.x;z=local.z;y=local.y;
+ }else if(i<55){
+  const local=home.C((rainRnd()-.5)*home.w*1.1,0,(rainRnd()-.5)*(home.d+5)-1.5);x=local.x;z=local.z;
+ }else if(i<95){
+  const k=Math.floor(channel.length*(.33+.38*rainRnd())),p=channel[Math.min(k,channel.length-1)].p;x=p.x;z=p.z;
+ }else{
+  const a=Math.max(1,engine.getRenderWidth()/Math.max(1,engine.getRenderHeight())),w=span,h=span/a;
+  x=Math.max(minX+.5,Math.min(maxX-.5,camera.target.x+(rainRnd()-.5)*w));z=Math.max(minZ+.5,Math.min(maxZ-.5,camera.target.z+(rainRnd()-.5)*Math.max(h*1.6,26)));
+ }
+ p.x=x;p.z=z;p.target=rainSurface(x,z);p.runoff=runoff;p.speed=runoff?7+rainRnd()*3:13+rainRnd()*9;
+ p.y=runoff?Math.max(p.target.y+.2,y):p.target.y+9+rainRnd()*9;
+ if(initial)p.y=p.target.y+(p.y-p.target.y)*rainRnd();
+ p.life=1;
+}
+function updateRain(dt,weather=weatherVisual){
+ dt=Math.max(0,Math.min(dt,.10));const raining=!!weather.rain,storm=weather.kind==='storm';
+ rainStats.wetness=Math.max(0,Math.min(1,rainStats.wetness+dt*(raining?(storm?.075:.045):-.006)));
+ wetTick+=dt;if(wetTick>=.15||raining!==wasRaining){wetTick=0;const w=rainStats.wetness;
+  for(const {m,dry,shine} of wetMaterials){m.diffuseColor.set(dry.r*(1-.28*w),dry.g*(1-.23*w),dry.b*(1-.17*w));m.specularColor.set(shine.r+.055*w,shine.g+.055*w,shine.b+.055*w);}
+  for(const p of puddles){p.mesh.setEnabled(w>.32);p.mesh.visibility=Math.max(0,Math.min(1,(w-.32)/.48));}
+ }
+ const count=raining?Math.min(rainPool.length,({economico:145,equilibrado:255,alto:340}[quality]||255)+(storm?65:0)):0;
+ rainStats.active=count;rainDropMesh.setEnabled(count>0);
+ for(let i=0;i<rainPool.length;i++){
+  const p=rainPool[i];if(i>=count){p.life=0;rainMatrix(dropMatrices,i,0,0,0,0,0,0);continue;}
+  if(!p.life||!wasRaining)respawnRain(p,i,true);
+  p.y-=p.speed*dt;
+  if(p.y<=p.target.y){
+   const k=p.target.kind;if(!p.target.hidden&&!(p.runoff&&entry.mode!=='exterior')){
+    const f=impactPool[impactCursor++%impactPool.length];f.life=.52;f.x=p.x;f.z=p.z;f.y=p.target.y+.035;f.kind=k;rainStats.impacts[k]++;if(p.runoff)rainStats.runoff++;
+   }
+   respawnRain(p,i,false);
+  }
+  // Invisible roofs still shelter interior/porch; never draw through their cutaway.
+  const hidden=p.target.kind==='roof'&&(p.target.hidden||entry.inside&&Math.abs(homeLocal(p.x,p.z).x)<home.w/2)||p.runoff&&entry.mode!=='exterior';
+  const len=p.runoff?.10:.16+p.speed*.012;
+  rainMatrix(dropMatrices,i,p.x,p.y,p.z,hidden?0:.018,hidden?0:len,hidden?0:.018);
+ }
+ let visible=0;
+ for(let i=0;i<impactPool.length;i++){
+  const p=impactPool[i];p.life=Math.max(0,p.life-dt);const a=1-p.life/.52,alive=p.life>0,hideRoof=p.kind==='roof'&&entry.mode!=='exterior',s=alive&&!hideRoof?(.07+a*(p.kind==='river'?.39:.19)):0;
+  if(s)visible++;rainMatrix(ringMatrices,i,p.x,p.y,p.z,s,s*.26,s);
+  for(let j=0;j<2;j++){const sign=j?1:-1,b=alive&&!hideRoof&&a<.70?.026*(1-a):0;rainMatrix(splashMatrices,i*2+j,p.x+sign*a*.17,p.y+.18*Math.sin(a*Math.PI),p.z+sign*a*.11,b,b,b);}
+ }
+ rainRingMesh.setEnabled(visible>0);splashMesh.setEnabled(visible>0);
+ if(count||wasRaining)rainDropMesh.thinInstanceBufferUpdated('matrix');if(visible||wasRaining){rainRingMesh.thinInstanceBufferUpdated('matrix');splashMesh.thinInstanceBufferUpdated('matrix');}wasRaining=raining;
+}
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);updateLocomotion(dx,dz,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);updateWorldClock();updateRain(rawDt);refreshFarmCenter();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/30){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
@@ -1371,7 +1481,7 @@ if(waterMotion.length){
 const animated=new Set(flowBatch?[flowBatch]:[]);
 const casters=new Set(shadow.getShadowMap().renderList||[]);
 for(const [id,parts] of Object.entries(groups)){
- if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','chimney smoke'].includes(id))continue;
+ if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','chimney smoke','world precipitation'].includes(id))continue;
  const buckets=new Map(),kept=[];
  for(const m of parts){
   if(animated.has(m)||m.parent||!m.material||m.getTotalVertices()===0||m.hasThinInstances){kept.push(m);continue}
@@ -1391,4 +1501,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,roofCraft,facadeCraft,smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
