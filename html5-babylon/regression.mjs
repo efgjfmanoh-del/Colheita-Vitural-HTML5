@@ -15,12 +15,16 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);
  // Confirm movement in the running 3D scene, not just static mesh existence.
  await page.evaluate(()=>{document.getElementById('wide').click();cvQA.engine.runRenderLoop(()=>cvQA.scene.render());});
- const walk=await page.evaluate(()=>{const p=cvQA.avatar.position;const dirs=[['d',1,0],['a',-1,0],['w',0,1],['s',0,-1]];const a=cvQA.scene.activeCamera.alpha+Math.PI/2;for(const [key,x,z] of dirs){const dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);if(!cvQA.blocked(p.x+dx*.2,p.z+dz*.2)&&!cvQA.blocked(p.x+dx*.7,p.z+dz*.7))return {key,x:p.x,z:p.z};}return null;});
+ const walk=await page.evaluate(()=>{const p=cvQA.avatar.position;const dirs=[['d',1,0],['a',-1,0],['w',0,1],['s',0,-1]];const a=cvQA.scene.activeCamera.alpha+Math.PI/2;for(const [key,x,z] of dirs){const dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);if(!cvQA.blocked(p.x+dx*.2,p.z+dz*.2)&&!cvQA.blocked(p.x+dx*.7,p.z+dz*.7))return {key,x:p.x,z:p.z,gaitDistance:cvQA.gait.distance};}return null;});
  assert(walk,'spawn must permit movement');
  await page.keyboard.down(walk.key);
- try{await page.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.x,cvQA.avatar.position.z-p.z)>.15,walk,{timeout:30000});}finally{await page.keyboard.up(walk.key);}
+ try{await page.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.x,cvQA.avatar.position.z-p.z)>.15&&cvQA.gait.distance>p.gaitDistance+.1&&cvQA.gait.stride>.03,walk,{timeout:30000});}finally{await page.keyboard.up(walk.key);}
  const moved=await page.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.x,cvQA.avatar.position.z-p.z),walk);
- assert(moved>.15);console.log('PASS live avatar movement',moved);
+ assert(moved>.15);const animatedWalk=await page.evaluate(()=>({distance:cvQA.gait.distance,phase:cvQA.gait.phase}));assert(animatedWalk.distance>=moved);assert(Number.isFinite(animatedWalk.phase));
+ await page.waitForFunction(()=>!cvQA.gait.moving&&cvQA.gait.stride<.03,null,{timeout:30000});console.log('PASS live avatar movement and gait',moved,animatedWalk);
+ const closeSpan=await page.evaluate(()=>{document.getElementById('close').click();return cvQA.scene.activeCamera.orthoRight-cvQA.scene.activeCamera.orthoLeft;});
+ const followView=await page.evaluate(()=>{document.getElementById('follow').click();const c=cvQA.scene.activeCamera,p=cvQA.avatar.position;return {span:c.orthoRight-c.orthoLeft,targetError:Math.hypot(c.target.x-p.x,c.target.z-p.z)};});
+ assert(followView.span<closeSpan*.65,'follow must zoom in materially');assert(followView.targetError<.1,'follow centers on actual avatar');
  await page.close();
  // Emulated Android viewport validates the DPR bug; not a hardware benchmark.
  const mobile=await browser.newPage({viewport:{width:834,height:375},deviceScaleFactor:3.25,isMobile:true,hasTouch:true});
@@ -46,7 +50,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await mobile.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz)>.1,touchStart,{timeout:30000});
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const touchMoved=await mobile.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz),touchStart);
- assert(touchMoved>.1);assert.deepEqual(mobileErrors,[]);
+ assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1));assert.deepEqual(mobileErrors,[]);
  fs.writeFileSync('qa/perfis-android.json',JSON.stringify({profiles,desktopMovement:moved,touchMovement:touchMoved},null,2));console.log('PASS emulated mobile profiles and touch',JSON.stringify({profiles,touchMoved}));
  await mobile.close();console.log('PASS geometry, initialization, camera, river and bridge logic; visual approval pending');
 }finally{await browser.close()}

@@ -73,13 +73,13 @@ jobs:
           if grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt; then exit 1; fi
           unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
           unzip -p "$APK" assets/game.js | cmp - html5-babylon/dist/game.js
-          cp "$APK" android-test/qa/ColheitaVitural-Teste-1J3.apk
+          cp "$APK" android-test/qa/ColheitaVitural-Teste-1J4.apk
           cd android-test/qa
-          sha256sum ColheitaVitural-Teste-1J3.apk > SHA256SUMS.txt
-          ls -lh ColheitaVitural-Teste-1J3.apk
+          sha256sum ColheitaVitural-Teste-1J4.apk > SHA256SUMS.txt
+          ls -lh ColheitaVitural-Teste-1J4.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Colheita-Vitural-APK-Teste-1J3
+          name: Colheita-Vitural-APK-Teste-1J4
           path: android-test/qa/
           retention-days: 3
           if-no-files-found: error
