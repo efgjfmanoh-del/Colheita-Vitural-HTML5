@@ -58,7 +58,25 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await mobile.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz)>.1,touchStart,{timeout:30000});
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const touchMoved=await mobile.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz),touchStart);
- assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1));assert.deepEqual(mobileErrors,[]);
- fs.writeFileSync('qa/perfis-android.json',JSON.stringify({profiles,desktopMovement:moved,touchMovement:touchMoved},null,2));console.log('PASS emulated mobile profiles and touch',JSON.stringify({profiles,touchMoved}));
+ assert(touchMoved>.1);assert(await mobile.evaluate(()=>cvQA.gait.distance>.1));
+ // Physical input path in an emulated mobile browser, not a programmatic button.click().
+ // Set up a known start on the porch; actual door input and traversal use touch events.
+ await mobile.evaluate(()=>{const q=cvQA,H=q.home,p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});
+ await mobile.locator('#door-action').waitFor({state:'visible'});
+ const doorRect=await mobile.locator('#door-action').boundingBox();
+ const tap={x:doorRect.x+doorRect.width/2,y:doorRect.y+doorRect.height/2};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[tap]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await mobile.waitForFunction(()=>cvQA.entry.open&&cvQA.entry.door>.95,null,{timeout:30000});
+ const entryTouch=await mobile.evaluate(()=>{const q=cvQA,H=q.home,forward=H.C(0,0,1).subtract(H.C(0,0,0)),a=q.scene.activeCamera.alpha+Math.PI/2,r=document.getElementById('joy').getBoundingClientRect();return {cx:r.x+r.width/2,cy:r.y+r.height/2,dx:30*(forward.x*Math.cos(a)+forward.z*Math.sin(a)),dy:-30*(-forward.x*Math.sin(a)+forward.z*Math.cos(a))};});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:entryTouch.cx,y:entryTouch.cy}]});
+ try{
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:entryTouch.cx+entryTouch.dx,y:entryTouch.cy+entryTouch.dy}]});
+  await mobile.waitForFunction(()=>cvQA.entry.inside,null,{timeout:30000});
+ }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+ const touchEntry=await mobile.evaluate(()=>({open:cvQA.entry.open,inside:cvQA.entry.inside,roofHidden:cvQA.groups['house-roof'].every(m=>!m.isEnabled()),local:cvQA.homeLocal(cvQA.avatar.position.x,cvQA.avatar.position.z)}));
+ assert(touchEntry.open&&touchEntry.inside&&touchEntry.roofHidden);console.log('PASS actual Chromium touch on door and joystick entry',JSON.stringify(touchEntry));
+ assert.deepEqual(mobileErrors,[]);
+ fs.writeFileSync('qa/perfis-android.json',JSON.stringify({profiles,desktopMovement:moved,touchMovement:touchMoved,touchEntry},null,2));console.log('PASS emulated mobile profiles and touch',JSON.stringify({profiles,touchMoved}));
  await mobile.close();console.log('PASS geometry, initialization, camera, river and bridge logic; visual approval pending');
 }finally{await browser.close()}

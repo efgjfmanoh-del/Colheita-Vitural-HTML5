@@ -321,7 +321,22 @@ function toggleDoor(){
  if(entry.open&&Math.hypot(p.x+home.doorW/2,p.z-f)<home.doorW+.30)return false;
  entry.open=!entry.open;return true;
 }
-$('door-action').onclick=toggleDoor;
+// A single pointer gesture invokes the action once, even during joystick input.
+// Do not rely on the browser synthesizing a click after a touch gesture.
+const doorAction=$('door-action');let doorPointer=null;
+doorAction.addEventListener('pointerdown',e=>{
+ if(doorPointer!==null||!e.isPrimary&&e.pointerType==='mouse'||e.button!==0)return;
+ doorPointer=e.pointerId;doorAction.setPointerCapture(e.pointerId);e.preventDefault();
+});
+doorAction.addEventListener('pointerup',e=>{
+ if(e.pointerId!==doorPointer)return;
+ doorPointer=null;const r=doorAction.getBoundingClientRect();
+ if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom)toggleDoor();
+ e.preventDefault();
+});
+for(const name of ['pointercancel','lostpointercapture'])doorAction.addEventListener(name,e=>{if(e.pointerId===doorPointer)doorPointer=null;});
+doorAction.addEventListener('click',e=>{if(e.detail===0)toggleDoor();});
+
 window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='e'&&!e.repeat)toggleDoor()});
 const smooth01=x=>{const u=Math.max(0,Math.min(1,x));return u*u*(3-2*u);};
 const angleDelta=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
@@ -345,8 +360,11 @@ function updateEntry(dt){
  entry.inside=inside;
  const targetDoor=entry.open?1:0;entry.door+=(targetDoor-entry.door)*(1-Math.exp(-dt*7));if(Math.abs(targetDoor-entry.door)<.002)entry.door=targetDoor;
  home.doorRoot.rotation.y=home.angle-entry.door*Math.PI*.49;
- const doorButton=$('door-action'),nearDoor=doorNearby();doorButton.hidden=!nearDoor;doorButton.textContent=entry.open?'Fechar porta':'Abrir porta';
- $('entry-status').textContent=inside?'Interior':near?'Entrada da casa':'';
+ const nearDoor=doorNearby(),doorLabel=entry.open?'Fechar porta':'Abrir porta';
+ if(doorAction.hidden===nearDoor)doorAction.hidden=!nearDoor;
+ if(doorAction.textContent!==doorLabel)doorAction.textContent=doorLabel;
+ const status=$('entry-status'),statusText=inside?'Interior':near?'Entrada da casa':'';
+ if(status.textContent!==statusText)status.textContent=statusText;
  const factor=1-Math.exp(-dt*4);
  if(entry.previous){
   const saved=entry.previous;
@@ -386,7 +404,7 @@ function moveAvatar(dx,dz,dt){
  if(travel>.0001)avatar.rotation.y=Math.atan2(mx,mz);walkPose(travel,dt);return travel;
 }
 let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;moveAvatar(dx,dz,dt);updateEntry(dt);
- const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),span].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
+ const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,frames:0,last:null,windowStart:null,samples:[]};
 scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros';perf.samples=[];perf.windowStart=now;}});
