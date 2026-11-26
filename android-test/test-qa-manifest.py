@@ -11,6 +11,11 @@ class TestManifest(unittest.TestCase):
             sig=f"Signer #1 certificate SHA-256 digest: {cert}\nVerified using v2 scheme (APK Signature Scheme v2): true\nNumber of signers: 1\n"
             (p/"signature.txt").write_text(sig)
             self.assertEqual(m["build"](p)["versionCode"],109)
+            (p/"badging.txt").write_text("package: name='br.com.colheitavitural.html5.qa' versionCode='110' versionName='0.1.10'\n")
+            self.assertEqual(m["build"](p)["versionCode"],110)
+            (p/"badging.txt").write_text("package: name='br.com.colheitavitural.html5.qa' versionCode='108' versionName='0.1.8'\n")
+            with self.assertRaises(ValueError):m["build"](p)
+            (p/"badging.txt").write_text("package: name='br.com.colheitavitural.html5.qa' versionCode='110' versionName='0.1.10'\n")
             (p/"signature.txt").write_text(sig.replace(cert,"0"*64))
             with self.assertRaises(ValueError):m["build"](p)
             (p/"signature.txt").write_text(sig)

@@ -28,12 +28,13 @@ final class UpdateCenter {
     final Activity a; final DownloadManager dm; final SharedPreferences prefs;
     final Handler handler=new Handler(Looper.getMainLooper());
     final ExecutorService worker=Executors.newSingleThreadExecutor();
-    final Button badge; final long installed;
+    final Button badge; final long installed; final String installedName; final SharedPreferences history;
+    boolean showReport=false; long downloadedBytes=0;
     long id=-1,checkedAt=0; Info info;
     boolean alive=true,active=false,checking=false,verifying=false,verified=false;
     int progress=0; String status="Verificar novas versões";
-    AlertDialog dialog; TextView detail; ProgressBar bar; Button checkButton,downloadButton,installButton;
-    final Runnable tick=new Runnable(){public void run(){if(!alive||!active)return;poll();if(id<0&&!verified&&info==null&&!checking&&System.currentTimeMillis()-checkedAt>300000)check();handler.postDelayed(this,1000);}};
+    AlertDialog dialog; TextView detail; ProgressBar bar; Button checkButton,downloadButton,installButton,cancelButton;
+    final Runnable tick=new Runnable(){public void run(){if(!alive||!active)return;poll();if(id<0&&!verified&&!checking&&System.currentTimeMillis()-checkedAt>300000)check();handler.postDelayed(this,1000);}};
 
     static final class Info {
         final long code,size; final String name,hash,tag;
@@ -51,8 +52,11 @@ final class UpdateCenter {
     }
     UpdateCenter(Activity a,FrameLayout root){
         this.a=a;dm=(DownloadManager)a.getSystemService(Context.DOWNLOAD_SERVICE);prefs=a.getSharedPreferences("cv_qa_updater",Context.MODE_PRIVATE);
-        long local=0;try{PackageInfo p=a.getPackageManager().getPackageInfo(a.getPackageName(),0);local=Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode;}catch(Exception ignored){}
-        installed=local;
+        long local=0;String localName="desconhecida";try{PackageInfo p=a.getPackageManager().getPackageInfo(a.getPackageName(),0);local=Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode;localName=p.versionName;}catch(Exception ignored){}
+        installed=local;installedName=localName;
+        history=a.getSharedPreferences("cv_qa_version_history",Context.MODE_PRIVATE);
+        showReport=installed>=110&&history.getLong("seenVersion",0)<installed;
+        if(installed<110)history.edit().putLong("seenVersion",installed).apply();
         try{JSONObject j=new JSONObject(prefs.getString("info","{}"));Info saved=new Info(j,j.getString("tag"));long savedId=prefs.getLong("id",-1);
             if(saved.code>installed){info=saved;id=savedId;}else if(savedId>=0){dm.remove(savedId);prefs.edit().clear().apply();}
         }catch(Exception ignored){prefs.edit().clear().apply();}
@@ -109,16 +113,16 @@ final class UpdateCenter {
             r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             r.setDestinationInExternalFilesDir(a,Environment.DIRECTORY_DOWNLOADS,"qa-updates/qa-"+info.code+".apk");
             id=dm.enqueue(r);prefs.edit().putLong("id",id).putString("info",info.json().toString()).apply();
-            progress=0;status="Baixando em segundo plano";refresh();
+            downloadedBytes=0;progress=0;status="Baixando em segundo plano";refresh();
         }catch(Exception e){status="Não foi possível iniciar. Tente novamente.";refresh();}
     }
-    void clearDownload(String message){if(id>=0)dm.remove(id);id=-1;verified=false;verifying=false;progress=0;prefs.edit().clear().apply();status=message;refresh();}
+    void clearDownload(String message){if(id>=0)dm.remove(id);id=-1;verified=false;verifying=false;progress=0;downloadedBytes=0;prefs.edit().clear().apply();status=message;refresh();}
     void poll(){
         if(id<0||info==null||verified||verifying)return;
         try(Cursor c=dm.query(new DownloadManager.Query().setFilterById(id))){
             if(c==null||!c.moveToFirst()){clearDownload("Download interrompido. Tente novamente.");return;}
             long bytes=c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));int state=c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
-            progress=(int)Math.max(0,Math.min(100,100*bytes/Math.max(1,info.size)));
+            downloadedBytes=Math.max(0,bytes);progress=(int)Math.max(0,Math.min(100,100*bytes/Math.max(1,info.size)));
             if(bytes>info.size){clearDownload("Arquivo excedeu o tamanho esperado.");return;}
             if(state==DownloadManager.STATUS_SUCCESSFUL){verifyAsync();return;}
             if(state==DownloadManager.STATUS_FAILED){clearDownload("Download falhou. Tente novamente.");return;}
@@ -140,7 +144,7 @@ final class UpdateCenter {
     void verifyAsync(){
         if(verifying||info==null)return;verifying=true;status="Verificando integridade e assinatura…";refresh();final Info v=info;
         worker.execute(()->{boolean ok=false;try{ok=validate(v,file(v));}catch(Exception ignored){}final boolean result=ok;
-            ui(()->{verifying=false;if(!result){clearDownload("Arquivo ou assinatura inválida. Baixe novamente.");return;}verified=true;progress=100;status="Atualização verificada. Pronta para instalar.";refresh();});});
+            ui(()->{verifying=false;if(!result){clearDownload("Arquivo ou assinatura inválida. Baixe novamente.");return;}verified=true;progress=100;downloadedBytes=v.size;status="Atualização verificada. Pronta para instalar.";refresh();});});
     }
     void install(){
         if(!verified||info==null||verifying)return;
@@ -156,17 +160,23 @@ final class UpdateCenter {
             });});
     }
     void show(){
+        if(dialog!=null&&dialog.isShowing())return;
+        boolean report=showReport;
+        if(report){showReport=false;history.edit().putLong("seenVersion",installed).apply();}
         LinearLayout content=new LinearLayout(a);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(10));
+        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nNesta rodada: relatório pós-atualização, progresso em MB e cancelamento de transferência. A animação da porta foi preservada.");reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
         detail=new TextView(a);detail.setTextSize(15);content.addView(detail);bar=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);content.addView(bar,new LinearLayout.LayoutParams(-1,dp(24)));
         checkButton=new Button(a);checkButton.setText("Verificar atualizações");checkButton.setOnClickListener(v->check());content.addView(checkButton);
         downloadButton=new Button(a);downloadButton.setText("Baixar em segundo plano");downloadButton.setOnClickListener(v->start());content.addView(downloadButton);
         installButton=new Button(a);installButton.setText("Instalar atualização");installButton.setOnClickListener(v->install());content.addView(installButton);
-        dialog=new AlertDialog.Builder(a).setTitle("Central de atualizações · Teste").setView(content).setNegativeButton("Continuar jogando",null).create();
-        dialog.setOnDismissListener(v->{dialog=null;detail=null;bar=null;checkButton=null;downloadButton=null;installButton=null;});dialog.show();refresh();
+        cancelButton=new Button(a);cancelButton.setText("Cancelar download");cancelButton.setOnClickListener(v->{if(id>=0&&!verifying&&!verified)new AlertDialog.Builder(a).setTitle("Cancelar transferência?").setMessage("O arquivo parcial será removido. Você poderá baixar novamente.").setNegativeButton("Continuar baixando",null).setPositiveButton("Cancelar download",(dd,ww)->{if(id>=0&&!verifying&&!verified)clearDownload("Download cancelado.");}).show();});content.addView(cancelButton);
+        ScrollView scroll=new ScrollView(a);scroll.addView(content);
+        dialog=new AlertDialog.Builder(a).setTitle("Central de atualizações · Teste").setView(scroll).setNegativeButton("Continuar jogando",null).create();
+        dialog.setOnDismissListener(v->{dialog=null;detail=null;bar=null;checkButton=null;downloadButton=null;installButton=null;cancelButton=null;});dialog.show();refresh();
     }
     void refresh(){
-        badge.setText(verified?"Atualização pronta":id>=0?"Atualização "+progress+"%":info!=null?"Atualização • 1":"Atualizações");
-        if(detail!=null){detail.setText("Canal experimental · "+installed+(info==null?"":"\nNova versão "+info.name)+"\n"+status+(id>=0?"\nProgresso: "+progress+"%":""));bar.setProgress(progress);
-            checkButton.setEnabled(!checking&&id<0&&!verified);downloadButton.setEnabled(info!=null&&id<0&&!checking&&!verified&&!verifying);installButton.setEnabled(verified&&!verifying);}
+        badge.setText(verified?"Atualização pronta":id>=0?"Atualização "+progress+"%":info!=null?"Atualização • 1":showReport?"Atualizado • "+installedName:"Atualizações");
+        if(detail!=null){detail.setText("Canal experimental · "+installedName+(info==null?"":"\nNova versão "+info.name)+"\n"+status+(id>=0&&info!=null?String.format(new Locale("pt","BR"),"\nProgresso: %d%% · %.2f / %.2f MB",progress,downloadedBytes/1000000.0,info.size/1000000.0):""));bar.setProgress(progress);
+            checkButton.setEnabled(!checking&&id<0&&!verified);downloadButton.setEnabled(info!=null&&id<0&&!checking&&!verified&&!verifying);installButton.setEnabled(verified&&!verifying);cancelButton.setEnabled(id>=0&&!verified&&!verifying);}
     }
 }
