@@ -1,0 +1,44 @@
+name: Colheita Babylon - Etapa 1 residencial
+on:
+  push:
+    branches: [main]
+    paths: ['html5-babylon/**', '.github/workflows/babylon-residence.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: colheita-babylon-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: html5-babylon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Testar o motor e registrar capturas
+        run: |
+          python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/cv-babylon.log 2>&1 &
+          for i in {1..20}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Colheita-Babylon-Etapa1-QA
+          path: html5-babylon/qa/
+          retention-days: 3
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Colheita-Babylon-Etapa1-Web
+          path: html5-babylon/dist/
+          retention-days: 3
+          if-no-files-found: error

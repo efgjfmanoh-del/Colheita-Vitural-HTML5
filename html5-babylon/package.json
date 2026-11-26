@@ -1,0 +1,18 @@
+{
+  "name": "colheita-vitural-babylon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run check && node validate-layout.mjs && esbuild src/main.js --bundle --format=iife --platform=browser --target=chrome100 --minify --outfile=dist/game.js && node -e \"require('fs').copyFileSync('index.html','dist/index.html')\"",
+    "test": "node regression.mjs",
+    "check": "node --check src/main.js && node --check regression.mjs && node --check validate-layout.mjs"
+  },
+  "dependencies": {
+    "@babylonjs/core": "8.32.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "playwright": "1.56.1"
+  }
+}
