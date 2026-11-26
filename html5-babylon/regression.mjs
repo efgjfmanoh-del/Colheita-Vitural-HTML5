@@ -129,6 +129,20 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  // Validate exact physical path endpoints and side flower clearance.
  const walkway=await page.evaluate(()=>{const q=cvQA,H=q.home,first=q.pathRows[0],last=q.pathRows.at(-1),local=first.map(p=>q.homeLocal(p.x,p.z));return {width:q.porchHalf*2,depth:2.8,stairError:Math.hypot(first[1].x-q.stairFoot.x,first[1].z-q.stairFoot.z),bridgeError:Math.hypot(last[1].x-q.bridgeEntry.x,last[1].z-q.bridgeEntry.z),stairWidth:Math.abs(local[2].x-local[0].x),flowers:q.pathFlowerPositions.length,sides:[...new Set(q.pathFlowerPositions.map(p=>p.side))],minClearance:Math.min(...q.pathFlowerPositions.map(p=>q.pathDistance(p.x,p.z))),benches:q.benches.map(b=>({x:b.x,windowClear:Math.abs(b.x)+b.hx< H.w*.3-.775})),pots:q.planters.map(p=>({id:p.id,clear:Math.abs(p.x)+p.config.hx<q.porchHalf-.11}))};});
  console.log('Walkway diagnostics',JSON.stringify(walkway));assert(walkway.width>12&&walkway.stairError<1e-6&&walkway.bridgeError<1e-6&&Math.abs(walkway.stairWidth-2.2)<.001&&walkway.flowers>10&&walkway.sides.length===2&&walkway.minClearance>=1.66&&walkway.benches.every(b=>b.windowClear)&&walkway.pots.every(p=>p.clear));
+ // A geometry-only test missed a visually absent surface in 0.1.14.
+ // Render the actual path, then hide only the paving and verify that its pixels change.
+ const paving=await page.evaluate(()=>{
+  const q=cvQA;document.getElementById('close').click();q.scene.render();
+  const canvas=document.getElementById('view'),probe=document.createElement('canvas');probe.width=canvas.width;probe.height=canvas.height;const ctx=probe.getContext('2d');
+  const points=q.pathRows.slice(3,-4).filter((_,i)=>i%2===0).map(r=>q.projectPoint(r[1])).filter(p=>p.x>=4&&p.y>=4&&p.x<canvas.width-4&&p.y<canvas.height-4&&p.z>=0&&p.z<=1);
+  function sample(){ctx.clearRect(0,0,probe.width,probe.height);ctx.drawImage(canvas,0,0);return points.map(p=>{const v=ctx.getImageData(Math.floor(p.x)-1,Math.floor(p.y)-1,3,3).data;return [0,1,2].map(k=>{let s=0;for(let i=k;i<v.length;i+=4)s+=v[i];return s/9;});});}
+  const visible=sample();q.pathMesh.setEnabled(false);q.scene.render();const hidden=sample();q.pathMesh.setEnabled(true);q.scene.render();
+  const differences=visible.map((v,i)=>v.reduce((sum,c,k)=>sum+Math.abs(c-hidden[i][k]),0));
+  const minElevation=Math.min(...q.pathRows.flat().map(v=>v.y-q.renderedTerrainY(v.x,v.z)));
+  return {samples:points.length,changed:differences.filter(x=>x>20).length,differences,minElevation};
+ });
+ console.log('Rendered paving visibility',JSON.stringify(paving));assert(paving.samples>=5&&paving.changed>=Math.ceil(paving.samples*.65)&&paving.minElevation>=.09,'paving must actually appear in rendered pixels above terrain');
+ fs.writeFileSync('qa/pavimento.json',JSON.stringify(paving,null,2));
  // Walk to the two benches, use actual buttons and inspect jointed poses and state.
  const seats=[];
  for(const id of ['bench-left','bench-right']){

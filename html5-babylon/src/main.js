@@ -128,20 +128,28 @@ const pathRows=[],pathFlowerPositions=[];
 const pathDistance=(x,z)=>{let best=Infinity;for(let i=1;i<pathPoints.length;i++)best=Math.min(best,segDist(x,z,pathPoints[i-1],pathPoints[i]));return best;};
 entity('stone walkway');
 const pathVertices=[],pathIndices=[],pathUV=[],pathColors=[];
+// Match the rendered terrain triangles, not only the continuous height function.
+function renderedTerrainY(x,z){
+ const u=Math.max(0,Math.min(nx-1e-8,(x-minX)/(maxX-minX)*nx)),v=Math.max(0,Math.min(nz-1e-8,(z-minZ)/(maxZ-minZ)*nz));
+ const i=Math.floor(u),j=Math.floor(v),fx=u-i,fz=v-j,k=j*(nx+1)+i;
+ const a=pos[k*3+1],b=pos[(k+1)*3+1],c=pos[(k+nx+1)*3+1],dd=pos[(k+nx+2)*3+1];
+ return fx+fz<=1?a+(b-a)*fx+(c-a)*fz:dd+(c-dd)*(1-fx)+(b-dd)*(1-fz);
+}
+const pavingMaterial=mat('residential stone paving','#d6c7a1');pavingMaterial.backFaceCulling=false;
 let pathLengthHome=0;
 for(let i=0;i<pathPoints.length;i++){
  const p=pathPoints[i],dir=i===0?houseXZ(0,-1).subtract(houseXZ(0,0)):pathPoints[Math.min(i+1,pathPoints.length-1)].subtract(pathPoints[i-1]);dir.y=0;dir.normalize();
  const side=V(-dir.z,0,dir.x),half=1.10+.14*Math.min(1,i/8);if(i)pathLengthHome+=Math.hypot(p.x-pathPoints[i-1].x,p.z-pathPoints[i-1].z);
  const row=[];
  for(const k of [-1,0,1]){
-  const v=p.add(side.scale(k*half));v.y=height(v.x,v.z)+.055;
-  if(i===pathPoints.length-1)v.y=2.945;
+  const v=p.add(side.scale(k*half));v.y=Math.max(renderedTerrainY(v.x,v.z),height(v.x,v.z))+.095;
+  if(i===pathPoints.length-1)v.y=Math.max(v.y,2.945);
   row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);pathColors.push(.93,.91,.80,1);
  }
  pathRows.push(row);
  if(i)for(let k=0;k<2;k++){const n=(i-1)*3+k;pathIndices.push(n,n+3,n+1,n+1,n+3,n+4);}
 }
-const pathMesh=new Mesh('continuous residential stone walkway',scene),pathData=new VertexData();pathData.positions=pathVertices;pathData.indices=pathIndices;pathData.uvs=pathUV;pathData.colors=pathColors;pathData.normals=[];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);if(pathData.normals[1]<0){for(let i=0;i<pathIndices.length;i+=3)[pathIndices[i+1],pathIndices[i+2]]=[pathIndices[i+2],pathIndices[i+1]];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);}pathData.applyToMesh(pathMesh);own(pathMesh,M.stoneLight,false);
+const pathMesh=new Mesh('continuous residential stone walkway',scene),pathData=new VertexData();pathData.positions=pathVertices;pathData.indices=pathIndices;pathData.uvs=pathUV;pathData.colors=pathColors;pathData.normals=[];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);if(pathData.normals[1]<0){for(let i=0;i<pathIndices.length;i+=3)[pathIndices[i+1],pathIndices[i+2]]=[pathIndices[i+2],pathIndices[i+1]];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);}pathData.applyToMesh(pathMesh);own(pathMesh,pavingMaterial,false);
 // Engraved stone joints, without gaps in the supporting surface.
 for(let i=2;i<pathRows.length-1;i+=3){const r=pathRows[i];beam('stone paving joint',r[0].add(V(0,.009,0)),r[1].add(V(0,.009,0)),.025,M.stone,.025,false);beam('stone paving joint',r[1].add(V(0,.009,0)),r[2].add(V(0,.009,0)),.025,M.stone,.025,false);}
 // Exterior approach is a physical ground-following ribbon, not a painted road.
@@ -570,10 +578,10 @@ function setSeatPose(blend,lean=0){
  for(let i=3;i<5;i++){const m=bodyParts[i],r=limbRest[i];m.position.copyFromFloats(r.x,r.y-drop,.12*blend);m.rotation.x=-.65*blend+lean;}
  for(let i=0;i<seatLegs.length;i++){
   const l=seatLegs[i],x=l.x;
-  const hip=V(x,.68-.10*blend,0),knee=V(x,.37+.02*blend,.30*blend),ankle=V(x,.075,.34*blend);
+  const hip=V(x,.68-.10*blend,0),knee=V(x,.37+.17*blend,.39*blend),ankle=V(x,.075,.43*blend);
   for(const m of [l.thigh,l.shin,l.foot])m.setEnabled(blend>0);
   bodyParts[i+1].setEnabled(blend===0);bodyParts[i+1].rotation.x=0;bodyParts[i+1].position.copyFrom(limbRest[i+1]);
-  poseSegment(l.thigh,hip,knee);poseSegment(l.shin,knee,ankle);l.foot.position.copyFromFloats(x,.06,.075+.34*blend);
+  poseSegment(l.thigh,hip,knee);poseSegment(l.shin,knee,ankle);l.foot.position.copyFromFloats(x,.06,.075+.43*blend);
  }
 }
 function seatStand(b){return home.C(b.x,.53,b.z-.77);}
@@ -920,4 +928,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
