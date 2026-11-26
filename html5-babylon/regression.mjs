@@ -330,7 +330,30 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(care.name==='Tobias'&&care.affinity>0&&care.saved.name==='Tobias'&&care.pose==='pet');await page.locator('#pet-close').click();
  const shelters=await page.evaluate(()=>{const s=cvQA.petSystem,out=[];for(const p of s.pets){p.rig.root.position.copyFrom(p.out);p.inShelter=false;const planned=s.plan(p,p.out,'sleep',true);for(let i=0;i<180&&p.state==='walk';i++)s.update(.05);const slept=p.state==='sleep'&&p.inShelter&&p.rig.root.position.subtract(p.bed).length()<.05;s.leave(p);for(let i=0;i<180&&p.state==='walk';i++)s.update(.05);out.push({id:p.id,planned,slept,left:!p.inShelter&&p.rig.root.position.subtract(p.out).length()<.05});}return out;});
  console.log('Pet shelter entry and exit',JSON.stringify(shelters));assert(shelters.every(p=>p.planned&&p.slept&&p.left));
- fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
+ // Validate real meal approach and resource consumption for each species.
+ const meals=await page.evaluate(()=>{
+  const s=cvQA.petSystem,out=[];for(const p of s.pets){
+   for(const kind of ['drink','eat']){
+    const d=s.data[p.id],key=kind==='drink'?'water':'food',need=kind==='drink'?'thirst':'hunger',b=p[key].point;
+    p.rig.root.position.copyFrom(p.out);p.inShelter=false;p.path=[];d[key]=1;d[need]=.85;
+    const planned=s.mealPlan(p,kind);for(let i=0;i<600&&p.state==='walk';i++)s.update(.05,false);
+    const arrived=p.state===kind,root=p.rig.root,stand=Math.hypot(root.position.x-b.x,root.position.z-b.z);
+    for(let i=0;i<20;i++)s.update(.05,false);
+    const target=Math.atan2(root.position.x-b.x,root.position.z-b.z),facing=Math.abs(Math.atan2(Math.sin(root.rotation.y-target),Math.cos(root.rotation.y-target)));
+    for(let i=0;i<90&&p.state===kind;i++)s.update(.05,false);
+    out.push({id:p.id,kind,planned,arrived,stand,facing,consumed:d[key]<1,needReduced:d[need]<.6});
+   }
+  }return out;
+ });
+ console.log('Pet meals from beside bowls',JSON.stringify(meals));assert(meals.every(m=>m.planned&&m.arrived&&Math.abs(m.stand-(m.id==='dog'?.68:.49))<.04&&m.facing<.08&&m.consumed&&m.needReduced));
+ fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
+ // QA-only closeups, not a permanent camera control.
+ await page.evaluate(()=>{const q=cvQA,p=q.wheatPlots.at(-1);q.avatar.position.set(p.x,q.surfaceHeight(p.x,p.z),p.z);for(let i=0;i<160;i++)q.updateEntry(.05);});
+ for(const id of ['dog','cat']){
+  await page.evaluate(id=>{const q=cvQA,p=q.petSystem.pets.find(p=>p.id===id);p.rig.root.position.copyFrom(p.out);p.path=[];p.inShelter=false;p.state='idle';p.timer=100;const focus=p.out.clone();focus.y+=.8;q.setView(12,focus,false);},id);
+  await capture('pet-detalhe-'+id,null,48);
+ }
+ await page.evaluate(v=>{const q=cvQA;q.avatar.position.copyFromFloats(...v);document.getElementById('wide').click();},petQA.old);
  // Test actual day/night lighting on a disposable page state, after all daytime visual checks.
  const lighting=await page.evaluate(()=>{const q=cvQA,anchor=q.worldClock.anchor;const day=Math.ceil(q.worldElapsed()/7200000);q.updateWorldClock(anchor+day*7200000+16*300000,true);const night={...q.daylight,label:document.getElementById('world-clock').textContent};q.updateWorldClock(anchor+day*7200000+28*300000,true);return {night,day:{...q.daylight,label:document.getElementById('world-clock').textContent}};});
  assert(lighting.night.sun<.2&&lighting.day.sun>.45&&lighting.night.label.includes('Noite')&&lighting.day.label.includes('Dia'));
