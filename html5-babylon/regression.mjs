@@ -139,9 +139,11 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   const visible=sample();q.pathMesh.setEnabled(false);q.scene.render();const hidden=sample();q.pathMesh.setEnabled(true);q.scene.render();
   const differences=visible.map((v,i)=>v.reduce((sum,c,k)=>sum+Math.abs(c-hidden[i][k]),0));
   const minElevation=Math.min(...q.pathRows.flat().map(v=>v.y-q.renderedTerrainY(v.x,v.z)));
-  return {samples:points.length,changed:differences.filter(x=>x>20).length,differences,minElevation};
+  const luminance=visible.map(([r,g,b])=>.2126*r+.7152*g+.0722*b);
+  const stonePixels=visible.filter(([r,g,b],i)=>luminance[i]>=105&&r>=g*.96&&g>=b*.95).length;
+  return {samples:points.length,changed:differences.filter(x=>x>20).length,differences,minElevation,stonePixels,luminance,medianLuminance:[...luminance].sort((a,b)=>a-b)[Math.floor(luminance.length/2)]};
  });
- console.log('Rendered paving visibility',JSON.stringify(paving));assert(paving.samples>=5&&paving.changed>=Math.ceil(paving.samples*.65)&&paving.minElevation>=.09,'paving must actually appear in rendered pixels above terrain');
+ console.log('Rendered paving visibility',JSON.stringify(paving));assert(paving.samples>=5&&paving.changed>=Math.ceil(paving.samples*.65)&&paving.minElevation>=.09,'paving must actually appear in rendered pixels above terrain');assert(paving.stonePixels>=Math.ceil(paving.samples*.65)&&paving.medianLuminance>=105,'stone must render in a light warm tone, not dark soil');
  fs.writeFileSync('qa/pavimento.json',JSON.stringify(paving,null,2));
  // Walk to the two benches, use actual buttons and inspect jointed poses and state.
  const seats=[];

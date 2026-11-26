@@ -136,6 +136,13 @@ function renderedTerrainY(x,z){
  return fx+fz<=1?a+(b-a)*fx+(c-a)*fz:dd+(c-dd)*(1-fx)+(b-dd)*(1-fz);
 }
 const pavingMaterial=mat('residential stone paving','#d6c7a1');pavingMaterial.backFaceCulling=false;
+pavingMaterial.twoSidedLighting=false;
+pavingMaterial.ambientColor=Color3.FromHexString('#ad9e80');
+// Keep a small reflected-light component so the stone never reads as black soil.
+pavingMaterial.emissiveColor=new Color3(.30,.26,.20);
+pavingMaterial.specularColor=Color3.Black();
+const pavingJointMaterial=mat('residential stone joints','#8b795b');
+pavingJointMaterial.emissiveColor=new Color3(.07,.06,.045);
 let pathLengthHome=0;
 for(let i=0;i<pathPoints.length;i++){
  const p=pathPoints[i],dir=i===0?houseXZ(0,-1).subtract(houseXZ(0,0)):pathPoints[Math.min(i+1,pathPoints.length-1)].subtract(pathPoints[i-1]);dir.y=0;dir.normalize();
@@ -144,14 +151,16 @@ for(let i=0;i<pathPoints.length;i++){
  for(const k of [-1,0,1]){
   const v=p.add(side.scale(k*half));v.y=Math.max(renderedTerrainY(v.x,v.z),height(v.x,v.z))+.095;
   if(i===pathPoints.length-1)v.y=Math.max(v.y,2.945);
-  row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);pathColors.push(.93,.91,.80,1);
+  row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);const shade=.96+.035*Math.sin(i*.82+k*.73);pathColors.push(shade,shade,shade,1);
  }
  pathRows.push(row);
  if(i)for(let k=0;k<2;k++){const n=(i-1)*3+k;pathIndices.push(n,n+3,n+1,n+1,n+3,n+4);}
 }
-const pathMesh=new Mesh('continuous residential stone walkway',scene),pathData=new VertexData();pathData.positions=pathVertices;pathData.indices=pathIndices;pathData.uvs=pathUV;pathData.colors=pathColors;pathData.normals=[];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);if(pathData.normals[1]<0){for(let i=0;i<pathIndices.length;i+=3)[pathIndices[i+1],pathIndices[i+2]]=[pathIndices[i+2],pathIndices[i+1]];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);}pathData.applyToMesh(pathMesh);own(pathMesh,pavingMaterial,false);
+const pathMesh=new Mesh('continuous residential stone walkway',scene),pathData=new VertexData();pathData.positions=pathVertices;pathData.indices=pathIndices;pathData.uvs=pathUV;pathData.colors=pathColors;pathData.normals=[];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);if(pathData.normals[1]<0){for(let i=0;i<pathIndices.length;i+=3)[pathIndices[i+1],pathIndices[i+2]]=[pathIndices[i+2],pathIndices[i+1]];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);}// Force upward-facing normals even at tight curve joins; retain vertex slope elsewhere.
+for(let i=0;i<pathData.normals.length;i+=3){if(pathData.normals[i+1]<0){pathData.normals[i]*=-1;pathData.normals[i+1]*=-1;pathData.normals[i+2]*=-1;}if(pathData.normals[i+1]<.25){pathData.normals[i]=0;pathData.normals[i+1]=1;pathData.normals[i+2]=0;}}
+pathData.applyToMesh(pathMesh);own(pathMesh,pavingMaterial,false);
 // Engraved stone joints, without gaps in the supporting surface.
-for(let i=2;i<pathRows.length-1;i+=3){const r=pathRows[i];beam('stone paving joint',r[0].add(V(0,.009,0)),r[1].add(V(0,.009,0)),.025,M.stone,.025,false);beam('stone paving joint',r[1].add(V(0,.009,0)),r[2].add(V(0,.009,0)),.025,M.stone,.025,false);}
+for(let i=2;i<pathRows.length-1;i+=3){const r=pathRows[i];beam('stone paving joint',r[0].add(V(0,.009,0)),r[1].add(V(0,.009,0)),.025,pavingJointMaterial,.025,false);beam('stone paving joint',r[1].add(V(0,.009,0)),r[2].add(V(0,.009,0)),.025,pavingJointMaterial,.025,false);}
 // Exterior approach is a physical ground-following ribbon, not a painted road.
 entity('bridge approach');const approach=[[575,248],[597,256],[616,270],[635,290],[644,305],[658,327]].map(p=>P(...p));
 const approachCurve=[];for(let i=1;i<approach.length;i++){const a=approach[i-1],b=approach[i],n=Math.ceil(Vector3.Distance(a,b)/.42);for(let j=0;j<n;j++)approachCurve.push(Vector3.CatmullRom(approach[Math.max(0,i-2)],a,b,approach[Math.min(approach.length-1,i+1)],j/n));}approachCurve.push(approach.at(-1));
