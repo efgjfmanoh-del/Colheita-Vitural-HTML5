@@ -178,7 +178,7 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity('house-front');
  const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.woodDark);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.glass);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.woodDark);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.woodDark);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.woodLight)};
  for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.woodDark);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.glass);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.woodDark);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.woodLight)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
- B('porch deck',0,.37,-d/2-1.45,w*.77,.32,2.8,M.woodLight);for(let j=0;j<16;j++)B('porch deck board seam',-w*.37+j*w*.049,.54,-d/2-1.45,.035,.012,2.7,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*w*.34,1.83,-d/2-2.4,.27,2.8,.27,M.woodDark);B('porch rail',s*w*.27,.96,-d/2-2.5,w*.23,.14,.15,M.woodLight);for(let i=0;i<5;i++)B('porch baluster',s*(w*.16+i*w*.045),.74,-d/2-2.5,.11,.50,.11,M.wood)}
+ B('porch deck',0,.37,-d/2-1.45,w*.77,.32,2.8,M.woodLight);for(let j=0;j<16;j++)B('porch deck board seam',-w*.37+j*w*.049,.54,-d/2-1.45,.035,.012,2.7,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*w*.34,1.83,-d/2-2.4,.27,2.8,.27,M.woodDark);}
  entity('house-porch-roof');
  quad('porch roof',[C(-w*.42,3.65,-d/2),C(w*.42,3.65,-d/2),C(w*.42,3.12,-d/2-3),C(-w*.42,3.12,-d/2-3)],M.roof,true);
  for(let zz=0;zz<6;zz++)L('porch roof tile',[-w*.42,3.69-zz*.09,-d/2-zz*.51],[w*.42,3.69-zz*.09,-d/2-zz*.51],.10,M.tile);
@@ -191,6 +191,131 @@ const home=house('house',409,137,14.5,9,5.6,-.30);
 // The rendered architectural surfaces and the movement surfaces share local coordinates.
 const homeLocal=(x,z)=>{const dx=x-home.x,dz=z-home.z,c=Math.cos(home.angle),s=Math.sin(home.angle);return {x:dx*c-dz*s,z:dx*s+dz*c};};
 const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false,action:null,lastAction:null};
+// Porch fixtures share their dimensions with physical collision volumes.
+const porchFront=-home.d/2-2.75,porchHalf=home.w*.385;
+const porchFixtures=[],porchRails=[];
+const porchBox=(n,x,y,z,w,h,d,m)=>{const p=home.C(x,y,z);return box(n,p.x,p.y,p.z,w,h,d,m,home.angle);};
+const addRail=(x1,z1,x2,z2)=>{
+ const length=Math.hypot(x2-x1,z2-z1),steps=Math.ceil(length/.46);
+ porchRails.push({x1,z1,x2,z2});
+ for(let i=0;i<=steps;i++){
+  const u=i/steps;porchBox('porch railing upright',x1+(x2-x1)*u,1.00,z1+(z2-z1)*u,.10,.94,.10,i===0||i===steps?M.woodDark:M.wood);
+ }
+ for(const y of [.78,1.48])beam('continuous porch guardrail',home.C(x1,y,z1),home.C(x2,y,z2),.13,M.woodLight);
+};
+entity('porch guardrails');
+for(const side of [-1,1]){
+ const x=side*(porchHalf-.11);
+ addRail(x,porchFront,x,-home.d/2-.10);
+ addRail(side*1.1,porchFront,x,porchFront);
+}
+entity('porch seating');
+for(const side of [-1,1]){
+ const x=side*3.25,z=-home.d/2-.62;
+ porchFixtures.push({kind:'bench',x,z,hx:1.02,hz:.37});
+ for(const a of [-.77,.77])for(const b of [-.26,.26])porchBox('bench foot',x+a,.78,z+b,.14,.50,.14,M.woodDark);
+ for(let i=0;i<4;i++)porchBox('bench seat slat',x,1.05,z-.26+i*.17,1.94,.10,.16,M.woodLight);
+ for(const a of [-.80,.80])porchBox('bench back support',x+a,1.36,z+.30,.12,.85,.12,M.woodDark);
+ for(const y of [1.31,1.54])porchBox('bench back slat',x,y,z+.30,1.94,.17,.09,M.woodLight);
+ for(const a of [-.93,.93])porchBox('bench armrest',x+a,1.30,z,.12,.10,.72,M.wood);
+}
+// Independent containers and a catalog, reusable by future garden beds.
+const flowerCatalog=Object.freeze({
+ rose:{name:'Rosa',color:'#d84868',center:'#9d2343',petals:8,height:.55,spread:.11},
+ daisy:{name:'Margarida',color:'#fff4dc',center:'#e7ad27',petals:7,height:.39,spread:.14},
+ lavender:{name:'Lavanda',color:'#9768c8',center:'#7151ad',petals:5,height:.66,spread:.065}
+});
+const planterTypes=Object.freeze({
+ ceramic:{name:'Vaso de cerâmica',hx:.39,hz:.39,soilY:1.00,slots:[[-.14,0],[.14,0]]},
+ wooden:{name:'Jardineira de madeira',hx:.58,hz:.31,soilY:.92,slots:[[-.34,0],[0,0],[.34,0]]}
+});
+const planterSpecs=[{id:'porch-ceramic',type:'ceramic',x:-4.63,z:-home.d/2-1.58},{id:'porch-wooden',type:'wooden',x:4.63,z:-home.d/2-1.58}];
+const GROW_MS=90000,SAVE_KEY='cv.ornamentalGarden.v1';
+let gardenSave={};let gardenError='';
+try{const saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))gardenSave=saved;}catch{}
+const potMat=mat('warm terracotta pottery','#ad633e'),potRim=mat('ceramic lip','#d08a59'),soilMat=mat('potting soil','#523b2b'),flowerMat=mat('cultivated flower vertex colors','#ffffff');
+flowerMat.backFaceCulling=false;flowerMat.specularColor=Color3.Black();
+const planters=planterSpecs.map(spec=>{
+ const type=planterTypes[spec.type],p=home.C(spec.x,.53,spec.z);
+ entity('porch planters');
+ if(spec.type==='ceramic'){
+  cyl('tapered ceramic pot',p.x,p.y+.22,p.z,.26,.44,potMat,.38);
+  cyl('ceramic pot lip',p.x,p.y+.455,p.z,.40,.095,potRim);
+  cyl('exposed ceramic pot soil',p.x,p.y+.48,p.z,.34,.018,soilMat);
+  cyl('pot saucer',p.x,p.y+.038,p.z,.38,.075,potRim);
+ }else{
+  porchBox('wooden planter base',spec.x,.61,spec.z,1.16,.15,.62,M.woodDark);
+  porchBox('planter soil',spec.x,.90,spec.z,1.04,.12,.50,soilMat);
+  for(const k of [-1,1]){
+   porchBox('planter long side',spec.x,.76,spec.z+k*.275,1.16,.44,.10,M.woodLight);
+   porchBox('planter short side',spec.x+k*.53,.76,spec.z,.10,.44,.62,M.wood);
+  }
+ }
+ porchFixtures.push({kind:'planter',x:spec.x,z:spec.z,hx:type.hx,hz:type.hz});
+ entity('porch cultivated flowers');
+ const mesh=new Mesh('cultivated '+spec.id,scene);own(mesh,flowerMat,false);mesh.receiveShadows=false;mesh.position=home.C(spec.x,type.soilY,spec.z);mesh.rotation.y=home.angle;mesh.setEnabled(false);
+ const saved=gardenSave[spec.id];const crop=saved&&Object.hasOwn(flowerCatalog,saved.species)&&Number.isFinite(saved.plantedAt)&&saved.plantedAt>=0&&saved.plantedAt<=Date.now()?{species:saved.species,plantedAt:saved.plantedAt}:null;
+ return {...spec,config:type,mesh,crop,stage:0};
+});
+function rebuildCrop(p){
+ if(!p.crop){p.mesh.setEnabled(false);p.stage=0;return;}
+ const f=flowerCatalog[p.crop.species],positions=[],indices=[],colors=[];
+ const triangle=(a,b,c,color)=>{const k=positions.length/3;positions.push(...a,...b,...c);indices.push(k,k+1,k+2);for(let n=0;n<3;n++)colors.push(color.r,color.g,color.b,1);};
+ const diamond=(x,y,z,rx,ry,rz,color)=>{const u=[x,y+ry,z],b=[x,y-ry,z],ring=[[x+rx,y,z],[x,y,z+rz],[x-rx,y,z],[x,y,z-rz]];for(let i=0;i<4;i++){triangle(u,ring[i],ring[(i+1)%4],color);triangle(b,ring[(i+1)%4],ring[i],color);}};
+ const green=Color3.FromHexString('#43813e'),leaf=Color3.FromHexString('#6a9e45'),petal=Color3.FromHexString(f.color),center=Color3.FromHexString(f.center);
+ p.config.slots.forEach(([sx,sz],i)=>{
+  const height=f.height*(.88+.09*i),r=.022;
+  for(let k=0;k<6;k++){const a=k*Math.PI/3,b=(k+1)*Math.PI/3,A=[sx+Math.cos(a)*r,0,sz+Math.sin(a)*r],B=[sx+Math.cos(b)*r,0,sz+Math.sin(b)*r],C=[B[0],height,B[2]],D=[A[0],height,A[2]];triangle(A,B,C,green);triangle(A,C,D,green);}
+  for(let k=0;k<4;k++){const a=k*2.4+i,cy=height*(.24+k*.12),dx=Math.cos(a),dz=Math.sin(a);triangle([sx,cy,sz],[sx+dx*.16-dz*.045,cy+.05,sz+dz*.16+dx*.045],[sx+dx*.24,cy+.11,sz+dz*.24],leaf);triangle([sx,cy,sz],[sx+dx*.24,cy+.11,sz+dz*.24],[sx+dx*.16+dz*.045,cy+.04,sz+dz*.16-dx*.045],green);}
+  const layers=p.crop.species==='lavender'?4:p.crop.species==='rose'?2:1;
+  for(let layer=0;layer<layers;layer++){
+   const yy=height-layer*(p.crop.species==='lavender'?.075:.035),spread=f.spread*(layer===0?.72:1);
+   diamond(sx,yy,sz,.045,.04,.045,center);
+   for(let k=0;k<f.petals;k++){const a=k*Math.PI*2/f.petals+layer*.45;diamond(sx+Math.cos(a)*spread*.67,yy,sz+Math.sin(a)*spread*.67,spread*.59,.039,spread*.59,petal);}
+  }
+ });
+ const v=new VertexData();v.positions=positions;v.indices=indices;v.colors=colors;v.normals=[];VertexData.ComputeNormals(positions,indices,v.normals);v.applyToMesh(p.mesh,true);p.mesh.setEnabled(true);
+}
+function updateCrop(p,now=Date.now()){
+ if(!p.crop)return;
+ p.stage=Math.max(0,Math.min(1,(now-p.crop.plantedAt)/GROW_MS));
+ const scale=.18+.82*p.stage;p.mesh.scaling.setAll(scale);
+}
+function writeGarden(){
+ const data=Object.fromEntries(planters.filter(p=>p.crop).map(p=>[p.id,p.crop]));
+ try{localStorage.setItem(SAVE_KEY,JSON.stringify(data));gardenError='';return true;}catch{gardenError='Não foi possível salvar as flores. Tente novamente.';return false;}
+}
+function nearbyPlanter(){const pos=homeLocal(avatar.position.x,avatar.position.z);if(entry.inside||entry.action||pos.z> -home.d/2+.10||pos.z<porchFront-.12)return null;return planters.map(p=>({p,dist:Math.hypot(pos.x-p.x,pos.z-p.z)})).filter(x=>x.dist<1.34).sort((a,b)=>a.dist-b.dist)[0]?.p||null;}
+let selectedPlanter=null,lastGardenTick=0;
+const gardenPanel=$('garden-panel'),gardenAction=$('garden-action');
+function renderGarden(){
+ if(!selectedPlanter)return;const p=selectedPlanter;
+ $('garden-title').textContent=p.config.name;
+ $('garden-state').textContent=gardenError||(p.crop?flowerCatalog[p.crop.species].name+' · '+(p.stage>=1?'Floresceu':Math.floor(p.stage*100)+'% de crescimento'):'Vazio · escolha uma espécie');
+ for(const button of $('garden-species').querySelectorAll('button'))button.disabled=!!p.crop;
+ $('garden-remove').disabled=!p.crop;
+}
+function changeCrop(species){
+ const p=selectedPlanter;if(!p||nearbyPlanter()!==p||entry.action)return false;
+ if(species!==null&&(!Object.hasOwn(flowerCatalog,species)||p.crop))return false;
+ if(species===null&&!p.crop)return false;
+ const prior=p.crop;p.crop=species===null?null:{species,plantedAt:Date.now()};
+ if(!writeGarden()){p.crop=prior;renderGarden();return false;}
+ rebuildCrop(p);updateCrop(p);renderGarden();return true;
+}
+for(const [id,f] of Object.entries(flowerCatalog)){
+ const b=document.createElement('button');b.textContent=f.name;b.dataset.flower=id;b.addEventListener('click',()=>changeCrop(id));$('garden-species').append(b);
+}
+gardenAction.addEventListener('click',()=>{selectedPlanter=nearbyPlanter();if(selectedPlanter){gardenPanel.hidden=false;renderGarden();}});
+function closeGarden(){gardenPanel.hidden=true;selectedPlanter=null;}
+$('garden-close').addEventListener('click',closeGarden);$('garden-remove').addEventListener('click',()=>changeCrop(null));
+for(const p of planters){rebuildCrop(p);updateCrop(p);}
+function updateGarden(now=Date.now()){
+ const near=nearbyPlanter();gardenAction.hidden=!near||!gardenPanel.hidden;
+ if(selectedPlanter&&selectedPlanter!==near)closeGarden();
+ if(now-lastGardenTick>=250){lastGardenTick=now;for(const p of planters)updateCrop(p,now);if(selectedPlanter)renderGarden();}
+}
+
 function surfaceHeight(x,z){
  const p=homeLocal(x,z),f=-home.d/2;
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return home.y+.53;
@@ -206,7 +331,9 @@ function homeBlocked(x,z,interacting=false){
  if(Math.abs(p.x)<half+r&&Math.abs(p.z-f)<wall+r&&(Math.abs(p.x)>home.doorW/2-r||(!interacting&&entry.door<.88)))return true;
  const theta=-entry.door*Math.PI*.49,hx=-home.doorW/2+.035,hz=f-.055,dx=Math.cos(theta)*(home.doorW-.07),dz=-Math.sin(theta)*(home.doorW-.07),u=Math.max(0,Math.min(1,((p.x-hx)*dx+(p.z-hz)*dz)/(dx*dx+dz*dz)));
  if(Math.hypot(p.x-hx-dx*u,p.z-hz-dz*u)<r+.055)return true;
- if(Math.abs(p.z-(f-2.50))<.22&&Math.abs(p.x)>home.w*.155&&Math.abs(p.x)<home.w*.39)return true;
+ // Guardrails use exactly the segments rendered above; the only front gap is the stair.
+ for(const rail of porchRails){const dx=rail.x2-rail.x1,dz=rail.z2-rail.z1,u=Math.max(0,Math.min(1,((p.x-rail.x1)*dx+(p.z-rail.z1)*dz)/(dx*dx+dz*dz)));if(Math.hypot(p.x-rail.x1-u*dx,p.z-rail.z1-u*dz)<r+.075)return true;}
+ for(const item of porchFixtures)if(Math.abs(p.x-item.x)<item.hx+r&&Math.abs(p.z-item.z)<item.hz+r)return true;
  for(const k of [-1,1])if(Math.hypot(p.x-k*home.w*.34,p.z-(f-2.4))<.33)return true;
  return false;
 }
@@ -488,7 +615,7 @@ function moveAvatar(dx,dz,dt,interacting=false){
  avatar.position.y=surfaceHeight(avatar.position.x,avatar.position.z);
  if(travel>.0001)avatar.rotation.y=Math.atan2(mx,mz);walkPose(travel,dt);return travel;
 }
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;if(!entry.action)moveAvatar(dx,dz,dt);else walkPose(0,dt);updateEntry(dt);
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;if(!entry.action)moveAvatar(dx,dz,dt);else walkPose(0,dt);updateEntry(dt);updateGarden();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,frames:0,last:null,windowStart:null,samples:[]};
@@ -513,7 +640,7 @@ if(waterMotion.length){
 const animated=new Set(flowBatch?[flowBatch]:[]);
 const casters=new Set(shadow.getShadowMap().renderList||[]);
 for(const [id,parts] of Object.entries(groups)){
- if(['terrain','grass details','farm visitor'].includes(id))continue;
+ if(['terrain','grass details','farm visitor','porch cultivated flowers'].includes(id))continue;
  const buckets=new Map(),kept=[];
  for(const m of parts){
   if(animated.has(m)||m.parent||!m.material||m.getTotalVertices()===0||m.hasThinInstances){kept.push(m);continue}
@@ -533,4 +660,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

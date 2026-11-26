@@ -49,6 +49,33 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  for(let i=0;i<120;i++)q.updateEntry(.05);
  return {initial,leafBlocked,routeErrors,mode,restored,partialBeta,beta:q.scene.activeCamera.beta*180/Math.PI,blend:q.entry.blend};});
  console.log('Exit route diagnostics',JSON.stringify(exit));assert(exit.leafBlocked,'open leaf must still block its physical footprint');assert(exit.routeErrors.every(e=>e<.06),'walk around open leaf, not through it');assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
+ // Shared real collision volumes, including lateral rails and the narrow stair access.
+ const porch=await page.evaluate(()=>{
+ const q=cvQA,H=q.home,f=-H.d/2,half=H.w*.385;
+ const at=(x,z)=>{const p=H.C(x,0,z);return q.homeBlocked(p.x,p.z);};
+ const rails=q.porchRails.every(r=>at((r.x1+r.x2)/2,(r.z1+r.z2)/2));
+ const fixtures=q.porchFixtures.every(r=>at(r.x,r.z));
+ const clearStair=!at(0,f-2.75);
+ const start=H.C(-half+.65,0,f-1.4);q.avatar.position.copyFrom(start);q.avatar.position.y=q.surfaceHeight(start.x,start.z);
+ const dir=H.C(-1,0,0).subtract(H.C(0,0,0));
+ for(let i=0;i<60;i++)q.moveAvatar(dir.x*.08,dir.z*.08,.025);
+ const stopped=q.homeLocal(q.avatar.position.x,q.avatar.position.z);
+ return {rails,fixtures,clearStair,stopped,half};
+ });
+ assert(porch.rails&&porch.fixtures&&porch.clearStair&&porch.stopped.x> -porch.half,'porch rails and fixture collisions');
+ // Interact with each separate planter via the real UI. No inventory or time simulation claimed.
+ const visit=async id=>page.evaluate(id=>{const q=cvQA,p=q.planters.find(x=>x.id===id),v=q.home.C(p.x+(p.x<0?1:-1)*.92,0,p.z);q.avatar.position.copyFrom(v);q.avatar.position.y=q.surfaceHeight(v.x,v.z);q.updateGarden(Date.now()+1000);},id);
+ await visit('porch-ceramic');await page.locator('#garden-action').click();await page.locator('[data-flower="rose"]').click();assert(await page.locator('[data-flower="daisy"]').isDisabled());
+ await page.locator('#garden-close').click();await visit('porch-wooden');await page.locator('#garden-action').click();await page.locator('[data-flower="lavender"]').click();await page.locator('#garden-close').click();
+ const crops=await page.evaluate(()=>{const q=cvQA;for(const p of q.planters)q.updateCrop(p,p.crop.plantedAt+90000);return q.planters.map(p=>({id:p.id,type:p.type,species:p.crop.species,stage:p.stage,vertices:p.mesh.getTotalVertices(),visible:p.mesh.isEnabled()}));});
+ assert.equal(crops[0].species,'rose');assert.equal(crops[1].species,'lavender');assert(crops.every(p=>p.visible&&p.stage===1&&p.vertices>0));
+ await page.evaluate(()=>{const q=cvQA;const p=q.home.C(0,0,-q.home.d/2-4.1);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});
+ await capture('varanda-cultivada',null,await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));
+ await page.reload();await page.waitForFunction(()=>window.cvQA?.ready,null,{timeout:120000});await page.evaluate(()=>cvQA.engine.stopRenderLoop());
+ const saved=await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species));assert.deepEqual(saved,['rose','lavender']);
+ await visit('porch-ceramic');await page.locator('#garden-action').click();await page.locator('#garden-remove').click();await page.locator('[data-flower="daisy"]').click();
+ assert.deepEqual(await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species)),['daisy','lavender']);
+ assert.deepEqual(errors,[]);fs.writeFileSync('qa/varanda.json',JSON.stringify({porch,crops,saved},null,2));console.log('PASS porch rail and planter collision, species, growth and persistence',JSON.stringify({porch,crops,saved}));
  await page.close();
  // Emulated Android viewport validates the DPR bug; not a hardware benchmark.
  const mobile=await browser.newPage({viewport:{width:834,height:375},deviceScaleFactor:3.25,isMobile:true,hasTouch:true});
