@@ -182,7 +182,7 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
 const home=house('house',409,137,14.5,9,5.6,-.30);
 // The rendered architectural surfaces and the movement surfaces share local coordinates.
 const homeLocal=(x,z)=>{const dx=x-home.x,dz=z-home.z,c=Math.cos(home.angle),s=Math.sin(home.angle);return {x:dx*c-dz*s,z:dx*s+dz*c};};
-const entry={open:false,door:0,mode:'exterior',blend:0,previous:null,inside:false};
+const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false};
 function surfaceHeight(x,z){
  const p=homeLocal(x,z),f=-home.d/2;
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return home.y+.53;
@@ -323,6 +323,15 @@ function toggleDoor(){
 }
 $('door-action').onclick=toggleDoor;
 window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='e'&&!e.repeat)toggleDoor()});
+const smooth01=x=>{const u=Math.max(0,Math.min(1,x));return u*u*(3-2*u);};
+const angleDelta=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
+// Camera influence is spatial and continuous, independent of the door/roof state.
+function entryInfluence(p,inside,porch){
+ if(inside||porch)return 1;
+ const f=-home.d/2;
+ if(p.z>f+.25)return 0;
+ return smooth01((p.z-f+6.2)/3.25)*smooth01((3.0-Math.abs(p.x))/1.8);
+}
 function updateEntry(dt){
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
  const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+.22&&p.z<home.d/2-.12;
@@ -330,7 +339,8 @@ function updateEntry(dt){
  const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95&&p.z<f-2.8;
  const near=inside||porch||stairs;
  const next=inside?'interior':near?'entrada':'exterior';
- if(near&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
+ const weight=entryInfluence(p,inside,porch);entry.cameraWeight=weight;
+ if(weight>.001&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
  if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
  entry.inside=inside;
  const targetDoor=entry.open?1:0;entry.door+=(targetDoor-entry.door)*(1-Math.exp(-dt*7));if(Math.abs(targetDoor-entry.door)<.002)entry.door=targetDoor;
@@ -340,22 +350,31 @@ function updateEntry(dt){
  const factor=1-Math.exp(-dt*4);
  if(entry.previous){
   const saved=entry.previous;
-  entry.blend+=( (near?1:0)-entry.blend)*factor;
-  const aim=near?(inside?avatar.position.add(V(0,1,0)):home.C(0,1.65,f-1.25)):(saved.follow?avatar.position.add(V(0,1,0)):saved.target);
-  const desiredAlpha=near?-Math.PI/2-home.angle:saved.alpha;
-  const da=Math.atan2(Math.sin(desiredAlpha-camera.alpha),Math.cos(desiredAlpha-camera.alpha));
-  camera.alpha+=da*factor;
-  const beta=camera.beta+((near?(inside?CAMERA_BETA:65*Math.PI/180):saved.beta)-camera.beta)*factor;
-  span+=((near?(inside?24:30):saved.span)-span)*factor;
-  retarget(Vector3.Lerp(camera.target,aim,factor),beta);fit();
-  if(!near&&entry.blend<.004){camera.alpha=saved.alpha;span=saved.span;retarget(aim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
+  entry.blend+=(weight-entry.blend)*factor;
+  const b=entry.blend;
+  // The actor, not the building centre, is the tracking anchor. Look slightly
+  // ahead along the entrance axis, keeping the actor below the visual centre.
+  const forward=home.C(0,0,1).subtract(home.C(0,0,0));
+  const aim=avatar.position.add(V(0,inside?1.25:1.45,0)).add(forward.scale(inside?.65:1.65));
+  const baseAim=saved.follow?avatar.position.add(V(0,1,0)):saved.target;
+  const desiredAlpha=saved.alpha+angleDelta(saved.alpha,-Math.PI/2-home.angle)*b;
+  camera.alpha+=angleDelta(camera.alpha,desiredAlpha)*factor;
+  const betaTarget=saved.beta+((inside?CAMERA_BETA:65*Math.PI/180)-saved.beta)*b;
+  const beta=camera.beta+(betaTarget-camera.beta)*factor;
+  const desiredSpan=saved.span+((inside?24:34)-saved.span)*b;
+  span+=(desiredSpan-span)*factor;
+  retarget(Vector3.Lerp(camera.target,Vector3.Lerp(baseAim,aim,b),factor),beta);fit();
+  if(weight===0&&b<.004){camera.alpha=saved.alpha;span=saved.span;retarget(baseAim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
  }else if(follow)retarget(Vector3.Lerp(camera.target,avatar.position.add(V(0,1,0)),1-Math.exp(-dt*9)));
 }
-function manualView(next){if(entry.previous){entry.previous={alpha:camera.alpha,beta:CAMERA_BETA,span,target:camera.target.clone(),follow};}next();}
-$('wide').onclick=()=>{span=94;follow=false;retarget(V(-2,2.7,0));fit();if(entry.previous){entry.previous.span=span;entry.previous.follow=false;entry.previous.target=camera.target.clone();}};
-$('close').onclick=()=>{span=66;follow=false;retarget(V(0,3.5,0));fit();if(entry.previous){entry.previous.span=span;entry.previous.follow=false;entry.previous.target=camera.target.clone();}};
-$('follow').onclick=()=>{follow=true;span=27;retarget(avatar.position.add(V(0,1,0)));fit();if(entry.previous){entry.previous.span=span;entry.previous.follow=true;}};
-$('rotate').onclick=()=>{orbit=(orbit+1)%4;camera.alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=camera.alpha;};
+function setView(newSpan,target,tracking){
+ if(entry.previous){Object.assign(entry.previous,{span:newSpan,target,follow:tracking});return;}
+ span=newSpan;follow=tracking;retarget(target);fit();
+}
+$('wide').onclick=()=>setView(94,V(-2,2.7,0),false);
+$('close').onclick=()=>setView(66,V(0,3.5,0),false);
+$('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
+$('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
 function moveAvatar(dx,dz,dt){
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  // A raised deck can be reached only via the stairs; prevent jumping through its edge.
@@ -411,4 +430,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,homeLocal,surfaceHeight,homeBlocked,moveAvatar,updateEntry,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,moveAvatar,updateEntry,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
