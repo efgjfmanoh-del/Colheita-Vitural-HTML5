@@ -12,5 +12,41 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   assert(Math.abs(frame.beta-48)<.01,'camera tilt changed during '+name);assert(frame.width>=640&&frame.height>=360,'capture dimensions');assert(frame.colors>100,'capture must contain real varied scene pixels');
   assert(frame.png.startsWith('data:image/png;base64,'));const bytes=Buffer.from(frame.png.split(',')[1],'base64');assert(bytes.length>10000,'capture PNG size');fs.writeFileSync('qa/'+name+'.png',bytes);console.log('Captured '+name+' '+frame.width+'x'+frame.height+' '+bytes.length+' bytes');
  }
- await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);console.log('PASS geometry, initialization, camera, river and bridge logic; visual approval pending');
+ await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);
+ // Confirm movement in the running 3D scene, not just static mesh existence.
+ await page.evaluate(()=>{document.getElementById('wide').click();cvQA.engine.runRenderLoop(()=>cvQA.scene.render());});
+ const walk=await page.evaluate(()=>{const p=cvQA.avatar.position;const dirs=[['d',1,0],['a',-1,0],['w',0,1],['s',0,-1]];const a=cvQA.scene.activeCamera.alpha+Math.PI/2;for(const [key,x,z] of dirs){const dx=x*Math.cos(a)-z*Math.sin(a),dz=x*Math.sin(a)+z*Math.cos(a);if(!cvQA.blocked(p.x+dx*.2,p.z+dz*.2)&&!cvQA.blocked(p.x+dx*.7,p.z+dz*.7))return {key,x:p.x,z:p.z};}return null;});
+ assert(walk,'spawn must permit movement');
+ await page.keyboard.down(walk.key);
+ try{await page.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.x,cvQA.avatar.position.z-p.z)>.15,walk,{timeout:30000});}finally{await page.keyboard.up(walk.key);}
+ const moved=await page.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.x,cvQA.avatar.position.z-p.z),walk);
+ assert(moved>.15);console.log('PASS live avatar movement',moved);
+ await page.close();
+ // Emulated Android viewport validates the DPR bug; not a hardware benchmark.
+ const mobile=await browser.newPage({viewport:{width:834,height:375},deviceScaleFactor:3.25,isMobile:true,hasTouch:true});
+ mobile.setDefaultTimeout(90000);const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(String(e)));
+ await mobile.goto('http://127.0.0.1:4173/');
+ await mobile.waitForFunction(()=>window.cvQA?.ready,null,{timeout:120000});
+ const profileRead=()=>mobile.evaluate(()=>({quality:cvQA.quality,w:cvQA.engine.getRenderWidth(),h:cvQA.engine.getRenderHeight(),cssW:document.getElementById('view').clientWidth,cssH:document.getElementById('view').clientHeight,dpr:devicePixelRatio}));
+ const profiles=[await profileRead()];
+ assert.equal(profiles[0].quality,'equilibrado');assert(Math.abs(profiles[0].h-720)<=2,'mobile default resolution');
+ for(const [key,target] of [['economico',540],['alto',1080],['equilibrado',720]]){
+  await mobile.evaluate(key=>document.getElementById('quality-'+key).click(),key);
+  const info=await profileRead();profiles.push(info);assert.equal(info.quality,key);assert(Math.abs(info.h-target)<=2,'profile '+key+' height');assert(Math.abs(info.w/info.h-info.cssW/info.cssH)<.015,'aspect ratio');
+ }
+ assert.equal(await mobile.evaluate(()=>getComputedStyle(document.getElementById('hud')).userSelect),'none');
+ await mobile.evaluate(()=>document.getElementById('hud-toggle').click());assert(await mobile.locator('#hud-panel').isHidden());
+ await mobile.evaluate(()=>document.getElementById('hud-toggle').click());assert(await mobile.locator('#hud-panel').isVisible());
+ // Verify actual touch input, using Chromium's native touch events.
+ const touchStart=await mobile.evaluate(()=>{const p=cvQA.avatar.position,r=document.getElementById('joy').getBoundingClientRect();const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const [x,z] of dirs)if(!cvQA.blocked(p.x+x*.25,p.z+z*.25)&&!cvQA.blocked(p.x+x*.6,p.z+z*.6))return {px:p.x,pz:p.z,cx:r.x+r.width/2,cy:r.y+r.height/2,dx:x*30,dy:-z*30};return null;});
+ assert(touchStart,'mobile spawn must permit movement');
+ const cdp=await mobile.context().newCDPSession(mobile);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchStart.cx,y:touchStart.cy}]});
+ try{await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchStart.cx+touchStart.dx,y:touchStart.cy+touchStart.dy}]});
+ await mobile.waitForFunction(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz)>.1,touchStart,{timeout:30000});
+ }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+ const touchMoved=await mobile.evaluate(p=>Math.hypot(cvQA.avatar.position.x-p.px,cvQA.avatar.position.z-p.pz),touchStart);
+ assert(touchMoved>.1);assert.deepEqual(mobileErrors,[]);
+ fs.writeFileSync('qa/perfis-android.json',JSON.stringify({profiles,desktopMovement:moved,touchMovement:touchMoved},null,2));console.log('PASS emulated mobile profiles and touch',JSON.stringify({profiles,touchMoved}));
+ await mobile.close();console.log('PASS geometry, initialization, camera, river and bridge logic; visual approval pending');
 }finally{await browser.close()}

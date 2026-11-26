@@ -27,6 +27,8 @@ public final class MainActivity extends Activity {
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web = new WebView(this);
         web.setBackgroundColor(0xff263d29);
+        web.setLongClickable(false);
+        web.setOnLongClickListener(v -> true);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
