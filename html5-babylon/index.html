@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Colheita Vitural — Teste 1J.4</title>
+<title>Colheita Vitural — Teste 1K · 0.1.6</title>
 <style>
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#34552c;font:13px system-ui;color:#fff;overscroll-behavior:none;touch-action:none}
@@ -18,15 +18,17 @@ button[aria-pressed=true]{background:#d9e5b8;color:#243b2b;border-color:#e7efce;
 #hud-toggle{min-height:28px;padding:3px 8px}
 #joy{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:max(22px,env(safe-area-inset-left));width:108px;height:108px;border:2px solid #e4eac783;border-radius:50%;background:#243b2b66;touch-action:none}
 #knob{position:absolute;left:31px;top:31px;width:42px;height:42px;border-radius:50%;background:#f5edc0b3;pointer-events:none}
+#door-action{position:fixed;bottom:28px;right:24px;min-height:48px;padding:12px 18px;background:#e7d3a1;color:#243b2b;font-size:15px;font-weight:700;box-shadow:0 3px 12px #0005}
+#entry-status{display:block;color:#f6e6bf;font-size:11px}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:#263d29;z-index:10;text-align:center;padding:20px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body><canvas id="view"></canvas>
-<div id="hud"><div id="hud-head"><div><strong>COLHEITA VITURAL · 1J.4</strong><small><span id="fps">…</span> · <span id="quality-label">Equilibrado</span></small></div><button id="hud-toggle" aria-expanded="true" aria-controls="hud-panel">Painel</button></div>
-<div id="hud-panel"><small id="metrics">Medindo tempo de quadro…</small>
+<div id="hud"><div id="hud-head"><div><strong>COLHEITA VITURAL · 1K · 0.1.6</strong><small><span id="fps">…</span> · <span id="quality-label">Equilibrado</span></small></div><button id="hud-toggle" aria-expanded="true" aria-controls="hud-panel">Painel</button></div>
+<div id="hud-panel"><span id="entry-status"></span><small id="metrics">Medindo tempo de quadro…</small>
 <div class="controls"><button id="wide">Geral</button><button id="close">Casa</button><button id="follow">Personagem</button><button id="rotate">Girar</button></div>
 <div class="controls" aria-label="Qualidade gráfica"><button id="quality-economico" aria-pressed="false">540p</button><button id="quality-equilibrado" aria-pressed="true">720p</button><button id="quality-alto" aria-pressed="false">1080p</button></div></div></div>
-<div id="joy"><div id="knob"></div></div><div id="loading">Construindo a fazenda…</div>
+<button id="door-action" hidden>Abrir porta</button><div id="joy"><div id="knob"></div></div><div id="loading">Construindo a fazenda…</div>
 <script>addEventListener('error',e=>{const el=document.getElementById('loading');if(el)el.textContent='Falha ao iniciar: '+e.message});setTimeout(()=>{const el=document.getElementById('loading');if(el)el.textContent='O motor 3D ainda não iniciou. Verifique o suporte WebGL.'},30000);</script>
 <script src="./game.js"></script></body></html>
