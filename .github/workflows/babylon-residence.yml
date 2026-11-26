@@ -23,6 +23,9 @@ jobs:
       - name: Testar leitura independente das senhas QA
         working-directory: .
         run: python3 android-test/test-sign-qa.py
+      - name: Testar manifesto de atualização QA
+        working-directory: .
+        run: python3 android-test/test-qa-manifest.py
       - name: Conferir configuração de assinatura QA
         env:
           CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
@@ -91,16 +94,54 @@ jobs:
           grep -Fx "Number of signers: 1" android-test/qa/signature.txt
           "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
           grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
-          if grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt; then exit 1; fi
+          grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt
+          grep -F "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" android-test/qa/badging.txt
           unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
           unzip -p "$APK" assets/game.js | cmp - html5-babylon/dist/game.js
-          cp "$APK" android-test/qa/ColheitaVitural-Teste-0.1.8.apk
+          cp "$APK" android-test/qa/ColheitaVitural-QA.apk
           cd android-test/qa
-          sha256sum ColheitaVitural-Teste-0.1.8.apk > SHA256SUMS.txt
-          ls -lh ColheitaVitural-Teste-0.1.8.apk
+          sha256sum ColheitaVitural-QA.apk > SHA256SUMS.txt
+          ls -lh ColheitaVitural-QA.apk
+          cd ../..
+          python3 android-test/qa-manifest.py android-test/qa
       - uses: actions/upload-artifact@v4
         with:
-          name: Colheita-Vitural-APK-Teste-0.1.8
+          name: Colheita-Vitural-APK-QA
           path: android-test/qa/
           retention-days: 3
           if-no-files-found: error
+  publish-qa:
+    needs: preview
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Colheita-Vitural-APK-QA
+          path: qa
+      - name: Publicar exclusivamente no canal experimental
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd qa
+          sha256sum -c SHA256SUMS.txt
+          code=$(jq -er '.versionCode | numbers' update.json)
+          version=$(jq -er '.versionName' update.json)
+          [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 109 ]]
+          tag="qa-v$code"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            mkdir existing
+            gh release download "$tag" --pattern update.json --pattern ColheitaVitural-QA.apk --dir existing
+            cmp update.json existing/update.json
+            cmp ColheitaVitural-QA.apk existing/ColheitaVitural-QA.apk
+            echo "Versão QA já publicada com conteúdo idêntico."
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --prerelease --draft --title "Colheita Vitural QA $version" --notes "Canal experimental. Não substitui a versão oficial." update.json ColheitaVitural-QA.apk SHA256SUMS.txt
+            gh release edit "$tag" --draft=false --prerelease
+          fi
+          gh release view "$tag" --json url,isDraft,isPrerelease,assets

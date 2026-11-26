@@ -33,7 +33,7 @@ final class UpdateCenter {
     boolean alive=true,active=false,checking=false,verifying=false,verified=false;
     int progress=0; String status="Verificar novas versões";
     AlertDialog dialog; TextView detail; ProgressBar bar; Button checkButton,downloadButton,installButton;
-    final Runnable tick=new Runnable(){public void run(){if(!alive||!active)return;poll();handler.postDelayed(this,1000);}};
+    final Runnable tick=new Runnable(){public void run(){if(!alive||!active)return;poll();if(id<0&&!verified&&info==null&&!checking&&System.currentTimeMillis()-checkedAt>300000)check();handler.postDelayed(this,1000);}};
 
     static final class Info {
         final long code,size; final String name,hash,tag;
