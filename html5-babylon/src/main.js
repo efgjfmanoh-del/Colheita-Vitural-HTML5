@@ -1,4 +1,4 @@
-import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer} from '@babylonjs/core';
+import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer} from '@babylonjs/core';
 import layout from '../layout.json';
 import {createPets} from './pets.js';
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies} from './farm-simulation.js';
@@ -53,7 +53,17 @@ const facadeCraft={exposedGrid:0,plinths:0,sideFlowerBoxes:0,upperWindows:[],sid
 M.roof.diffuseTexture=roofTex;M.grass.diffuseTexture=grassTex;
 M.plaster.diffuseColor=Color3.FromHexString('#fffdf6');
 M.blueJoinery=mat('painted rural blue','#245b83');M.blueTrim=mat('weathered blue edge','#397ca4');M.windowPane=mat('cool reflected window','#668fa4',.12);
-M.windowPane.emissiveColor=new Color3(.035,.050,.060);
+M.windowPane.alpha=.24;M.windowPane.backFaceCulling=false;M.windowPane.disableDepthWrite=true;M.windowPane.emissiveColor=new Color3(.015,.025,.030);
+const windowApertures=[],nightLights=[];let nightPower=0;
+function addNightLight(id,p,range,strength){
+ const l=new PointLight(id,p,scene);l.diffuse=new Color3(1,.76,.44);l.specular=new Color3(.18,.12,.06);l.range=range;l.intensity=nightPower*strength;l.setEnabled(nightPower>.01);nightLights.push({id,light:l,strength});return l;
+}
+function updateNightLighting(daylight){
+ nightPower=Math.max(0,Math.min(1,(.32-daylight)/.32));
+ M.glass.emissiveColor.set(.80*nightPower,.45*nightPower,.12*nightPower);
+ M.windowPane.emissiveColor.set(.015+.32*nightPower,.025+.16*nightPower,.030+.035*nightPower);
+ for(const p of nightLights){p.light.intensity=nightPower*p.strength;p.light.setEnabled(nightPower>.01);}
+}
 const ceramicMat=mat('individual curved terracotta tiles','#ffffff');ceramicMat.backFaceCulling=false;
 const roofCraft={fields:0,tiles:0,vertices:0,triangles:0,flowerBoxes:0,flowerHeads:0};
 // Curved tile shells in a single mesh per roof slope.
@@ -369,11 +379,21 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
   B('walkable wooden floor',0,.485,0,w-.06,.09,d-.06,M.woodLight);
   for(let j=0;j<24;j++)B('interior plank seam',-w*.47+j*w*.04,.532,0,.025,.008,d-.3,M.woodDark);
   B('rear wall',0,.53+h/2,d/2-wall/2,w,h,wall,M.plaster);
-  for(const k of [-1,1])B('side wall',k*(w/2-wall/2),.53+h/2,0,wall,h,d-wall*2,M.plaster);
+  // Partition masonry around actual rectangular apertures; no hidden solid wall behind glazing.
+  function wallWithHoles(name,axis,plane,lo,hi,bottom,top,holes){
+   const xs=[lo,hi,...holes.flatMap(a=>[a.x-a.w/2,a.x+a.w/2])].sort((a,b)=>a-b),ys=[bottom,top,...holes.flatMap(a=>[a.y-a.h/2,a.y+a.h/2])].sort((a,b)=>a-b);
+   for(let i=1;i<xs.length;i++)for(let j=1;j<ys.length;j++){
+    const width=xs[i]-xs[i-1],height=ys[j]-ys[j-1],x=(xs[i]+xs[i-1])/2,y=(ys[j]+ys[j-1])/2;
+    if(width<.001||height<.001||holes.some(a=>Math.abs(x-a.x)<a.w/2&&Math.abs(y-a.y)<a.h/2))continue;
+    if(axis==='front')B(name,x,y,plane,width,height,wall,M.plaster);else B(name,plane,y,x,wall,height,width,M.plaster);
+   }
+   for(const a of holes.filter(a=>a.window))windowApertures.push({name,axis,plane,x:a.x,y:a.y,w:a.w,h:a.h,center:axis==='front'?C(a.x,a.y,plane):C(plane,a.y,a.x)});
+  }
+  for(const k of [-1,1])wallWithHoles('side wall masonry','side',k*(w/2-wall/2),-d/2+wall,d/2-wall,.53,.53+h,[-d*.22,d*.22].map(x=>({x,y:h*.85,w:1.07,h:1.08,window:true})));
   entity('house-front');
-  const sideW=(w-doorW)/2;
-  for(const k of [-1,1])B('front wall beside doorway',k*(doorW/2+sideW/2),.53+h/2,-d/2+wall/2,sideW,h,wall,M.plaster);
-  B('door lintel',0,.53+doorH+(h-doorH)/2,-d/2+wall/2,doorW,h-doorH,wall,M.plaster);
+  const openings=[{x:0,y:.53+doorH/2,w:doorW,h:doorH}];
+  for(const x of [-w*.3,w*.3])for(const y of [1.8,h*.85])openings.push({x,y,w:1.11,h:1.17,window:true});
+  wallWithHoles('front wall masonry','front',-d/2+wall/2,-w/2,w/2,.53,.53+h,openings);
   entity(id);
  }
  if(small){
@@ -401,13 +421,26 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
   if(!small)ceramicField('curved colonial roof tiles '+s,Math.hypot(ow,r-e),od*2,(u,v)=>C(s*ow*u,r+(e-r)*u,-od+od*2*v));
   else for(let row=0;row<Math.ceil(ow/.62);row++){let t=(row+.55)/Math.ceil(ow/.62),xx=s*ow*t,yy=r+(e-r)*t+.07;L('raised ceramic tile seam',[xx,yy,-od],[xx,yy,od],.09,row%3===0?M.tile2:M.tile);}
  }
- for(let zz of [-d/2,d/2]){poly('gable plaster',[C(-w/2,e,zz),C(w/2,e,zz),C(0,r,zz)],[0,1,2,2,1,0],small?M.woodLight:M.plaster);L('gable trim',[-ow,e,zz],[0,r,zz],.22,M.woodDark);L('gable trim',[0,r,zz],[ow,e,zz],.22,M.woodDark)}
+ for(let zz of [-d/2,d/2]){
+ if(!small&&zz<0){
+  const y0=h+1.45-1.17/2,y1=h+1.45+1.17/2,a=.555,x0=w/2*(r-y0)/(r-e),x1=w/2*(r-y1)/(r-e);
+  const patch=(name,pts)=>{const v=pts.map(([x,y])=>C(x,y,zz));poly(name,v,[0,1,2,0,2,3,2,1,0,3,2,0],M.plaster);};
+  patch('gable below attic window',[[-w/2,e],[w/2,e],[x0,y0],[-x0,y0]]);
+  patch('gable left jamb',[[-x0,y0],[-a,y0],[-a,y1],[-x1,y1]]);
+  patch('gable right jamb',[[a,y0],[x0,y0],[x1,y1],[a,y1]]);
+  poly('gable above attic window',[C(-x1,y1,zz),C(x1,y1,zz),C(0,r,zz)],[0,1,2,2,1,0],M.plaster);
+  windowApertures.push({name:'attic',axis:'front',plane:zz,x:0,y:h+1.45,w:1.11,h:1.17,center:C(0,h+1.45,zz)});
+ }else poly('gable plaster',[C(-w/2,e,zz),C(w/2,e,zz),C(0,r,zz)],[0,1,2,2,1,0],small?M.woodLight:M.plaster);L('gable trim',[-ow,e,zz],[0,r,zz],.22,M.woodDark);L('gable trim',[0,r,zz],[ow,e,zz],.22,M.woodDark)}
  L('ridge tiles',[0,r+.11,-od],[0,r+.11,od],.28,M.tile);
  if(!small){
   // Projecting dormer on the visible roof slope, modeled in local house coordinates.
   const side=-1,z0=-.85,dw=2.35,front=side*ow*.78,back=side*ow*.26,baseY=e+(r-e)*.22,topY=e+(r-e)*.73;
   const crest=topY+1.03,edge=topY-.05;
-  B('dormer facade',front,baseY+(edge-baseY)/2,z0,.18,edge-baseY,dw,M.plaster);
+  const wy=baseY+(edge-baseY)*.57,wh=.98,ww=.86,lo=wy-wh/2,hi=wy+wh/2;
+  for(const k of [-1,1])B('dormer masonry jamb',front,baseY+(edge-baseY)/2,z0+k*(dw+ww)/4,.18,edge-baseY,(dw-ww)/2,M.plaster);
+  if(lo>baseY)B('dormer masonry below',front,(baseY+lo)/2,z0,.18,lo-baseY,ww,M.plaster);
+  if(edge>hi)B('dormer masonry above',front,(edge+hi)/2,z0,.18,edge-hi,ww,M.plaster);
+  windowApertures.push({name:'dormer',axis:'side',plane:front,x:z0,y:wy,w:ww,h:wh,center:C(front,wy,z0)});
   for(const dz of [-dw/2,dw/2]){
    quad('dormer cheek',[C(front,baseY,z0+dz),C(back,topY-.13,z0+dz),C(back,edge,z0+dz),C(front,edge,z0+dz)],M.plaster,true);
    L('dormer corner trim',[front,baseY,z0+dz],[front,edge,z0+dz],.12,M.woodDark);
@@ -418,9 +451,8 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
    for(let k=0;k<5;k++){const a=k/5;L('dormer tile seam',[front-.32,crest+(edge-crest)*a+.055,z0+dz*(dw/2+.25)*a],[back+.26,crest+(edge-crest)*a+.055,z0+dz*(dw/2+.25)*a],.065,M.tile);}
    L('dormer fascia',[front-.35,crest,z0],[front-.35,edge,z0+dz*(dw/2+.25)],.14,M.woodDark);
   }
-  const wy=baseY+(edge-baseY)*.57;
-  B('dormer window frame',front-.14,wy,z0,.16,1.25,1.12,M.woodDark);
-  B('dormer golden glass',front-.25,wy,z0,.08,.98,.86,M.glass);
+  for(const k of [-1,1]){B('dormer frame stile',front-.14,wy,z0+k*.495,.16,1.25,.13,M.woodDark);B('dormer frame rail',front-.14,wy+k*.557, z0,.16,.135,.86,M.woodDark);}
+  B('dormer clear glass',front-.25,wy,z0,.035,.98,.86,M.windowPane);
   B('dormer mullion',front-.31,wy,z0,.06,.98,.085,M.woodDark);
   B('dormer crossbar',front-.31,wy,z0,.06,.075,.86,M.woodDark);
   B('dormer window sill',front-.27,wy-.66,z0,.35,.12,1.33,M.woodLight);
@@ -455,10 +487,10 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
   handles[side]={pivot,grip};
  }
  entity('house-front');
- const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.blueJoinery);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.windowPane);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.blueJoinery);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.blueJoinery);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.blueTrim)};
+ const window=(xx,yy)=>{for(const k of [-1,1]){B('window frame stile',xx+k*.62,yy,-d/2-.12,.13,1.43,.20,M.blueJoinery);B('window frame rail',xx,yy+k*.65,-d/2-.12,1.11,.13,.20,M.blueJoinery);}B('window clear glass',xx,yy,-d/2-.24,1.11,1.17,.035,M.windowPane);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.blueJoinery);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.blueJoinery);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.blueTrim)};
  const upperY=h*.85,atticY=h+1.45;
  for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,upperY);facadeCraft.upperWindows.push({x:xx,y:upperY,bottom:upperY-.715,top:upperY+.715});}
- entity('house-roof');window(0,atticY);facadeCraft.atticWindow={x:0,y:atticY,bottom:atticY-.715};entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){facadeCraft.sideWindows.push({x:xx,z:zz,y:upperY});B('side window frame',xx,upperY,zz,.18,1.34,1.36,M.blueJoinery);B('side window glass',xx+Math.sign(xx)*.11,upperY,zz,.10,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,upperY,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,upperY-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
+ entity('house-roof');window(0,atticY);facadeCraft.atticWindow={x:0,y:atticY,bottom:atticY-.715};entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){facadeCraft.sideWindows.push({x:xx,z:zz,y:upperY});for(const k of [-1,1]){B('side frame stile',xx,upperY,zz+k*.607,.18,1.34,.145,M.blueJoinery);B('side frame rail',xx,upperY+k*.605,zz,.18,.13,1.07,M.blueJoinery);}B('side window glass',xx+Math.sign(xx)*.11,upperY,zz,.035,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,upperY,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,upperY-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
  // Side window flower boxes, above the walkable ground and outside the wall.
  for(const k of [-1,1])for(const zz of [-d*.22,d*.22]){
   const yy=upperY-.88,xx=k*(w/2+.27);
@@ -499,6 +531,9 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot,handles,petFlap};
 }
 const home=house('house',HOUSE.u,HOUSE.v,HOUSE.w,HOUSE.d,HOUSE.h,HOUSE.angle);
+for(const k of [-1,1])addNightLight('veranda lantern '+k,home.C(k*home.w*.18,2.32,-home.d/2-.65),6,.75);
+addNightLight('warm interior',home.C(0,3.0,-.9),11,.90);
+addNightLight('warm loft',home.C(0,HOUSE.h+.9,0),7,.55);
 // Six reusable, locally textured smoke puffs. No external files or particle allocation per frame.
 entity('chimney smoke');
 const smokeOrigin=home.C(home.w*.29, HOUSE.h+3.69,home.d*.26);
@@ -693,7 +728,7 @@ function updateWorldClock(now=Date.now(),force=false){
   lastLightMinute=minute;const k=daylight.daylight;
   // Maintain the existing daytime art. At night keep paths and controls readable.
   const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;
-  scene.clearColor=new Color4(.08+.28*k,.13+.43*k,.19+.10*k,1);
+  scene.clearColor=new Color4(.08+.28*k,.13+.43*k,.19+.10*k,1);updateNightLighting(k);
  }
 }
 window.addEventListener('pagehide',()=>saveWorldClock());
@@ -920,6 +955,10 @@ for(let s of [-1,1])quad('well tile roof',[V(well.x-1.4,well.y+3.2,well.z),V(wel
 for(let s of [-1,1])for(let i=0;i<5;i++)beam('well tile seam',V(well.x-1.4,well.y+3.23-i*.11,well.z+s*i*.21),V(well.x+1.4,well.y+3.23-i*.11,well.z+s*i*.21),.07,M.tile);beam('well ridge',V(well.x-1.42,well.y+3.28,well.z),V(well.x+1.42,well.y+3.28,well.z),.13,M.woodDark);
 entity('bench');const bench=P(532,173);bench.y=height(bench.x,bench.z);for(let j=0;j<3;j++)box('bench slat',bench.x,bench.y+.62,bench.z+j*.18,2.1,.1,.17,M.woodLight);for(let s of [-1,1])box('bench leg',bench.x+s*.78,bench.y+.28,bench.z+.18,.17,.56,.5,M.woodDark);
 entity('lamp');const lamp=P(529,111);lamp.y=height(lamp.x,lamp.z);box('lamp post',lamp.x,lamp.y+1.55,lamp.z,.15,3.1,.15,M.woodDark);box('lamp glass',lamp.x,lamp.y+2.9,lamp.z,.35,.55,.35,M.glass);box('lamp cap',lamp.x,lamp.y+3.22,lamp.z,.47,.12,.47,M.black);box('lamp base',lamp.x,lamp.y+2.57,lamp.z,.43,.12,.43,M.black);
+addNightLight('garden lamp',V(lamp.x,lamp.y+2.9,lamp.z),8,1.05);
+const yardBench={id:'bench-yard',x:bench.x,z:bench.z+.18,y:bench.y,angle:0,world:true,hx:1.05,hz:.27};
+const worldFixtures=[{id:'bench-yard',x:yardBench.x,z:yardBench.z,hx:yardBench.hx,hz:yardBench.hz},{id:'lamp',x:lamp.x,z:lamp.z,hx:.105,hz:.105}];
+const allBenches=[...benches,yardBench];
 const trunkColliders=[];
 const canopyStats={trees:0,leaves:0,petals:0,vertices:0,triangles:0};
 function tree(id,u,v,pink=false,size=1){
@@ -1087,9 +1126,7 @@ const seatLegs=[-.13,.13].map(x=>{
 const seatButton=$('seat-action');
 function nearbyBench(){
  if(entry.action||entry.inside||!gardenPanel.hidden)return null;
- const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
- if(p.z>f-.18||p.z<porchFront)return null;
- return benches.map(b=>({b,d:Math.hypot(p.x-b.x,p.z-(b.z-.70))})).filter(x=>x.d<1.12).sort((a,b)=>a.d-b.d)[0]?.b||null;
+ return allBenches.map(b=>{const p=seatStand(b);return {b,d:Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z),dy:Math.abs(avatar.position.y-p.y)};}).filter(x=>x.d<1.12&&x.dy<.65).sort((a,b)=>a.d-b.d)[0]?.b||null;
 }
 function setSeatPose(blend,lean=0){
  seating.blend=blend;
@@ -1106,8 +1143,9 @@ function setSeatPose(blend,lean=0){
   poseSegment(l.thigh,hip,knee);poseSegment(l.shin,knee,ankle);l.foot.position.copyFromFloats(x,.06,.075+.43*blend);
  }
 }
-function seatStand(b){return home.C(b.x,.53,b.z-.77);}
-function seatTarget(b){return home.C(b.x,.53,b.z-.13);}
+function seatStand(b){if(!b.world)return home.C(b.x,.53,b.z-.77);const p=V(b.x,0,b.z-.73);p.y=surfaceHeight(p.x,p.z);return p;}
+function seatTarget(b){return b.world?V(b.x,b.y+.025,b.z-.11):home.C(b.x,.53,b.z-.13);}
+const seatYaw=b=>(b.world?b.angle:home.angle)+Math.PI;
 function finishSeat(success){
  const b=seating.bench;setSeatPose(0);avatar.rotation.x=0;seating.last={success,bench:b?.id};seating.bench=null;seating.phase='idle';seating.elapsed=0;
 }
@@ -1124,7 +1162,7 @@ seatButton.addEventListener('click',toggleSeat);
 function updateSeating(dt){
  const b=seating.bench,phase=seating.phase;
  if(phase!=='idle'&&b){
-  seating.elapsed+=dt;const stand=seatStand(b),sit=seatTarget(b),yaw=home.angle+Math.PI;
+  seating.elapsed+=dt;const stand=seatStand(b),sit=seatTarget(b),yaw=seatYaw(b);
   if(phase==='approach'){
    const dx=stand.x-avatar.position.x,dz=stand.z-avatar.position.z,dist=Math.hypot(dx,dz);
    if(dist>.025){const k=Math.min(1,dt*1.7/dist);moveAvatar(dx*k,dz*k,dt,true);}
@@ -1269,6 +1307,7 @@ function blocked(x,z,interacting=false,from=null){
  if(check((a,b)=>{const dx=a-dogHome.x,dz=b-dogHome.z;return Math.max(Math.abs(dx*dc-dz*ds)-dogHome.w/2-.18,Math.abs(dx*ds+dz*dc)-dogHome.d/2-.18);}))return true;
  if(check((a,b)=>Math.hypot(a-well.x,b-well.z)-1.34))return true;
  if(check((a,b)=>Math.max(Math.abs(a-fieldSignCollider.x)-1.08,Math.abs(b-fieldSignCollider.z)-.26)))return true;
+ if(worldFixtures.some(f=>check((a,b)=>Math.max(Math.abs(a-f.x)-f.hx-.18,Math.abs(b-f.z)-f.hz-.18))))return true;
  return false;
 }
 function setHouseGroup(id,visible){for(const mesh of groups[id]||[])mesh.setEnabled(visible);}
@@ -1499,12 +1538,14 @@ function terrainMotionAllowed(x0,z0,x1,z1,y0,y1){
  if(natural&&y1>y0&&rise>run*1.20+.018){terrainContactStats.rejectedSlope++;return false;}
  return true;
 }
+let petBodyBlocked=()=>false;
+function playerBlocked(x,z,from=null){return blocked(x,z,false,from)||petBodyBlocked(x,z,from);}
 function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  let floor=surfaceHeight(oldX,oldZ);
  const attempt=(x,z)=>{
-  if(blocked(x,z,interacting,{x:avatar.position.x,z:avatar.position.z}))return false;
+  const from={x:avatar.position.x,z:avatar.position.z};if(blocked(x,z,interacting,from)||petBodyBlocked(x,z,from))return false;
   const next=surfaceHeight(x,z);if(!terrainMotionAllowed(avatar.position.x,avatar.position.z,x,z,floor,next))return false;
   avatar.position.x=x;avatar.position.z=z;floor=next;return true;
  };
@@ -1684,7 +1725,10 @@ function petPlayerPose(target,blend,dt){
  const shoulderPoint=V(.29,1.19-drop,.08*blend),restPoint=V(.29,.69-drop,0);
  return handPose(target,blend,shoulderPoint,restPoint);
 }
-const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked:(x,z)=>blocked(x,z),project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
+const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
+petBodyBlocked=petSystem.bodyBlocked;
+// Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
+for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=7;
 let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden))petSystem.cancelInteraction();if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden);refreshFarmCenter();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x/3),Math.round(camera.target.z/3),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/(entry.blend>.02?20:30)){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
@@ -1730,4 +1774,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

@@ -234,13 +234,27 @@ export function createPets(api){
   const y=p.id==='dog'?.67:.48;
   return root.position.add(V(0,y,0));
  }
+ // Separate moving body collider from the static route topology. Ellipses
+ // rotate with each model and permit only outward recovery from prior overlap.
+ function bodyClearance(p,x,z){
+  const root=p.rig.root,a=root.rotation.y,c=Math.cos(a),s=Math.sin(a),dx=x-root.position.x,dz=z-root.position.z;
+  const rx=p.id==='dog'?.46:.35,rz=p.id==='dog'?.72:.54;
+  return (Math.hypot((dx*c-dz*s)/rx,(dx*s+dz*c)/rz)-1)*Math.min(rx,rz);
+ }
+ function bodyBlocked(x,z,from=null){
+  return pets.some(p=>{
+   const root=p.rig.root.position;if(p.inShelter||Math.abs(surfaceHeight(x,z)-root.y)>.65)return false;
+   const next=bodyClearance(p,x,z),prev=from?bodyClearance(p,from.x,from.z):null;
+   return next<0&&!(prev!==null&&prev<0&&next>prev+1e-6);
+  });
+ }
  function approachPoint(p){
   const root=p.rig.root.position,a=Math.atan2(avatar.position.z-root.z,avatar.position.x-root.x),candidates=[];
   for(const offset of [0,.55,-.55,1.1,-1.1,1.65,-1.65,Math.PI]){
    const x=root.x+Math.cos(a+offset)*.57,z=root.z+Math.sin(a+offset)*.57,y=surfaceHeight(x,z);
    if(Math.abs(y-root.y)>.24||api.playerBlocked(x,z))continue;
    // Reject a route across a wall or furniture, even if its endpoint is clear.
-   let clear=true;for(let t=.1;t<=1.001;t+=.1){const u=avatar.position.x+(x-avatar.position.x)*t,v=avatar.position.z+(z-avatar.position.z)*t;if(api.playerBlocked(u,v)){clear=false;break;}}
+   let clear=true;for(let t=.1;t<=1.001;t+=.1){const u=avatar.position.x+(x-avatar.position.x)*t,v=avatar.position.z+(z-avatar.position.z)*t;const prev={x:avatar.position.x+(x-avatar.position.x)*Math.max(0,t-.1),z:avatar.position.z+(z-avatar.position.z)*Math.max(0,t-.1)};if(api.playerBlocked(u,v,prev)){clear=false;break;}}
    if(clear)candidates.push(V(x,y,z));
   }
   return candidates[0]||null;
@@ -358,5 +372,5 @@ export function createPets(api){
   positionActions();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,toys,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
+ return {pets,stats,toys,bodyBlocked,bodyClearance,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
 }
