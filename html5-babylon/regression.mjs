@@ -323,7 +323,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert.deepEqual(await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species)),['daisy','lavender']);
  assert.deepEqual(errors,[]);fs.writeFileSync('qa/varanda.json',JSON.stringify({porch,crops,saved},null,2));console.log('PASS porch rail and planter collision, species, growth and persistence',JSON.stringify({porch,crops,saved}));
  // Verify both real pet rigs and local care without overwriting existing farm saves.
- const petQA=await page.evaluate(()=>{const q=cvQA,s=q.petSystem,old=q.avatar.position.clone();for(const p of s.pets){p.state='idle';p.timer=100;}const dog=s.pets[0],cat=s.pets[1];const models=s.pets.map(p=>({id:p.id,legs:p.rig.legs.length,spawn:s.valid(p.out.x,p.out.z),food:!!s.route(p.out,p.food.point),water:!!s.route(p.out,p.water.point)}));dog.state='walk';const before=dog.rig.legs[0].hip.rotation.x;for(let i=0;i<11;i++)s.pose(dog,.05);const articulated=Math.abs(dog.rig.legs[0].hip.rotation.x-before)>.02;dog.state='idle';dog.timer=100;q.avatar.position.copyFrom(dog.rig.root.position);s.update(.1);s.update(.1);return {models,articulated,old:old.asArray(),near:!document.getElementById('pet-action').hidden};});
+ const petQA=await page.evaluate(()=>{const q=cvQA,s=q.petSystem,old=q.avatar.position.clone();for(const p of s.pets){p.state='idle';p.timer=100;s.data[p.id].hunger=.1;s.data[p.id].thirst=.1;}const dog=s.pets[0],cat=s.pets[1];const models=s.pets.map(p=>({id:p.id,legs:p.rig.legs.length,spawn:s.valid(p.out.x,p.out.z),food:!!s.route(p.out,p.food.point),water:!!s.route(p.out,p.water.point)}));dog.state='walk';const before=dog.rig.legs[0].hip.rotation.x;for(let i=0;i<11;i++)s.pose(dog,.05);const articulated=Math.abs(dog.rig.legs[0].hip.rotation.x-before)>.02;dog.state='idle';dog.timer=100;q.avatar.position.copyFrom(dog.rig.root.position);s.update(.1);s.update(.1);return {models,articulated,old:old.asArray(),near:!document.getElementById('pet-action').hidden};});
  console.log('Companion rigs and paths',JSON.stringify(petQA));assert(petQA.models.length===2&&petQA.models.every(p=>p.legs===4&&p.spawn&&p.food&&p.water)&&petQA.articulated&&petQA.near);
  await page.locator('#pet-action').click();await page.locator('#pet-name').fill('Tobias');await page.locator('#pet-rename').click();await page.locator('#pet-pet').click();
  const care=await page.evaluate(()=>({name:cvQA.petSystem.data.dog.name,affinity:cvQA.petSystem.data.dog.affinity,saved:JSON.parse(localStorage.getItem('cv.pets.v1')).dog,pose:cvQA.petSystem.pets[0].state}));
@@ -348,7 +348,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('Pet meals from beside bowls',JSON.stringify(meals));assert(meals.every(m=>m.planned&&m.arrived&&Math.abs(m.stand-(m.id==='dog'?.68:.49))<.04&&m.facing<.08&&m.consumed&&m.needReduced));
  // Both pets must cross the actual central door portal and return, with the main door closed.
  const portal=await page.evaluate(()=>{
-  const q=cvQA,s=q.petSystem,result=[];q.entry.door=0;
+  const q=cvQA,s=q.petSystem,result=[];q.entry.door=0;for(const p of s.pets){s.data[p.id].hunger=.1;s.data[p.id].thirst=.1;}
   for(const p of s.pets){
    p.rig.root.position.copyFrom(s.houseOut);p.inShelter=false;p.inHouse=false;p.path=[];p.state='idle';p.timer=100;
    const planned=s.visitHouse(p);let open=0;for(let i=0;i<220&&p.state==='walk';i++){s.update(.05,false);open=Math.max(open,Math.abs(q.home.petFlap.rotation.x));}
@@ -359,7 +359,27 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   return {result,leftBenchRemoved:q.benches.length===1&&q.benches[0].id==='bench-right',catLeft:s.catHome.x<0,playerBlocked:q.homeBlocked(q.home.C(0,.53,-q.home.d/2).x,q.home.C(0,.53,-q.home.d/2).z)};
  });
  console.log('Functional pet main door',JSON.stringify(portal));assert(portal.leftBenchRemoved&&portal.catLeft&&portal.playerBlocked&&portal.result.every(p=>p.planned&&p.entered&&p.leaving&&p.returned&&p.open>.8));
- fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals,portal},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
+ // Exercise autonomous preemption, not only forced meal routes.
+ const preventive=await page.evaluate(()=>{
+  const s=cvQA.petSystem,results=[];
+  for(const p of s.pets){
+   for(const kind of ['eat','drink']){
+    const d=s.data[p.id],need=kind==='eat'?'hunger':'thirst',supply=kind==='eat'?'food':'water';
+    p.rig.root.position.copyFrom(p.out);p.inShelter=false;p.inHouse=false;p.path=[];p.state='sit';p.timer=100;p.brain.memory.clear();p.needCheck=0;
+    d.hunger=.1;d.thirst=.1;d.food=1;d.water=1;d[need]=.29;
+    const early=s.reconsiderCare(p);d[need]=.30;p.needCheck=.5;s.update(.05,false);
+    const planned=p.state==='walk'&&p.after===kind;
+    const untouched=d[supply]===1;
+    for(let i=0;i<800&&p.state==='walk';i++)s.update(.05,false);
+    const arrived=p.state===kind;
+    for(let i=0;i<100&&p.state===kind;i++)s.update(.05,false);
+    results.push({id:p.id,kind,early,planned,untouched,arrived,recovered:d[need]<.10,consumed:d[supply]<1});
+    p.state='idle';p.timer=100;p.path=[];p.rig.root.position.copyFrom(p.out);d.hunger=.1;d.thirst=.1;
+   }
+  }return results;
+ });
+ console.log('Autonomous preventive care',JSON.stringify(preventive));assert(preventive.every(p=>!p.early&&p.planned&&p.untouched&&p.arrived&&p.recovered&&p.consumed));
+ fs.writeFileSync('qa/pets.json',JSON.stringify({petQA,care,shelters,meals,portal,preventive},null,2));await capture('pets-residencia','close',await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));await page.evaluate(v=>cvQA.avatar.position.copyFromFloats(...v),petQA.old);
  // QA-only closeups, not a permanent camera control.
  await page.evaluate(()=>{const q=cvQA,p=q.wheatPlots.at(-1);q.avatar.position.set(p.x,q.surfaceHeight(p.x,p.z),p.z);for(let i=0;i<160;i++)q.updateEntry(.05);});
  for(const id of ['dog','cat']){

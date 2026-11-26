@@ -15,10 +15,17 @@ export class AgentBrain{
   this.goal=scores[0]?.id??null;return this.goal;
  }
 }
+// Stored deficits increase; displayed satisfaction decreases.
+// Preventive care starts when satisfaction reaches 70%, before deprivation.
+export const CARE_POLICY=Object.freeze({returnAt:.30,urgentAt:.70,satisfiedAt:.05,minSupply:.03});
+export function careGoals(per,policy=CARE_POLICY){
+ const choices=[{id:'drink',deficit:clamp01(per.thirst),supply:per.water},{id:'eat',deficit:clamp01(per.hunger),supply:per.food}];
+ return choices.filter(c=>c.supply>policy.minSupply&&c.deficit+1e-9>=policy.returnAt).sort((a,b)=>b.deficit-a.deficit||(a.id==='drink'?-1:1));
+}
 export function petGoals(){
  return [
-  {id:'drink',available:p=>p.water>.03&&p.thirst>.25,score:p=>p.thirst*2.7+.10},
-  {id:'eat',available:p=>p.food>.03&&p.hunger>.30,score:p=>p.hunger*2.4+.07},
+  {id:'drink',available:p=>careGoals(p).some(c=>c.id==='drink'),score:p=>4+p.thirst*3+(p.thirst>=CARE_POLICY.urgentAt?4:0)},
+  {id:'eat',available:p=>careGoals(p).some(c=>c.id==='eat'),score:p=>4+p.hunger*3+(p.hunger>=CARE_POLICY.urgentAt?4:0)},
   {id:'shelter',available:p=>!p.inShelter,score:(p,t)=>p.night?1.15+t.rest*.25:p.rain?.87+t.rest*.1:p.energy<.26?.85:.04},
   {id:'social',available:p=>!p.inShelter&&p.playerNear,score:(p,t)=>.18+t.social*.45+p.affinity*.22},
   {id:'explore',available:p=>!p.inShelter,score:(p,t)=>.24+t.curiosity*.39+p.energy*.1},
