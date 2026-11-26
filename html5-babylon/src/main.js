@@ -468,10 +468,17 @@ const dustPool=Array.from({length:8},(_,i)=>{
  const mesh=sphere('foot dust '+i,0,0,0,.1,.1,.1,dustMaterial,false);mesh.receiveShadows=false;mesh.setEnabled(false);
  return {mesh,life:0,max:.5,dx:0,dz:0};
 });
+function dustAllowed(x,z){
+ // Decide by the physical surface, not by a potentially stale camera/entry state.
+ const p=homeLocal(x,z),f=-home.d/2;
+ if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return false;
+ if(Math.abs(p.x)<=home.w*.385&&p.z>=f-2.85&&p.z<=f)return false;
+ if(Math.abs(p.x)<=1.1&&p.z>=f-3.725&&p.z<f-2.85)return false;
+ if(onBridge(x,z))return false;
+ const river=nearRiver(x,z);return river.dist>river.w*.54+.12;
+}
 function emitBrakeDust(){
- // Dust only on outdoor soil, not on interior boards or across the bridge.
- const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
- if(entry.inside||(Math.abs(p.x)<home.w*.385&&p.z>=f-3.725&&p.z<=f+.25)||onBridge(avatar.position.x,avatar.position.z))return;
+ if(!dustAllowed(avatar.position.x,avatar.position.z))return;
  sprint.bursts++;
  for(let i=0;i<dustPool.length;i++){
   const d=dustPool[i],side=(i%2?1:-1)*(.10+.045*(i%4)),back=.04+.065*Math.floor(i/2);
@@ -793,4 +800,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

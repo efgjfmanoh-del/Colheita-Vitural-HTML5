@@ -38,11 +38,20 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  // Controlled, frame-independent sprint/brake test on a clear piece of outdoor terrain.
  const runTest=await page.evaluate(()=>{
   const q=cvQA,original=q.avatar.position.clone(),yaw=q.avatar.rotation.y;
-  const dir=[[1,0],[-1,0],[0,1],[0,-1]].find(([x,z])=>Array.from({length:16},(_,i)=>(i+1)*.10).every(k=>!q.blocked(original.x+x*k,original.z+z*k)&&Math.abs(q.surfaceHeight(original.x+x*k,original.z+z*k)-original.y)<.2));
-  if(!dir)throw Error('No clear sprint test direction');
-  const [x,z]=dir;q.resetSprint();
+  let route=null;
+  // Spawn is near the bridge. Search deterministically for real dry, clear terrain.
+  for(let radius=0;radius<=24&&!route;radius+=.5){
+   for(let a=0;a<16&&!route;a++){
+    const start=original.clone();start.x+=Math.cos(a*Math.PI/8)*radius;start.z+=Math.sin(a*Math.PI/8)*radius;start.y=q.surfaceHeight(start.x,start.z);
+    if(q.blocked(start.x,start.z)||!q.dustAllowed(start.x,start.z))continue;
+    const dir=[[1,0],[-1,0],[0,1],[0,-1]].find(([x,z])=>Array.from({length:20},(_,i)=>(i+1)*.10).every(k=>!q.blocked(start.x+x*k,start.z+z*k)&&q.dustAllowed(start.x+x*k,start.z+z*k)&&Math.abs(q.surfaceHeight(start.x+x*k,start.z+z*k)-start.y)<.2));
+    if(dir)route={start,dir};
+   }
+  }
+  if(!route)throw Error('No clear dry-ground sprint test direction');
+  const [x,z]=route.dir;q.avatar.position.copyFrom(route.start);q.resetSprint();
   let walk=0;for(let i=0;i<8;i++)walk+=q.updateLocomotion(x,z,1/60,false);
-  q.avatar.position.copyFrom(original);q.resetSprint();
+  q.avatar.position.copyFrom(route.start);q.resetSprint();
   let run=0;for(let i=0;i<8;i++)run+=q.updateLocomotion(x,z,1/60,true);
   const speed=q.sprint.speed,lean=q.sprint.lean,bursts=q.sprint.bursts;
   let coast=0,minLean=0;for(let i=0;i<15;i++){coast+=q.updateLocomotion(0,0,1/60,false);minLean=Math.min(minLean,q.sprint.lean);}
@@ -50,12 +59,21 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   const stop=q.updateLocomotion(0,0,.05,false);
   for(let i=0;i<50;i++){q.updateDust(.02);q.updateLocomotion(0,0,.02,false);}
   const cleared=q.dustPool.every(p=>!p.mesh.isEnabled());
+  const countBeforeSurfaceTest=q.sprint.bursts;
+  const bridge=q.bridgeEnds;
+  q.avatar.position.copyFromFloats((bridge[0][0]+bridge[1][0])/2,(bridge[0][1]+bridge[1][1])/2,(bridge[0][2]+bridge[1][2])/2);
+  const bridgeAllowsDust=q.dustAllowed(q.avatar.position.x,q.avatar.position.z);q.emitBrakeDust();
+  const porch=q.home.C(0,0,-q.home.d/2-1.5);q.avatar.position.copyFrom(porch);const porchAllowsDust=q.dustAllowed(porch.x,porch.z);q.emitBrakeDust();
+  const inside=q.home.C(0,0,0);q.avatar.position.copyFrom(inside);const interiorAllowsDust=q.dustAllowed(inside.x,inside.z);q.emitBrakeDust();
+  const forbiddenBursts=q.sprint.bursts-countBeforeSurfaceTest;
   q.avatar.position.copyFrom(original);q.avatar.rotation.y=yaw;q.resetSprint();
-  return {walk,run,speed,lean,coast,minLean,burstCount,particles,stop,cleared};
+  return {walk,run,speed,lean,coast,minLean,burstCount,particles,stop,cleared,bridgeAllowsDust,porchAllowsDust,interiorAllowsDust,forbiddenBursts,start:route.start.asArray()};
  });
+ console.log('Sprint diagnostics',JSON.stringify(runTest));fs.writeFileSync('qa/corrida.json',JSON.stringify(runTest,null,2));
  assert(runTest.run>runTest.walk*1.20&&runTest.speed>6.5&&runTest.lean>.04,'sprint must be faster and lean forward');
  assert(runTest.coast>0&&runTest.coast<=.31&&runTest.minLean<-.04&&runTest.stop===0,'bounded brake and body lean');
  assert(runTest.burstCount===1&&runTest.particles>0&&runTest.cleared,'bounded foot dust burst must expire');
+ assert(!runTest.bridgeAllowsDust&&!runTest.porchAllowsDust&&!runTest.interiorAllowsDust&&runTest.forbiddenBursts===0,'no dust on built surfaces');
  fs.writeFileSync('qa/corrida.json',JSON.stringify(runTest,null,2));console.log('PASS sprint, bounded braking and pooled dust',JSON.stringify(runTest));
  await capture('visao-geral',null);await capture('residencia','close');const before=await page.evaluate(()=>cvQA.scene.activeCamera.alpha);await capture('perspectiva-alternativa','rotate');assert.notEqual(await page.evaluate(()=>cvQA.scene.activeCamera.alpha),before);assert.deepEqual(errors,[]);
  // Confirm movement in the running 3D scene, not just static mesh existence.
