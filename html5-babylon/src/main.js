@@ -35,9 +35,22 @@ function swatch(name,kind,size=128){
 }
 const woodTex=swatch('wood grain','wood'),stoneTex=swatch('stone grain','stone'),roofTex=swatch('ceramic microtexture','roof'),grassTex=swatch('meadow detail','grass');
 for(const m of [M.wood,M.woodLight,M.woodDark])m.diffuseTexture=woodTex;
-for(const m of [M.stone,M.stoneLight,M.plaster])m.diffuseTexture=stoneTex;
+for(const m of [M.stone,M.stoneLight])m.diffuseTexture=stoneTex;
+// Limewashed stucco: low-contrast, isotropic mineral texture, no repeated hatch marks.
+const stuccoTex=new DynamicTexture('limewash plaster',{width:256,height:256},scene,true,Texture.TRILINEAR_SAMPLINGMODE);
+const stuccoCtx=stuccoTex.getContext(),stuccoPixels=stuccoCtx.createImageData(256,256);
+let plasterSeed=12051;
+for(let y=0;y<256;y++)for(let x=0;x<256;x++){
+ plasterSeed=(Math.imul(1664525,plasterSeed)+1013904223)|0;
+ const grain=((plasterSeed>>>0)/4294967296-.5)*8;
+ const wave=2.8*Math.sin(x*Math.PI/64)*Math.cos(y*Math.PI/64)+1.6*Math.sin((x+y)*Math.PI/32);
+ const i=(y*256+x)*4;stuccoPixels.data[i]=244+grain+wave;stuccoPixels.data[i+1]=241+grain+wave;stuccoPixels.data[i+2]=231+grain+wave;stuccoPixels.data[i+3]=255;
+}
+stuccoCtx.putImageData(stuccoPixels,0,0);stuccoTex.update();stuccoTex.wrapU=stuccoTex.wrapV=Texture.WRAP_ADDRESSMODE;
+M.plaster.diffuseTexture=stuccoTex;M.plaster.specularColor=Color3.Black();
+const facadeCraft={exposedGrid:0,plinths:0,sideFlowerBoxes:0};
 M.roof.diffuseTexture=roofTex;M.grass.diffuseTexture=grassTex;
-M.plaster.diffuseColor=Color3.FromHexString('#f2eee0');
+M.plaster.diffuseColor=Color3.FromHexString('#fffdf6');
 M.blueJoinery=mat('painted rural blue','#245b83');M.blueTrim=mat('weathered blue edge','#397ca4');M.windowPane=mat('cool reflected window','#668fa4',.12);
 M.windowPane.emissiveColor=new Color3(.035,.050,.060);
 const ceramicMat=mat('individual curved terracotta tiles','#ffffff');ceramicMat.backFaceCulling=false;
@@ -351,9 +364,19 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
   for(const k of [-1,1])B('front wall beside doorway',k*(doorW/2+sideW/2),.53+h/2,-d/2+wall/2,sideW,h,wall,M.plaster);
   B('door lintel',0,.53+doorH+(h-doorH)/2,-d/2+wall/2,doorW,h-doorH,wall,M.plaster);
   entity(id);
- }for(let xx of [-w/2+.05,w/2-.05])for(let zz of [-d/2+.05,d/2-.05])B('corner framing',xx,h/2+.44,zz,.23,h,.23,M.woodDark);
- for(let zz of [-d/2-.03,d/2+.03]){const front=!small&&zz<0;entity(front?'house-front':id);for(let xx of [-w*.25,0,w*.25])if(!front||xx!==0)B('vertical timber',xx,h/2+.44,zz,.18,h,.17,M.wood);for(let yy of [.5,h*.53,h+.40]){if(front&&yy<.6){for(const k of [-1,1])B('split threshold timber',k*(w+doorW)/4,yy,zz,(w-doorW)/2,.19,.2,M.woodDark);}else B('horizontal timber',0,yy,zz,w,.19,.2,M.woodDark)}}entity(id);
- for(let xx of [-w/2-.03,w/2+.03]){for(let zz of [-d*.25,0,d*.25])B('side timber',xx,h/2+.44,zz,.18,h,.18,M.wood);for(let yy of [.5,h*.53,h+.40])B('side horizontal',xx,yy,0,.19,.19,d,M.woodDark)}
+ }
+ if(small){
+ for(let xx of [-w/2+.05,w/2-.05])for(let zz of [-d/2+.05,d/2-.05])B('corner framing',xx,h/2+.44,zz,.23,h,.23,M.woodDark);
+ for(let zz of [-d/2-.03,d/2+.03]){for(let xx of [-w*.25,0,w*.25])B('vertical timber',xx,h/2+.44,zz,.18,h,.17,M.wood);for(let yy of [.5,h*.53,h+.40])B('horizontal timber',0,yy,zz,w,.19,.2,M.woodDark);}
+ for(let xx of [-w/2-.03,w/2+.03]){for(let zz of [-d*.25,0,d*.25])B('side timber',xx,h/2+.44,zz,.18,h,.18,M.wood);for(let yy of [.5,h*.53,h+.40])B('side horizontal',xx,yy,0,.19,.19,d,M.woodDark);}
+ }else{
+  // The reference is masonry, not a half-timbered facade. Keep only the base and eaves.
+  entity('house-front');
+  for(const k of [-1,1]){B('limewash stone plinth',k*(w+doorW)/4,.67,-d/2-.065,(w-doorW)/2,.28,.12,M.stoneLight);facadeCraft.plinths++;}
+  entity(id);
+  B('rear masonry plinth',0,.67,d/2+.065,w,.28,.12,M.stoneLight);facadeCraft.plinths++;
+  for(const k of [-1,1]){B('side masonry plinth',k*(w/2+.065),.67,0,.12,.28,d,M.stoneLight);facadeCraft.plinths++;}
+ }
  if(!small)entity('house-roof');
  const e=h+.5,r=h+.5+w*.26,ow=w/2+.55,od=d/2+.65;
  for(let s of [-1,1]){
@@ -389,8 +412,8 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  if(small)B('door opening',0,.44+doorH/2,-d/2-.06,doorW,doorH,.14,M.woodDark);
  if(!small){
  entity('house-door');
- for(const k of [-1,1])B('door jamb',k*(doorW/2+.065),.53+doorH/2,-d/2-.045,.13,doorH,.30,M.woodDark);
- B('door header',0,.53+doorH+.065,-d/2-.045,doorW+.26,.13,.30,M.woodDark);
+ for(const k of [-1,1])B('door jamb',k*(doorW/2+.065),.53+doorH/2,-d/2-.045,.13,doorH,.30,M.blueJoinery);
+ B('door header',0,.53+doorH+.065,-d/2-.045,doorW+.26,.13,.30,M.blueJoinery);
  doorRoot=new Mesh('door hinge pivot',scene);doorRoot.position=C(-doorW/2+.035,.53,-d/2-.055);doorRoot.rotation.y=angle;
  const leaf=(n,x,y,z,ww,hh,dd,m)=>{const q=box(n,x,y,z,ww,hh,dd,m);q.parent=doorRoot;return q;};
  const leafW=doorW-.07;leaf('solid swinging door',leafW/2,doorH/2,0,leafW,doorH-.04,.095,M.blueJoinery);
@@ -408,6 +431,19 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity('house-front');
  const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.blueJoinery);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.windowPane);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.blueJoinery);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.blueJoinery);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.blueTrim)};
  for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.blueJoinery);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
+ // Side window flower boxes, above the walkable ground and outside the wall.
+ for(const k of [-1,1])for(const zz of [-d*.22,d*.22]){
+  const yy=h*.69-.88,xx=k*(w/2+.27);
+  B('side window flower trough',xx,yy,zz,.40,.24,1.42,M.woodLight);
+  B('side flower trough soil',xx,yy+.13,zz,.31,.035,1.29,M.earth);
+  for(let j=0;j<7;j++){
+   const p=C(xx+k*.035,yy+.26+(j%3)*.04,zz-.51+j*.17);
+   sphere('side flower foliage',p.x,p.y,p.z,.12,.14,.13,j%2?M.leaf:M.leaf2,false);
+   const f=C(xx+k*.10,yy+.40+(j%3)*.04,zz-.51+j*.17);
+   sphere('side pink blossoms',f.x,f.y,f.z,.085,.065,.095,j%2?M.pink:M.red,false);
+  }
+  facadeCraft.sideFlowerBoxes++;
+ }
  // Ornamental window boxes are independent from saved interactive planters.
  entity('house-front');
  for(const xx of [-w*.30,w*.30]){
@@ -1355,4 +1391,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,roofCraft,smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
