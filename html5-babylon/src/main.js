@@ -37,6 +37,32 @@ const woodTex=swatch('wood grain','wood'),stoneTex=swatch('stone grain','stone')
 for(const m of [M.wood,M.woodLight,M.woodDark])m.diffuseTexture=woodTex;
 for(const m of [M.stone,M.stoneLight,M.plaster])m.diffuseTexture=stoneTex;
 M.roof.diffuseTexture=roofTex;M.grass.diffuseTexture=grassTex;
+M.plaster.diffuseColor=Color3.FromHexString('#f2eee0');
+M.blueJoinery=mat('painted rural blue','#245b83');M.blueTrim=mat('weathered blue edge','#397ca4');M.windowPane=mat('cool reflected window','#668fa4',.12);
+M.windowPane.emissiveColor=new Color3(.035,.050,.060);
+const ceramicMat=mat('individual curved terracotta tiles','#ffffff');ceramicMat.backFaceCulling=false;
+const roofCraft={fields:0,tiles:0,vertices:0,triangles:0,flowerBoxes:0,flowerHeads:0};
+// Curved tile shells in a single mesh per roof slope.
+function ceramicField(label,length,width,surface){
+ const rows=Math.ceil(length/.58),cols=Math.ceil(width/.35),pos=[],indices=[],colors=[],normals=[];
+ const clay=['#a94628','#bc532d','#d66b38','#c15b31','#a94a2a','#cc6133'].map(Color3.FromHexString);
+ for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
+  const a=i/rows,b=Math.min(1,(i+1.10)/rows),start=j/cols,end=(j+1)/cols;
+  const k=pos.length/3,c=clay[(i*17+j*11)%clay.length];
+  for(let t=0;t<2;t++)for(let q=0;q<=6;q++){
+   const s=q/6,arch=.075*Math.sin(s*Math.PI),p=surface(t?b:a,start+(end-start)*s);
+   p.y+=.065+arch+(t?.025:0);pos.push(...p.asArray());
+   const shade=.84+.16*Math.sin(s*Math.PI);colors.push(c.r*shade,c.g*shade,c.b*shade,1);
+  }
+  for(let q=0;q<6;q++)indices.push(k+q,k+q+1,k+q+7,k+q+1,k+q+8,k+q+7);
+  roofCraft.tiles++;
+ }
+ VertexData.ComputeNormals(pos,indices,normals);
+ if(normals[1]<0){for(let k=0;k<indices.length;k+=3){const t=indices[k+1];indices[k+1]=indices[k+2];indices[k+2]=t;}VertexData.ComputeNormals(pos,indices,normals);}
+ const mesh=new Mesh(label,scene),data=new VertexData();data.positions=pos;data.indices=indices;data.colors=colors;data.normals=normals;data.applyToMesh(mesh);own(mesh,ceramicMat,true);
+ roofCraft.fields++;roofCraft.vertices+=pos.length/3;roofCraft.triangles+=indices.length/3;
+ return mesh;
+}
 const waterTex=new DynamicTexture('local water ripples',{width:256,height:256},scene,true,Texture.TRILINEAR_SAMPLINGMODE);const wc=waterTex.getContext();const depthGradient=wc.createLinearGradient(0,0,256,0);for(const [a,b] of [[0,'#b8dfc8'],[.12,'#a0d5d4'],[.33,'#87b8c8'],[.5,'#75a8bf'],[.67,'#87b8c8'],[.88,'#a0d5d4'],[1,'#b8dfc8']])depthGradient.addColorStop(a,b);wc.fillStyle=depthGradient;wc.fillRect(0,0,256,256);for(let i=0;i<145;i++){const x=random()*256,y=random()*256,len=12+random()*70;wc.strokeStyle=i%4===0?'rgba(248,255,251,.52)':'rgba(38,106,126,.14)';wc.lineWidth=.6+random()*1.3;for(let k=-1;k<=1;k++){wc.beginPath();wc.moveTo(x+k*256,y);wc.quadraticCurveTo(x+k*256+len*.5,y+Math.sin(i)*3,x+k*256+len,y);wc.stroke()}}waterTex.update();waterTex.wrapU=waterTex.wrapV=Texture.WRAP_ADDRESSMODE;M.water.diffuseTexture=waterTex;M.water.diffuseColor=Color3.FromHexString('#399ab4');
 const light=new HemisphericLight('sky',V(.2,1,-.15),scene);light.intensity=.85;light.groundColor=new Color3(.37,.39,.27);
 const sun=new DirectionalLight('sun',V(-.6,-1,.45),scene);sun.position=V(40,65,-40);sun.intensity=.90;sun.diffuse=new Color3(1,.91,.78);sun.autoCalcShadowZBounds=true;sun.shadowOrthoScale=.2;
@@ -330,7 +356,11 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  for(let xx of [-w/2-.03,w/2+.03]){for(let zz of [-d*.25,0,d*.25])B('side timber',xx,h/2+.44,zz,.18,h,.18,M.wood);for(let yy of [.5,h*.53,h+.40])B('side horizontal',xx,yy,0,.19,.19,d,M.woodDark)}
  if(!small)entity('house-roof');
  const e=h+.5,r=h+.5+w*.26,ow=w/2+.55,od=d/2+.65;
- for(let s of [-1,1]){let ps=[C(0,r,-od),C(0,r,od),C(s*ow,e,od),C(s*ow,e,-od)];quad('sloping roof panel',ps,M.roof,true);for(let row=0;row<Math.ceil(ow/.62);row++){let t=(row+.55)/Math.ceil(ow/.62),xx=s*ow*t,yy=r+(e-r)*t+.07;L('raised ceramic tile seam',[xx,yy,-od],[xx,yy,od],.09,row%3===0?M.tile2:M.tile);for(let zz=-od+.25;zz<od;zz+=.67){let stagger=(row%2)*.29;let zt=zz+stagger;if(zt>od-.1)continue;L('tile joint',[s*ow*Math.max(0,t-.045),yy+.03,zt],[s*ow*Math.min(1,t+.045),yy-.15,zt],.045,M.tile2)}}}
+ for(let s of [-1,1]){
+  let ps=[C(0,r,-od),C(0,r,od),C(s*ow,e,od),C(s*ow,e,-od)];quad('sloping roof panel',ps,M.roof,true);
+  if(!small)ceramicField('curved colonial roof tiles '+s,Math.hypot(ow,r-e),od*2,(u,v)=>C(s*ow*u,r+(e-r)*u,-od+od*2*v));
+  else for(let row=0;row<Math.ceil(ow/.62);row++){let t=(row+.55)/Math.ceil(ow/.62),xx=s*ow*t,yy=r+(e-r)*t+.07;L('raised ceramic tile seam',[xx,yy,-od],[xx,yy,od],.09,row%3===0?M.tile2:M.tile);}
+ }
  for(let zz of [-d/2,d/2]){poly('gable plaster',[C(-w/2,e,zz),C(w/2,e,zz),C(0,r,zz)],[0,1,2,2,1,0],small?M.woodLight:M.plaster);L('gable trim',[-ow,e,zz],[0,r,zz],.22,M.woodDark);L('gable trim',[0,r,zz],[ow,e,zz],.22,M.woodDark)}
  L('ridge tiles',[0,r+.11,-od],[0,r+.11,od],.28,M.tile);
  if(!small){
@@ -363,9 +393,9 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  B('door header',0,.53+doorH+.065,-d/2-.045,doorW+.26,.13,.30,M.woodDark);
  doorRoot=new Mesh('door hinge pivot',scene);doorRoot.position=C(-doorW/2+.035,.53,-d/2-.055);doorRoot.rotation.y=angle;
  const leaf=(n,x,y,z,ww,hh,dd,m)=>{const q=box(n,x,y,z,ww,hh,dd,m);q.parent=doorRoot;return q;};
- const leafW=doorW-.07;leaf('solid swinging door',leafW/2,doorH/2,0,leafW,doorH-.04,.095,M.wood);
- for(const x of [.13,leafW-.13])leaf('door vertical trim',x,doorH/2,-.07,.075,doorH-.11,.05,M.woodLight);
- for(const y of [.2,doorH-.2])leaf('door cross trim',leafW/2,y,-.07,leafW-.13,.09,.05,M.woodLight);
+ const leafW=doorW-.07;leaf('solid swinging door',leafW/2,doorH/2,0,leafW,doorH-.04,.095,M.blueJoinery);
+ for(const x of [.13,leafW-.13])leaf('door vertical trim',x,doorH/2,-.07,.075,doorH-.11,.05,M.blueTrim);
+ for(const y of [.2,doorH-.2])leaf('door cross trim',leafW/2,y,-.07,leafW-.13,.09,.05,M.blueTrim);
  // Both sides have independent real lever geometry and a grip anchor.
  for(const side of [-1,1]){
   const pivot=new Mesh('handle spindle '+side,scene);pivot.parent=doorRoot;pivot.position=V(leafW-.19,1.01,side*.115);
@@ -376,12 +406,29 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
   handles[side]={pivot,grip};
  }
  entity('house-front');
- const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.woodDark);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.glass);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.woodDark);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.woodDark);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.woodLight)};
- for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.woodDark);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.glass);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.woodDark);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.woodLight)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
+ const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.blueJoinery);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.windowPane);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.blueJoinery);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.blueJoinery);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.blueTrim)};
+ for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.blueJoinery);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.windowPane);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.blueJoinery);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.blueTrim)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
+ // Ornamental window boxes are independent from saved interactive planters.
+ entity('house-front');
+ for(const xx of [-w*.30,w*.30]){
+  B('window flower trough',xx,.95,-d/2-.32,1.38,.28,.40,M.woodLight);
+  B('window trough soil',xx,1.11,-d/2-.32,1.24,.035,.31,M.earth);
+  for(let j=0;j<9;j++){
+   const px=xx-.54+j*.135,pz=-d/2-.35+(j%2)*.075;
+   const leafPoint=C(px,1.20+(j%3)*.04,pz);
+   sphere('window box leaves',leafPoint.x,leafPoint.y,leafPoint.z,.12,.13,.11,j%2?M.leaf:M.leaf2,false);
+   const flower=C(px,1.36+(j%3)*.06,pz-.03);
+   sphere('window box flower',flower.x,flower.y,flower.z,.087,.063,.087,j%3===0?M.pink2:j%3===1?M.red:M.pink,false);
+   roofCraft.flowerHeads++;
+  }
+  roofCraft.flowerBoxes++;
+ }
+ entity(id);
  B('porch deck',0,.37,-d/2-(HOUSE.porchDepth+.1)/2,w*HOUSE.porchRatio,.32,HOUSE.porchDepth,M.woodLight);for(let j=0;j<20;j++)B('porch deck board seam',-w*HOUSE.porchRatio/2+.25+j*(w*HOUSE.porchRatio-.5)/19, .54,-d/2-(HOUSE.porchDepth+.1)/2,.035,.012,HOUSE.porchDepth-.1,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*(w*HOUSE.porchRatio/2-.22),1.83,-d/2-2.4-porchExtension,.27,2.8,.27,M.woodDark);}
  entity('house-porch-roof');
  quad('porch roof',[C(-w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension),C(-w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension)],M.roof,true);
- for(let zz=0;zz<8;zz++){const u=zz/7;L('porch roof tile',[-w*(HOUSE.porchRatio/2+.035),3.69-u*.53,-d/2-u*(3+porchExtension)],[w*(HOUSE.porchRatio/2+.035),3.69-u*.53,-d/2-u*(3+porchExtension)],.10,M.tile);}
+ const porchRoofHalf=w*(HOUSE.porchRatio/2+.035);
+ ceramicField('curved colonial veranda tiles',Math.hypot(3+porchExtension,.53),porchRoofHalf*2,(u,v)=>C(-porchRoofHalf+2*porchRoofHalf*v,3.65-.53*u,-d/2-(3+porchExtension)*u));
  entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55-porchExtension+i*.35,2.2,top,.35,M.stoneLight);}
  entity('house-roof');B('chimney',w*.29,h+1.75,d*.26,.86,3.5,.86,M.stoneLight);for(let i=0;i<7;i++)B('chimney course',w*.29,h+.42+i*.48,d*.26,.89,.045,.89,M.stone);B('chimney cap',w*.29,h+3.55,d*.26,1.1,.20,1.1,M.woodDark);
  }else{B('doghouse name plaque',0,h*.84,-d/2-.11,.59,.24,.09,M.woodDark);for(let xx of [-.19,.19])B('paw mark',xx,h*.85,-d/2-.17,.07,.08,.035,M.woodLight)}
@@ -1280,4 +1327,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
