@@ -106,7 +106,8 @@ for(let i=1;i<channel.length;i++){
 }
 entity('waterfalls');riverMotionMetrics.fallGroups=fallFeet.length;for(const {a,b,bb} of fallFeet){const forward=b.p.subtract(a.p);forward.y=0;forward.normalize();const pp=[],ii=[],nn=[],cc=[];for(let row=0;row<3;row++)for(let j=0;j<12;j++){const lateral=(j+.5)/12*2-1,center=b.p.add(bb.side.scale(lateral*b.w*.45)).add(forward.scale(.18+row*.34));const rad=.18+row*.08+.12*random(),start=(random()-.5)*Math.PI;for(let k=0;k<8;k++){const ang=start+k*Math.PI/5,base=pp.length/3;for(const [r,phi] of [[rad,ang],[rad+.045,ang],[rad+.045,ang+Math.PI/5],[rad,ang+Math.PI/5]]){const p=center.add(bb.side.scale(Math.cos(phi)*r)).add(forward.scale(Math.sin(phi)*r));pp.push(p.x,nearRiver(p.x,p.z).y+.035,p.z);nn.push(0,1,0);cc.push(.8,.96,1,1);}ii.push(base,base+1,base+2,base,base+2,base+3);}riverMotionMetrics.foamArcs++;}const foam=new Mesh('cascade foot foam arcs',scene),fv=new VertexData();fv.positions=pp;fv.indices=ii;fv.normals=nn;fv.colors=cc;fv.applyToMesh(foam);M.foam.backFaceCulling=false;own(foam,M.foam,false);foam.receiveShadows=false;}
 entity('waterfall rocks');for(const [u,v] of [[181,42],[159,143]]){let p=P(u,v),a=nearRiver(p.x,p.z);for(let j=0;j<15;j++){let side=j%2?-1:1,xx=p.x+side*(a.w*.55+random()*2.5),zz=p.z+(random()-.5)*5.8,yy=height(xx,zz);if(nearRiver(xx,zz).dist<nearRiver(xx,zz).w*.53)continue;rock('cascade boulder',V(xx,yy+.3,zz),.8+random()*.8,.65+random()*.9,.85+random()*.7,j%3?M.stone:M.stoneLight,true);bankStats.boulders++;}}
-const HOUSE={u:409,v:137,w:14.5,d:9,h:5.6,angle:-.30,porchRatio:.90};
+const HOUSE={u:409,v:137,w:14.5,d:9,h:5.6,angle:-.30,porchRatio:.77,porchDepth:3.65};
+const porchExtension=HOUSE.porchDepth-2.8;
 const houseXZ=(x,z)=>V(X(HOUSE.u)+x*Math.cos(HOUSE.angle)+z*Math.sin(HOUSE.angle),0,Z(HOUSE.v)-x*Math.sin(HOUSE.angle)+z*Math.cos(HOUSE.angle));
 const fenceColliders=[];const fencePoints=layout.residence.boundary.map(([u,v])=>{let p=P(u,v);const center=P(430,153);for(let n=0;n<25&&nearRiver(p.x,p.z).dist<nearRiver(p.x,p.z).w/2+.8;n++)p=Vector3.Lerp(p,center,.045);p.y=height(p.x,p.z);return p});
 entity('residence fence');const gate=P(...layout.bridges[0].ends[0]);
@@ -114,8 +115,8 @@ for(let i=0;i<fencePoints.length;i++){let a=fencePoints[i],b=fencePoints[(i+1)%f
 // Preserve random sequence for unchanged scenery; replace only the residence walkway.
 const oldPath=layout.residence.path.map(p=>P(...p));
 for(let i=1;i<oldPath.length;i++)for(let k=0;k<Math.ceil(Vector3.Distance(oldPath[i-1],oldPath[i])/.72)*2;k++)random();
-const stairFoot=houseXZ(0,-HOUSE.d/2-3.725),bridgeEntry=P(...layout.bridges[0].ends[0],2.85);
-const pathControls=[stairFoot,houseXZ(0,-HOUSE.d/2-4.55),P(466,185),P(496,190),P(515,195),bridgeEntry];
+const stairFoot=houseXZ(0,-HOUSE.d/2-3.725-porchExtension),bridgeEntry=P(...layout.bridges[0].ends[0],2.85);
+const pathControls=[stairFoot,houseXZ(0,-HOUSE.d/2-4.20-porchExtension),P(466,185),P(496,190),P(515,195),bridgeEntry];
 const pathPoints=[];
 for(let i=1;i<pathControls.length;i++){
  const a=pathControls[i-1],b=pathControls[i],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.28));
@@ -135,14 +136,13 @@ function renderedTerrainY(x,z){
  const a=pos[k*3+1],b=pos[(k+1)*3+1],c=pos[(k+nx+1)*3+1],dd=pos[(k+nx+2)*3+1];
  return fx+fz<=1?a+(b-a)*fx+(c-a)*fz:dd+(c-dd)*(1-fx)+(b-dd)*(1-fz);
 }
-const pavingMaterial=mat('residential stone paving','#d6c7a1');pavingMaterial.backFaceCulling=false;
+const pavingMaterial=mat('individual natural stone paving','#ffffff');pavingMaterial.backFaceCulling=false;
 pavingMaterial.twoSidedLighting=false;
 pavingMaterial.ambientColor=Color3.FromHexString('#ad9e80');
 // Keep a small reflected-light component so the stone never reads as black soil.
-pavingMaterial.emissiveColor=new Color3(.30,.26,.20);
+pavingMaterial.emissiveColor=new Color3(.065,.055,.04);
 pavingMaterial.specularColor=Color3.Black();
-const pavingJointMaterial=mat('residential stone joints','#8b795b');
-pavingJointMaterial.emissiveColor=new Color3(.07,.06,.045);
+const pavingStats={residence:0,approach:0,colors:new Set(),maxStoneSize:0};
 let pathLengthHome=0;
 for(let i=0;i<pathPoints.length;i++){
  const p=pathPoints[i],dir=i===0?houseXZ(0,-1).subtract(houseXZ(0,0)):pathPoints[Math.min(i+1,pathPoints.length-1)].subtract(pathPoints[i-1]);dir.y=0;dir.normalize();
@@ -151,26 +151,60 @@ for(let i=0;i<pathPoints.length;i++){
  for(const k of [-1,0,1]){
   const v=p.add(side.scale(k*half));v.y=Math.max(renderedTerrainY(v.x,v.z),height(v.x,v.z))+.095;
   if(i===pathPoints.length-1)v.y=Math.max(v.y,2.945);
-  row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);const shade=.96+.035*Math.sin(i*.82+k*.73);pathColors.push(shade,shade,shade,1);
+  row.push(v);pathVertices.push(...v.asArray());pathUV.push((k+1)/2,pathLengthHome);pathColors.push(.35,.30,.23,1);
  }
  pathRows.push(row);
  if(i)for(let k=0;k<2;k++){const n=(i-1)*3+k;pathIndices.push(n,n+3,n+1,n+1,n+3,n+4);}
 }
-const pathMesh=new Mesh('continuous residential stone walkway',scene),pathData=new VertexData();pathData.positions=pathVertices;pathData.indices=pathIndices;pathData.uvs=pathUV;pathData.colors=pathColors;pathData.normals=[];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);if(pathData.normals[1]<0){for(let i=0;i<pathIndices.length;i+=3)[pathIndices[i+1],pathIndices[i+2]]=[pathIndices[i+2],pathIndices[i+1]];VertexData.ComputeNormals(pathVertices,pathIndices,pathData.normals);}// Force upward-facing normals even at tight curve joins; retain vertex slope elsewhere.
-for(let i=0;i<pathData.normals.length;i+=3){if(pathData.normals[i+1]<0){pathData.normals[i]*=-1;pathData.normals[i+1]*=-1;pathData.normals[i+2]*=-1;}if(pathData.normals[i+1]<.25){pathData.normals[i]=0;pathData.normals[i+1]=1;pathData.normals[i+2]=0;}}
-pathData.applyToMesh(pathMesh);own(pathMesh,pavingMaterial,false);
-// Engraved stone joints, without gaps in the supporting surface.
-for(let i=2;i<pathRows.length-1;i+=3){const r=pathRows[i];beam('stone paving joint',r[0].add(V(0,.009,0)),r[1].add(V(0,.009,0)),.025,pavingJointMaterial,.025,false);beam('stone paving joint',r[1].add(V(0,.009,0)),r[2].add(V(0,.009,0)),.025,pavingJointMaterial,.025,false);}
+// Separate beveled stone volumes, with natural staggered joints. All geometry is
+// batched into one mesh per road; no per-stone meshes or texture downloads.
+function makeStoneRoad(name,rows,positions,indices,uvs,colors,kind){
+ const distances=[0];for(let i=1;i<rows.length;i++)distances.push(distances[i-1]+Math.hypot(rows[i][1].x-rows[i-1][1].x,rows[i][1].z-rows[i-1][1].z));
+ const length=distances.at(-1);
+ function sample(at,u){
+  const v=Math.max(0,Math.min(length,at));let i=1;while(i<distances.length-1&&distances[i]<v)i++;
+  const k=(v-distances[i-1])/Math.max(.00001,distances[i]-distances[i-1]);
+  const p=Vector3.Lerp(Vector3.Lerp(rows[i-1][0],rows[i-1][2],u),Vector3.Lerp(rows[i][0],rows[i][2],u),k);
+  p.y=Math.max(p.y,renderedTerrainY(p.x,p.z)+.095,height(p.x,p.z)+.095);return p;
+ }
+ // deterministic local hash, independent of other map assets
+ const noise=(a,b,c)=>{const v=Math.sin(a*73.23+b*31.19+c*19.13)*43758.5453;return v-Math.floor(v);};
+ const palette=['#b7ad92','#aaa38e','#c3b79b','#9d9788','#c9bda4','#b1a38d','#a9a08b'];
+ function vertex(p,col){const n=positions.length/3;positions.push(...p.asArray());colors.push(col.r,col.g,col.b,1);uvs.push(p.x,p.z);return n;}
+ function face(a,b,c){indices.push(a,b,c);}
+ for(let lane=0;lane<3;lane++){
+  let at=0,serial=0;
+  while(at<length-.001){
+   let step=(serial===0&&lane%2)?.36:.57+.24*noise(lane,serial,1);
+   let next=Math.min(length,at+step);if(length-next<.24)next=length;
+   const gap=Math.min(.024,(next-at)*.11),a=at+gap,b=next-gap,u0=lane/3+.010,u1=(lane+1)/3-.010;
+   const cut=Math.min(.075,(b-a)*.16),ch=.035+.018*noise(lane,serial,2);
+   const shape=[[a+cut,u0],[b-cut,u0],[b,u0+ch],[b,u1-ch],[b-cut,u1],[a+cut,u1],[a,u1-ch],[a,u0+ch]];
+   const col=Color3.FromHexString(palette[Math.floor(noise(lane,serial,3)*palette.length)]),edge=col.scale(.72);
+   pavingStats.colors.add(palette[Math.floor(noise(lane,serial,3)*palette.length)]);pavingStats[kind]++;pavingStats.maxStoneSize=Math.max(pavingStats.maxStoneSize,b-a);
+   const outer=shape.map(([x,u])=>{const p=sample(x,u);p.y+=.017;return vertex(p,edge);});
+   const inner=shape.map(([x,u])=>{const p=sample(x+( (a+b)/2-x)*.07,u+((u0+u1)/2-u)*.08);p.y+=.065+noise(lane,serial,4)*.019;return vertex(p,col);});
+   const center=sample((a+b)/2,(u0+u1)/2);center.y+=.073+noise(lane,serial,4)*.019;const c=vertex(center,col);
+   for(let k=0;k<8;k++){const n=(k+1)%8;face(c,inner[k],inner[n]);face(inner[k],outer[k],outer[n]);face(inner[k],outer[n],inner[n]);}
+   at=next;serial++;
+  }
+ }
+ const mesh=new Mesh(name,scene),v=new VertexData();v.positions=positions;v.indices=indices;v.uvs=uvs;v.colors=colors;v.normals=[];
+ VertexData.ComputeNormals(positions,indices,v.normals);
+ for(let i=0;i<v.normals.length;i+=3){if(v.normals[i+1]<0){v.normals[i]*=-1;v.normals[i+1]*=-1;v.normals[i+2]*=-1;}if(v.normals[i+1]<.25){v.normals[i]=0;v.normals[i+1]=1;v.normals[i+2]=0;}}
+ v.applyToMesh(mesh);return own(mesh,pavingMaterial,false);
+}
+const pathMesh=makeStoneRoad('residential individual stone paving',pathRows,pathVertices,pathIndices,pathUV,pathColors,'residence');
 // Exterior approach is a physical ground-following ribbon, not a painted road.
 entity('bridge approach');const approach=[[575,248],[597,256],[616,270],[635,290],[644,305],[658,327]].map(p=>P(...p));
 const approachCurve=[];for(let i=1;i<approach.length;i++){const a=approach[i-1],b=approach[i],n=Math.ceil(Vector3.Distance(a,b)/.42);for(let j=0;j<n;j++)approachCurve.push(Vector3.CatmullRom(approach[Math.max(0,i-2)],a,b,approach[Math.min(approach.length-1,i+1)],j/n));}approachCurve.push(approach.at(-1));
 const rp=[],ri=[],rc=[],ru=[],sections=[];let pathLength=0;
 for(let i=0;i<approachCurve.length;i++){const p=approachCurve[i],d=approachCurve[Math.min(i+1,approachCurve.length-1)].subtract(approachCurve[Math.max(0,i-1)]);d.y=0;d.normalize();if(i)pathLength+=Vector3.Distance(p,approachCurve[i-1]);const side=V(-d.z,0,d.x);
- const row=[];for(const offset of [-1.65,-1.35,-.75,0,.75,1.35,1.65]){const q=p.add(side.scale(offset));q.y=height(q.x,q.z)+.065;row.push(q);rp.push(...q.asArray());ru.push((offset+1.65)/3.3,pathLength/3);const edge=Math.abs(offset)>1.4;rc.push(edge?.64:1,edge?.62:1,edge?.43:1,1);}
+ const row=[];for(const offset of [-1.65,-1.35,-.75,0,.75,1.35,1.65]){const q=p.add(side.scale(offset));q.y=Math.max(renderedTerrainY(q.x,q.z),height(q.x,q.z))+.095;row.push(q);rp.push(...q.asArray());ru.push((offset+1.65)/3.3,pathLength/3);rc.push(.35,.30,.23,1);}
  sections.push(row);
  if(i)for(let j=0;j<6;j++){const k=(i-1)*7+j;ri.push(k,k+7,k+1,k+1,k+7,k+8);}
 }
-const road=new Mesh('continuous terrain-following dirt road',scene),rv=new VertexData();rv.positions=rp;rv.indices=ri;rv.colors=rc;rv.uvs=ru;rv.normals=[];VertexData.ComputeNormals(rp,ri,rv.normals);if(rv.normals[1]<0){for(let i=0;i<ri.length;i+=3)[ri[i+1],ri[i+2]]=[ri[i+2],ri[i+1]];VertexData.ComputeNormals(rp,ri,rv.normals);}rv.applyToMesh(road);own(road,M.sand,false);
+const road=makeStoneRoad('farm approach individual stone paving',sections.map(r=>[r[0],r[3],r[6]]),rp,ri,ru,rc,'approach');
 const roadMetrics={sections:sections.length,vertices:road.getTotalVertices(),segments:approachCurve.length-1};
 entity('bridge home');const [ba,bb]=layout.bridges[0].ends.map(p=>P(...p,2.85));const bd=bb.subtract(ba),bl=bd.length(),ang=Math.atan2(bd.x,bd.z),bs=V(Math.cos(ang),0,-Math.sin(ang));
 for(let k=0;k<Math.ceil(bl/.36);k++){let p=Vector3.Lerp(ba,bb,k/Math.ceil(bl/.36));box('bridge plank',p.x,p.y,p.z,3.15,.19,.35,k%3?M.woodLight:M.wood,ang);for(let s of [-1,1]){let q=p.add(bs.scale(s*1.48));if(k%4===0){box('bridge rail post',q.x,q.y+.55,q.z,.20,1.1,.20,M.woodDark);box('bridge pier',q.x,q.y-.75,q.z,.27,1.6,.27,M.woodDark)}}}for(let s of [-1,1])beam('bridge railing',ba.add(bs.scale(s*1.48)).add(V(0,.91,0)),bb.add(bs.scale(s*1.48)).add(V(0,.91,0)),.14,M.woodLight);
@@ -241,11 +275,11 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity('house-front');
  const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.woodDark);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.glass);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.woodDark);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.woodDark);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.woodLight)};
  for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.woodDark);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.glass);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.woodDark);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.woodLight)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
- B('porch deck',0,.37,-d/2-1.45,w*HOUSE.porchRatio,.32,2.8,M.woodLight);for(let j=0;j<20;j++)B('porch deck board seam',-w*HOUSE.porchRatio/2+.25+j*(w*HOUSE.porchRatio-.5)/19,.54,-d/2-1.45,.035,.012,2.7,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*(w*HOUSE.porchRatio/2-.22),1.83,-d/2-2.4,.27,2.8,.27,M.woodDark);}
+ B('porch deck',0,.37,-d/2-(HOUSE.porchDepth+.1)/2,w*HOUSE.porchRatio,.32,HOUSE.porchDepth,M.woodLight);for(let j=0;j<20;j++)B('porch deck board seam',-w*HOUSE.porchRatio/2+.25+j*(w*HOUSE.porchRatio-.5)/19, .54,-d/2-(HOUSE.porchDepth+.1)/2,.035,.012,HOUSE.porchDepth-.1,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*(w*HOUSE.porchRatio/2-.22),1.83,-d/2-2.4-porchExtension,.27,2.8,.27,M.woodDark);}
  entity('house-porch-roof');
- quad('porch roof',[C(-w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3),C(-w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3)],M.roof,true);
- for(let zz=0;zz<6;zz++)L('porch roof tile',[-w*(HOUSE.porchRatio/2+.035),3.69-zz*.09,-d/2-zz*.51],[w*(HOUSE.porchRatio/2+.035),3.69-zz*.09,-d/2-zz*.51],.10,M.tile);
- entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55+i*.35,2.2,top,.35,M.stoneLight);}
+ quad('porch roof',[C(-w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension),C(-w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension)],M.roof,true);
+ for(let zz=0;zz<8;zz++){const u=zz/7;L('porch roof tile',[-w*(HOUSE.porchRatio/2+.035),3.69-u*.53,-d/2-u*(3+porchExtension)],[w*(HOUSE.porchRatio/2+.035),3.69-u*.53,-d/2-u*(3+porchExtension)],.10,M.tile);}
+ entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55-porchExtension+i*.35,2.2,top,.35,M.stoneLight);}
  entity('house-roof');B('chimney',w*.29,h+1.75,d*.26,.86,3.5,.86,M.stoneLight);for(let i=0;i<7;i++)B('chimney course',w*.29,h+.42+i*.48,d*.26,.89,.045,.89,M.stone);B('chimney cap',w*.29,h+3.55,d*.26,1.1,.20,1.1,M.woodDark);
  }else{B('doghouse name plaque',0,h*.84,-d/2-.11,.59,.24,.09,M.woodDark);for(let xx of [-.19,.19])B('paw mark',xx,h*.85,-d/2-.17,.07,.08,.035,M.woodLight)}
  entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot,handles};
@@ -255,7 +289,7 @@ const home=house('house',HOUSE.u,HOUSE.v,HOUSE.w,HOUSE.d,HOUSE.h,HOUSE.angle);
 const homeLocal=(x,z)=>{const dx=x-home.x,dz=z-home.z,c=Math.cos(home.angle),s=Math.sin(home.angle);return {x:dx*c-dz*s,z:dx*s+dz*c};};
 const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false,action:null,lastAction:null};
 // Porch fixtures share their dimensions with physical collision volumes.
-const porchFront=-home.d/2-2.75,porchHalf=(home.w*HOUSE.porchRatio/2);
+const porchFront=-home.d/2-2.75-porchExtension,porchHalf=(home.w*HOUSE.porchRatio/2);
 const porchFixtures=[],porchRails=[],benches=[];
 const seating={phase:'idle',bench:null,elapsed:0,blend:0,last:null};
 const porchBox=(n,x,y,z,w,h,d,m)=>{const p=home.C(x,y,z);return box(n,p.x,p.y,p.z,w,h,d,m,home.angle);};
@@ -293,7 +327,7 @@ const planterTypes=Object.freeze({
  ceramic:{name:'Vaso de cerâmica',hx:.39,hz:.39,soilY:1.00,slots:[[-.14,0],[.14,0]]},
  wooden:{name:'Jardineira de madeira',hx:.58,hz:.31,soilY:.92,slots:[[-.34,0],[0,0],[.34,0]]}
 });
-const planterSpecs=[{id:'porch-ceramic',type:'ceramic',x:-5.35,z:-home.d/2-1.28},{id:'porch-wooden',type:'wooden',x:5.35,z:-home.d/2-1.28}];
+const planterSpecs=[{id:'porch-ceramic',type:'ceramic',x:-4.40,z:-home.d/2-2.02},{id:'porch-wooden',type:'wooden',x:4.40,z:-home.d/2-2.02}];
 const GROW_MS=90000,SAVE_KEY='cv.ornamentalGarden.v1';
 let gardenSave={};let gardenError='';
 try{const saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))gardenSave=saved;}catch{}
@@ -383,8 +417,8 @@ function updateGarden(now=Date.now()){
 function surfaceHeight(x,z){
  const p=homeLocal(x,z),f=-home.d/2;
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return home.y+.53;
- if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85&&p.z<=f)return home.y+.53;
- if(Math.abs(p.x)<=1.1&&p.z>=f-3.725&&p.z<f-2.85){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725)/.35)));return home.y+[.18,.35,.53][i];}
+ if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85-porchExtension&&p.z<=f)return home.y+.53;
+ if(Math.abs(p.x)<=1.1&&p.z>=f-3.725-porchExtension&&p.z<f-2.85-porchExtension){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725+porchExtension)/.35)));return home.y+[.18,.35,.53][i];}
  return onBridge(x,z)?2.96:height(x,z);
 }
 function homeBlocked(x,z,interacting=false){
@@ -398,7 +432,7 @@ function homeBlocked(x,z,interacting=false){
  // Guardrails use exactly the segments rendered above; the only front gap is the stair.
  for(const rail of porchRails){const dx=rail.x2-rail.x1,dz=rail.z2-rail.z1,u=Math.max(0,Math.min(1,((p.x-rail.x1)*dx+(p.z-rail.z1)*dz)/(dx*dx+dz*dz)));if(Math.hypot(p.x-rail.x1-u*dx,p.z-rail.z1-u*dz)<r+.075)return true;}
  for(const item of porchFixtures)if(Math.abs(p.x-item.x)<item.hx+r&&Math.abs(p.z-item.z)<item.hz+r)return true;
- for(const k of [-1,1])if(Math.hypot(p.x-k*(porchHalf-.22),p.z-(f-2.4))<.33)return true;
+ for(const k of [-1,1])if(Math.hypot(p.x-k*(porchHalf-.22),p.z-(f-2.4-porchExtension))<.33)return true;
  return false;
 }
 const dogHome=house('doghouse',280,166,3.3,3.0,2.0,-.22,true);
@@ -500,7 +534,7 @@ for(const side of [-1,1]){
   const p=pathPoints[i],dir=pathPoints[i+1].subtract(pathPoints[i-1]);dir.y=0;dir.normalize();
   for(const offset of [1.75,2.15]){
    const v=p.add(V(-dir.z,0,dir.x).scale(side*offset)),local=homeLocal(v.x,v.z),nr=nearRiver(v.x,v.z);
-   if(local.z> -home.d/2-3.82&&Math.abs(local.x)<porchHalf+.35)continue;
+   if(local.z> -home.d/2-3.82-porchExtension&&Math.abs(local.x)<porchHalf+.35)continue;
    if(pathDistance(v.x,v.z)<1.66||nr.dist<nr.w*.54+.45||fenceColliders.some(([a,b])=>segDist(v.x,v.z,a,b)<.35))continue;
    flowers.push(v);pathFlowerPositions.push({x:v.x,z:v.z,side});
   }
@@ -539,8 +573,8 @@ function dustAllowed(x,z){
  // Decide by the physical surface, not by a potentially stale camera/entry state.
  const p=homeLocal(x,z),f=-home.d/2;
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return false;
- if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85&&p.z<=f)return false;
- if(Math.abs(p.x)<=1.1&&p.z>=f-3.725&&p.z<f-2.85)return false;
+ if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85-porchExtension&&p.z<=f)return false;
+ if(Math.abs(p.x)<=1.1&&p.z>=f-3.725-porchExtension&&p.z<f-2.85-porchExtension)return false;
  if(onBridge(x,z))return false;
  const river=nearRiver(x,z);return river.dist>river.w*.54+.12;
 }
@@ -782,14 +816,14 @@ function entryInfluence(p,inside,porch){
  if(inside||porch)return 1;
  const f=-home.d/2;
  if(p.z>f+.25)return 0;
- return smooth01((p.z-f+6.2)/3.25)*smooth01((3.0-Math.abs(p.x))/1.8);
+ return smooth01((p.z-f+6.2+porchExtension)/3.25)*smooth01((3.0-Math.abs(p.x))/1.8);
 }
 function updateEntry(dt){
  updateDoorAction(dt);updateSeating(dt);
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
  const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+.22&&p.z<home.d/2-.12;
- const porch=Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9&&p.z<=f+.25;
- const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95&&p.z<f-2.8;
+ const porch=Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9-porchExtension&&p.z<=f+.25;
+ const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95-porchExtension&&p.z<f-2.8-porchExtension;
  const near=inside||porch||stairs;
  const next=inside?'interior':near?'entrada':'exterior';
  const weight=entryInfluence(p,inside,porch);entry.cameraWeight=weight;
@@ -937,4 +971,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
