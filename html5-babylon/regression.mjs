@@ -79,6 +79,9 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  const landscape=await page.evaluate(()=>({terrain:cvQA.terrainSkirtStats,beds:cvQA.bedSurfaceStats,road:cvQA.roadMetrics,plots:cvQA.wheatPlots.length}));
  assert(landscape.terrain.margin>=64&&landscape.terrain.maxJoinGap<1e-6&&landscape.terrain.vertices<10000);
  assert(landscape.beds.continuousBeds===8&&landscape.beds.plotGaps===0&&landscape.plots===72&&landscape.road.fineGravel&&landscape.road.stones===0);
+ const soilCoverage=await page.evaluate(()=>{const q=cvQA;const rows=q.wheatBeds.map(b=>{const ps=q.bedPlots.get(b.id),widths=ps.map(p=>p.x2-p.x1);return {id:b.id,count:ps.length,first:ps[0].x1-b.x1,last:b.x2-ps.at(-1).x2,gap:Math.max(...ps.slice(1).map((p,i)=>Math.abs(p.x1-ps[i].x2))),widthDelta:Math.max(...widths)-Math.min(...widths)};});const dry=q.soilTone('tilled',.20),wet=q.soilTone('tilled',.95),m=q.wheatFurrows.material;return {rows,stats:q.bedSurfaceStats,dry:dry.asArray(),wet:wet.asArray(),gloss:m.specularColor.asArray(),vertices:q.wheatFurrows.getTotalVertices(),oldLayer:!!q.groups['wheat prepared soil']?.length};});
+ console.log('Continuous soil coverage and wet color',JSON.stringify(soilCoverage));assert(soilCoverage.rows.every(r=>r.count===9&&Math.abs(r.first)<1e-8&&Math.abs(r.last)<1e-8&&r.gap<1e-8&&r.widthDelta<1e-8));assert(soilCoverage.stats.maxWidth-soilCoverage.stats.minWidth<1e-6&&soilCoverage.stats.maxBoundaryGap<1e-8);assert(soilCoverage.wet.every((v,i)=>v<soilCoverage.dry[i])&&soilCoverage.gloss.every(v=>v===0));assert(soilCoverage.vertices>0&&!soilCoverage.oldLayer);fs.writeFileSync('qa/solo-continuo.json',JSON.stringify(soilCoverage,null,2));
+
  fs.writeFileSync('qa/paisagem.json',JSON.stringify(landscape,null,2));console.log('PASS continuous landscape, bed ribbons and fine gravel texture',JSON.stringify(landscape));
  await capture('campo-trigo','field-view');
  await capture('visao-geral-retorno','wide');
