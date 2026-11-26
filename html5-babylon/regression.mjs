@@ -307,14 +307,23 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('PASS simultaneous native touch on sprint and joystick');
  // Physical input path in an emulated mobile browser, not a programmatic button.click().
  // Set up a known start on the porch; actual door input and traversal use touch events.
- await mobile.evaluate(()=>{const q=cvQA,H=q.home,p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);});
+ // Isolate actual native touch from SwiftShader render throughput; step the same
+ // production door state machine after confirming the real gesture started it.
+ await mobile.evaluate(()=>{const q=cvQA,H=q.home;q.engine.stopRenderLoop();const p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);window.doorTouchTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','lostpointercapture','click'])document.getElementById('door-action').addEventListener(type,e=>window.doorTouchTrace.push({type,trusted:e.isTrusted,pointerType:e.pointerType,detail:e.detail}),true);});
  await mobile.locator('#door-action').waitFor({state:'visible'});
  await mobile.evaluate(()=>{cvQA.updateWheat(Date.now(),true);cvQA.updateGarden(Date.now());});
  const doorRect=await mobile.locator('#door-action').boundingBox();
  const tap={x:doorRect.x+doorRect.width/2,y:doorRect.y+doorRect.height/2};
  assert.equal(await mobile.evaluate(({x,y})=>document.elementFromPoint(x,y)?.id,tap),'door-action','door touch must hit its own control');
  await mobile.touchscreen.tap(tap.x,tap.y);
- await mobile.waitForFunction(()=>cvQA.entry.open&&cvQA.entry.door>.95&&!cvQA.entry.action,null,{timeout:30000});
+ const doorGesture=await mobile.evaluate(()=>({trace:window.doorTouchTrace,started:!!cvQA.entry.action,phase:cvQA.entry.action?.phase,local:cvQA.homeLocal(cvQA.avatar.position.x,cvQA.avatar.position.z)}));
+ console.log('Native door gesture diagnostic',JSON.stringify(doorGesture));
+ assert(doorGesture.trace.some(e=>e.type==='pointerdown'&&e.trusted&&e.pointerType==='touch')&&doorGesture.trace.some(e=>e.type==='pointerup'&&e.trusted&&e.pointerType==='touch'),'door must receive actual native touch');
+ assert(doorGesture.started,'native door gesture must start production animation');
+ const doorCompletion=await mobile.evaluate(()=>{const q=cvQA;for(let i=0;i<160&&q.entry.action;i++)q.updateEntry(.05);return {open:q.entry.open,door:q.entry.door,action:q.entry.action?.phase,last:q.entry.lastAction};});
+ console.log('Native door animation diagnostic',JSON.stringify(doorCompletion));
+ assert(doorCompletion.open&&doorCompletion.door>.95&&!doorCompletion.action&&doorCompletion.last?.success,'native gesture must finish opening the actual articulated door');
+ await mobile.evaluate(()=>cvQA.engine.runRenderLoop(()=>cvQA.scene.render()));
  const entryTouch=await mobile.evaluate(()=>{const q=cvQA,H=q.home,forward=H.C(0,0,1).subtract(H.C(0,0,0)),a=q.scene.activeCamera.alpha+Math.PI/2,r=document.getElementById('joy').getBoundingClientRect();return {cx:r.x+r.width/2,cy:r.y+r.height/2,dx:30*(forward.x*Math.cos(a)+forward.z*Math.sin(a)),dy:-30*(-forward.x*Math.sin(a)+forward.z*Math.cos(a))};});
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:entryTouch.cx,y:entryTouch.cy}]});
  try{
