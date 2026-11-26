@@ -182,6 +182,31 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  for(let i=0;i<120;i++)q.updateEntry(.05);
  return {initial,leafBlocked,routeErrors,mode,restored,partialBeta,beta:q.scene.activeCamera.beta*180/Math.PI,blend:q.entry.blend};});
  console.log('Exit route diagnostics',JSON.stringify(exit));assert(exit.leafBlocked,'open leaf must still block its physical footprint');assert(exit.routeErrors.every(e=>e<.06),'walk around open leaf, not through it');assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
+ // Camera coverage behind and beside major buildings, then restore the original view.
+ const orbitQA=await page.evaluate(()=>{
+  const q=cvQA,H=q.home,cam=q.scene.activeCamera,base=cam.alpha,initialBeta=cam.beta,old=q.avatar.position.clone();
+  const angle=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+  const go=(x,z)=>{const p=H.C(x,0,z);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<140;i++)q.updateEntry(.05);const zone=q.exteriorCameraZone(p.x,p.z);return {side:q.entry.cameraSide,weight:q.entry.cameraWeight,alpha:cam.alpha,error:zone?angle(cam.alpha,zone.alpha):null,roofVisible:q.groups['house-roof'].every(m=>m.isEnabled()),interior:q.entry.inside};};
+  const rear=go(0,H.d/2+1.05),right=go(H.w/2+1.05,0),left=go(-H.w/2-1.05,0);
+  q.avatar.position.copyFrom(old);q.avatar.position.y=q.surfaceHeight(old.x,old.z);for(let i=0;i<160;i++)q.updateEntry(.05);
+  return {rear,right,left,restored:angle(cam.alpha,base),betaError:Math.abs(cam.beta-initialBeta),blend:q.entry.blend,registry:q.cameraBuildings.length};
+ });
+ console.log('Major-building exterior camera',JSON.stringify(orbitQA));for(const side of ['rear','right','left']){assert.equal(orbitQA[side].side,side);assert(orbitQA[side].weight>.75&&orbitQA[side].error<.08&&orbitQA[side].roofVisible&&!orbitQA[side].interior);}assert(orbitQA.restored<.02&&orbitQA.betaError<.02&&orbitQA.blend===0);
+ const terrainQA=await page.evaluate(()=>{
+  const q=cvQA,old=q.avatar.position.clone();let candidate=null;
+  // Find an actual moderate hillside traversable for one metre, with measurable elevation.
+  for(let x=-43;x<-20&&!candidate;x+=.6)for(let z=5;z<19&&!candidate;z+=.5){
+   const samples=Array.from({length:21},(_,i)=>({x,z:z+i*.05}));
+   if(samples.some(p=>q.blocked(p.x,p.z)||Math.abs(q.surfaceHeight(p.x,p.z)-q.renderedTerrainY(p.x,p.z))>.045))continue;
+   const rise=q.surfaceHeight(x,z+1)-q.surfaceHeight(x,z);if(rise>.045&&rise<.65)candidate={x,z,rise};
+  }
+  if(!candidate)return {candidate:null};const {x,z}=candidate;q.avatar.position.set(x,q.surfaceHeight(x,z),z);
+  let maxError=0;for(let i=0;i<20;i++){q.moveAvatar(0,.05,.025);maxError=Math.max(maxError,Math.abs(q.avatar.position.y-q.renderedTerrainY(q.avatar.position.x,q.avatar.position.z)));}
+  const climbed=q.avatar.position.y-q.surfaceHeight(x,z),distance=q.avatar.position.z-z;q.avatar.position.copyFrom(old);
+  return {candidate,climbed,distance,maxError,wallRejected:!q.terrainMotionAllowed(x,z,x+.05,z,0,.8)};
+ });
+ console.log('Terrain contact and slope',JSON.stringify(terrainQA));assert(terrainQA.candidate&&terrainQA.distance>.95&&terrainQA.climbed>.04&&terrainQA.maxError<1e-5&&terrainQA.wallRejected);
+ fs.writeFileSync('qa/camera-relevo.json',JSON.stringify({orbitQA,terrainQA},null,2));
  // Shared real collision volumes, including lateral rails and the narrow stair access.
  const porch=await page.evaluate(()=>{
  const q=cvQA,H=q.home,f=-H.d/2,half=q.porchHalf;

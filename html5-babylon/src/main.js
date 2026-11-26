@@ -842,7 +842,7 @@ function surfaceHeight(x,z){
  if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85-porchExtension&&p.z<=f)return home.y+.53;
  if(Math.abs(p.x)<=1.1&&p.z>=f-3.725-porchExtension&&p.z<f-2.85-porchExtension){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725+porchExtension)/.35)));return home.y+[.18,.35,.53][i];}
  if(onBridge(x,z))return 2.945;
- let groundY=height(x,z);if(inWheat(x,z)){const bed=wheatBeds.find(b=>x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2);if(bed){groundY=Math.max(groundY,renderedTerrainY(x,z))+bedHeightAt(x,z,bed);const plot=wheatPlots.find(p=>p.bedId===bed.id&&x>=p.x1-.03&&x<=p.x2+.03);if(plot){const row=Math.round((z-bed.z1-.21)/.41),center=bed.z1+.21+Math.max(0,Math.min(2,row))*.41,profile=Math.max(0,Math.cos(Math.PI*Math.min(1,Math.abs(z-center)/.39)));groundY+=moundHeight(plot.id)*Math.pow(profile,1.35);}}}
+ let groundY=renderedTerrainY(x,z);if(inWheat(x,z)){const bed=wheatBeds.find(b=>x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2);if(bed){groundY=Math.max(groundY,renderedTerrainY(x,z))+bedHeightAt(x,z,bed);const plot=wheatPlots.find(p=>p.bedId===bed.id&&x>=p.x1-.03&&x<=p.x2+.03);if(plot){const row=Math.round((z-bed.z1-.21)/.41),center=bed.z1+.21+Math.max(0,Math.min(2,row))*.41,profile=Math.max(0,Math.cos(Math.PI*Math.min(1,Math.abs(z-center)/.39)));groundY+=moundHeight(plot.id)*Math.pow(profile,1.35);}}}
  let closest=Infinity,roadY=groundY;
  for(const [rows,half,relief] of [[pathRows,1.24,.08],[approachRows,1.65,0]]){
  if(x<Math.min(rows[0][1].x,rows.at(-1)[1].x)-4||x>Math.max(rows[0][1].x,rows.at(-1)[1].x)+4)continue;
@@ -1246,6 +1246,28 @@ function entryInfluence(p,inside,porch){
  if(p.z>f+.25)return 0;
  return smooth01((p.z-f+6.2+porchExtension)/3.25)*smooth01((3.0-Math.abs(p.x))/1.8);
 }
+// Register major buildings once, using their actual footprint and orientation.
+const cameraBuildings=[{id:'house',x:home.x,z:home.z,w:home.w,d:home.d,angle:home.angle}];
+function registerCameraBuilding(b){
+ if(!b||typeof b.id!=='string'||![b.x,b.z,b.w,b.d,b.angle].every(Number.isFinite)||b.w<5||b.d<4||cameraBuildings.some(q=>q.id===b.id))return false;
+ cameraBuildings.push({...b});return true;
+}
+function exteriorCameraZone(x,z){
+ let best=null;
+ for(const b of cameraBuildings){
+  const dx=x-b.x,dz=z-b.z,c=Math.cos(b.angle),s=Math.sin(b.angle),lx=dx*c-dz*s,lz=dx*s+dz*c;
+  const ox=Math.max(0,Math.abs(lx)-b.w/2),oz=Math.max(0,Math.abs(lz)-b.d/2);
+  if(!ox&&!oz)continue;
+  // The residence's existing front door/porch owns its own camera.
+  if(b.id==='house'&&lz< -b.d/2)continue;
+  const dist=Math.hypot(ox,oz),weight=smooth01((4.0-dist)/3.15);
+  if(weight<=.001||best&&best.weight>=weight)continue;
+  const nx=Math.sign(lx)*ox,nz=Math.sign(lz)*oz,len=Math.hypot(nx,nz);
+  const wx=(nx*c+nz*s)/len,wz=(-nx*s+nz*c)/len;
+  best={id:b.id,side:oz>=ox?(lz>0?'rear':'front'):(lx>0?'right':'left'),weight,alpha:Math.atan2(wz,wx),outX:wx,outZ:wz};
+ }
+ return best;
+}
 function updateEntry(dt){
  updateDoorAction(dt);updateSeating(dt);
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
@@ -1254,7 +1276,9 @@ function updateEntry(dt){
  const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95-porchExtension&&p.z<f-2.8-porchExtension;
  const near=inside||porch||stairs;
  const next=inside?'interior':near?'entrada':'exterior';
- const weight=entryInfluence(p,inside,porch);entry.cameraWeight=weight;
+ const frontWeight=entryInfluence(p,inside,porch);
+ const exterior=frontWeight>.001?null:exteriorCameraZone(avatar.position.x,avatar.position.z);
+ const weight=exterior?exterior.weight:frontWeight;entry.cameraWeight=weight;entry.cameraSide=exterior?.side||(frontWeight>.001?'front':null);entry.cameraBuilding=exterior?.id||(frontWeight>.001?'house':null);
  if(weight>.001&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
  if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
  entry.inside=inside;updateChimneySmoke(dt,!inside);
@@ -1272,13 +1296,13 @@ function updateEntry(dt){
   // The actor, not the building centre, is the tracking anchor. Look slightly
   // ahead along the entrance axis, keeping the actor below the visual centre.
   const forward=home.C(0,0,1).subtract(home.C(0,0,0));
-  const aim=avatar.position.add(V(0,inside?1.25:1.45,0)).add(forward.scale(inside?.65:1.65));
+  const aim=avatar.position.add(V(0,inside?1.25:1.45,0)).add(exterior?V(-exterior.outX*.65,0,-exterior.outZ*.65):forward.scale(inside?.65:1.65));
   const baseAim=saved.follow?avatar.position.add(V(0,1,0)):saved.target;
-  const desiredAlpha=saved.alpha+angleDelta(saved.alpha,-Math.PI/2-home.angle)*b;
+  const desiredAlpha=exterior?camera.alpha+angleDelta(camera.alpha,exterior.alpha)*Math.max(.20,b):saved.alpha+angleDelta(saved.alpha,-Math.PI/2-home.angle)*b;
   camera.alpha+=angleDelta(camera.alpha,desiredAlpha)*factor;
-  const betaTarget=saved.beta+((inside?CAMERA_BETA:65*Math.PI/180)-saved.beta)*b;
+  const betaTarget=saved.beta+((inside?CAMERA_BETA:(exterior?57:65)*Math.PI/180)-saved.beta)*b;
   const beta=camera.beta+(betaTarget-camera.beta)*factor;
-  const desiredSpan=saved.span+((inside?24:34)-saved.span)*b;
+  const desiredSpan=saved.span+((inside?24:exterior?37:34)-saved.span)*b;
   span+=(desiredSpan-span)*factor;
   retarget(Vector3.Lerp(camera.target,Vector3.Lerp(baseAim,aim,b),factor),beta);fit();
   if(weight===0&&b<.004){camera.alpha=saved.alpha;span=saved.span;retarget(baseAim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
@@ -1293,13 +1317,23 @@ $('close').onclick=()=>setView(66,V(0,3.5,0),false);
 $('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
 $('field-view').onclick=()=>setView(45,V(wheatGate.x,3.5,wheatGate.z+5),false);
 $('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
+// Use the rendered triangulated terrain for contact, and distinguish a smooth
+// walkable grade from an abrupt drop or wall. Built stairs keep their step limit.
+const terrainContactStats={steps:0,rejectedSlope:0,maxFootError:0};
+function terrainMotionAllowed(x0,z0,x1,z1,y0,y1){
+ const run=Math.hypot(x1-x0,z1-z0),rise=Math.abs(y1-y0);
+ if(rise>.34)return false;
+ const natural=Math.abs(y0-renderedTerrainY(x0,z0))<.045&&Math.abs(y1-renderedTerrainY(x1,z1))<.045;
+ if(natural&&rise>run*.92+.015){terrainContactStats.rejectedSlope++;return false;}
+ return true;
+}
 function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  let floor=surfaceHeight(oldX,oldZ);
  const attempt=(x,z)=>{
   if(blocked(x,z,interacting))return false;
-  const next=surfaceHeight(x,z);if(Math.abs(next-floor)>.34)return false;
+  const next=surfaceHeight(x,z);if(!terrainMotionAllowed(avatar.position.x,avatar.position.z,x,z,floor,next))return false;
   avatar.position.x=x;avatar.position.z=z;floor=next;return true;
  };
  if(!attempt(oldX+dx,oldZ+dz)){
@@ -1307,7 +1341,7 @@ function moveAvatar(dx,dz,dt,interacting=false){
   if(Math.abs(dz)>1e-8)attempt(avatar.position.x,oldZ+dz);
  }
  const mx=avatar.position.x-oldX,mz=avatar.position.z-oldZ,travel=Math.hypot(mx,mz);
- avatar.position.y=floor;
+ avatar.position.y=floor;terrainContactStats.steps++;terrainContactStats.maxFootError=Math.max(terrainContactStats.maxFootError,Math.abs(avatar.position.y-surfaceHeight(avatar.position.x,avatar.position.z)));
  if(travel>.0001){
   const target=Math.atan2(mx,mz);
   avatar.rotation.y=interacting?target:avatar.rotation.y+angleDelta(avatar.rotation.y,target)*(1-Math.exp(-dt*22));
@@ -1501,4 +1535,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,roofCraft,facadeCraft,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
