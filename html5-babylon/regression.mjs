@@ -83,6 +83,25 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('Continuous soil coverage and wet color',JSON.stringify(soilCoverage));assert(soilCoverage.rows.every(r=>r.count===9&&Math.abs(r.first)<1e-8&&Math.abs(r.last)<1e-8&&r.gap<1e-8&&r.widthDelta<1e-8));assert(soilCoverage.stats.maxWidth-soilCoverage.stats.minWidth<1e-6&&soilCoverage.stats.maxBoundaryGap<1e-8);assert(soilCoverage.wet.every((v,i)=>v<soilCoverage.dry[i])&&soilCoverage.gloss.every(v=>v===0));assert(soilCoverage.vertices>0&&!soilCoverage.oldLayer);fs.writeFileSync('qa/solo-continuo.json',JSON.stringify(soilCoverage,null,2));
 
  fs.writeFileSync('qa/paisagem.json',JSON.stringify(landscape,null,2));console.log('PASS continuous landscape, bed ribbons and fine gravel texture',JSON.stringify(landscape));
+ // Normal exploration must follow from the residential sector to the remote field.
+ const explore=await page.evaluate(()=>{
+  const q=cvQA,c=q.scene.activeCamera,old=q.avatar.position.clone(),start=c.target.clone();
+  const bootFollow=q.cameraFollow;
+  document.getElementById('wide').click();const width=c.orthoRight-c.orthoLeft;
+  const locations=[q.wheatPlots.at(-1),{x:old.x-12,z:old.z-9},old];
+  const visits=[];
+  for(const p of locations){
+   q.avatar.position.set(p.x,q.surfaceHeight(p.x,p.z),p.z);
+   for(let i=0;i<160;i++)q.updateEntry(.05);
+   visits.push({error:Math.hypot(c.target.x-p.x,c.target.z-p.z),width:c.orthoRight-c.orthoLeft,beta:c.beta*180/Math.PI,following:q.cameraFollow});
+  }
+  q.avatar.position.copyFrom(old);for(let i=0;i<160;i++)q.updateEntry(.05);
+  return {bootFollow,width,visits,qaHidden:document.getElementById('hud-panel').hidden,menuSeparate:document.getElementById('player-menu').contains(document.getElementById('controls-open'))};
+ });
+ console.log('Wide exploration follows across sectors',JSON.stringify(explore));
+ assert(explore.bootFollow&&explore.qaHidden&&explore.menuSeparate);
+ assert(explore.visits.every(v=>v.error<.12&&Math.abs(v.width-explore.width)<.1&&Math.abs(v.beta-48)<.25&&v.following));
+ fs.writeFileSync('qa/camera-exploracao.json',JSON.stringify(explore,null,2));
  await capture('campo-trigo','field-view');
  await capture('visao-geral-retorno','wide');
  // Verify the optimized nearest-river calculation against the previous hypot algorithm.
@@ -321,8 +340,12 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   const info=await profileRead();profiles.push(info);assert.equal(info.quality,key);assert(Math.abs(info.h-target)<=2,'profile '+key+' height');assert(Math.abs(info.w/info.h-info.cssW/info.cssH)<.015,'aspect ratio');
  }
  assert.equal(await mobile.evaluate(()=>getComputedStyle(document.getElementById('hud')).userSelect),'none');
- await mobile.evaluate(()=>document.getElementById('hud-toggle').click());assert(await mobile.locator('#hud-panel').isHidden());
+ assert(await mobile.locator('#hud-panel').isHidden());
+ await mobile.locator('#menu-open').tap();assert(await mobile.locator('#player-menu').isVisible());
+ await mobile.locator('#controls-open').tap();assert(await mobile.locator('#controls-menu').isVisible()&&await mobile.locator('#player-menu').isHidden());
+ await mobile.locator('#controls-close').tap();assert(await mobile.locator('#controls-menu').isHidden());
  await mobile.evaluate(()=>document.getElementById('hud-toggle').click());assert(await mobile.locator('#hud-panel').isVisible());
+ await mobile.evaluate(()=>document.getElementById('hud-toggle').click());assert(await mobile.locator('#hud-panel').isHidden());
  // Verify actual touch input, using Chromium's native touch events.
  const touchStart=await mobile.evaluate(()=>{const p=cvQA.avatar.position,r=document.getElementById('joy').getBoundingClientRect();const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const [x,z] of dirs)if(!cvQA.blocked(p.x+x*.25,p.z+z*.25)&&!cvQA.blocked(p.x+x*.6,p.z+z*.6))return {px:p.x,pz:p.z,cx:r.x+r.width/2,cy:r.y+r.height/2,dx:x*30,dy:-z*30};return null;});
  assert(touchStart,'mobile spawn must permit movement');
