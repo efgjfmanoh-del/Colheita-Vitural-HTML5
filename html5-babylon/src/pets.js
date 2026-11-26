@@ -98,7 +98,7 @@ export function createPets(api){
   {id:'dog',label:'Cachorro',rig:rig('dog',dogCoat,dogLight,false),out:dogOut,curtain:dogCurtain,threshold:dogHome.C(0,.51,-dogHome.d/2+.02),bed:dogHome.C(0,.51,.42),food:bowl('dog',dp2,false),water:bowl('dog',dp1,true)},
   {id:'cat',label:'Gato',rig:rig('cat',catCoat,catLight,true),out:catOut,curtain:catCurtain,threshold:catAt(0,.11,-.49),bed:catAt(0,.18,.12),food:bowl('cat',point(cp2.x,cp2.z),false),water:bowl('cat',point(cp1.x,cp1.z),true)}
  ];
- const stats={decisions:0,paths:0,failed:0,arrivals:0,distance:0,care:0,routeSlices:0,routeMaxSliceMs:0,routeOverBudget:0,routeCompleted:0},goals=petGoals();
+ const stats={decisions:0,paths:0,failed:0,arrivals:0,distance:0,care:0,completedInteractions:0,cancelledInteractions:0,toyTravel:0,handContacts:0,routeSlices:0,routeMaxSliceMs:0,routeOverBudget:0,routeCompleted:0},goals=petGoals();
  function state(p,s,t){p.state=s;p.timer=t;}
  function* routeCandidates(origin,targets){for(const target of targets){const path=yield* routeSteps(origin,target);if(path)return path;yield;}return null;}
  function plan(p,target,after,homeward=false){
@@ -201,7 +201,7 @@ export function createPets(api){
    }
   }else if((p.timer-=dt)<=0){
    if(p.state==='drink'||p.state==='eat'){const liquid=p.state==='drink',k=liquid?'water':'food',n=liquid?'thirst':'hunger',use=Math.min(d[k],.24,Math.max(0,(d[n]-CARE_POLICY.satisfiedAt)/2));d[k]-=use;d[n]=clamp01(d[n]-use*2);save();state(p,'idle',2);}
-   else if(p.state==='pet'||p.state==='play')state(p,'idle',2);
+   else if(p.state==='pet'||p.state==='play'){if(p.interaction)p.timer=.15;else state(p,'idle',2);}
    else choose(p);
   }
   if((p.state==='drink'||p.state==='eat')&&p.mealTarget){const root=p.rig.root,dx=root.position.x-p.mealTarget.x,dz=root.position.z-p.mealTarget.z;root.rotation.y+=angleDelta(root.rotation.y,Math.atan2(dx,dz))*(1-Math.exp(-dt*12));}
@@ -217,13 +217,80 @@ export function createPets(api){
  const animalNear=p=>!p.inShelter&&atHeight(avatar.position,p.rig.root.position)&&dist(avatar.position,p.rig.root.position)<1.65;
  const available=p=>animalNear(p)&&!p.path.some(s=>s.private)&&!['eat','drink','sleep','pet','play'].includes(p.state)&&p.brain.time-p.lastCare>=8;
  const mood=p=>{const d=data[p.id];return d.energy<.25?'Cansado':d.hunger>=.30||d.thirst>=.30?'Precisa de cuidados':p.state==='sleep'?'Sonolento':p.id==='cat'&&p.brain.time%34>=20?'Independente':'Bem-humorado';};
- let notice='',noticeUntil=0,activePet=null;
+ let notice='',noticeUntil=0,activePet=null,interaction=null;
+ // Real reusable toy meshes; one per species, allocated once and hidden when unused.
+ const toys={};entity('pet toys');
+ const ballMat=mat('dog tennis ball','#d4d85c'),yarnMat=mat('cat rose yarn','#d28e91'),yarnThread=mat('cat yarn thread','#a85d65');
+ for(const id of ['dog','cat']){
+  const root=new Mesh(id+' toy root',scene),radius=id==='dog'?.11:.09;
+  const core=sphere(id+' toy',0,0,0,radius,radius,radius,id==='dog'?ballMat:yarnMat,false);core.parent=root;
+  for(let i=0;i<(id==='dog'?2:6);i++){const ring=MeshBuilder.CreateTorus(id+' toy seam '+i,{diameter:radius*1.86,thickness:.012,tessellation:16},scene);ring.parent=root;ring.rotation.set(i*.51,i*.78,.35+i*.24);own(ring,id==='dog'?M.plaster:yarnThread,false);}
+  root.setEnabled(false);toys[id]={root,radius};
+ }
+ function interactionActive(){return !!interaction;}
+ function cancelInteraction(){if(!interaction)return false;const p=interaction.p;toys[p.id].root.setEnabled(false);p.interaction=null;state(p,'idle',2);interaction=null;api.playerFinish();stats.cancelledInteractions++;return true;}
+ function contactPoint(p){
+  const root=p.rig.root;root.computeWorldMatrix(true);
+  const y=p.id==='dog'?.67:.48;
+  return root.position.add(V(0,y,0));
+ }
+ function approachPoint(p){
+  const root=p.rig.root.position,a=Math.atan2(avatar.position.z-root.z,avatar.position.x-root.x),candidates=[];
+  for(const offset of [0,.55,-.55,1.1,-1.1,1.65,-1.65,Math.PI]){
+   const x=root.x+Math.cos(a+offset)*.57,z=root.z+Math.sin(a+offset)*.57,y=surfaceHeight(x,z);
+   if(Math.abs(y-root.y)>.24||api.playerBlocked(x,z))continue;
+   // Reject a route across a wall or furniture, even if its endpoint is clear.
+   let clear=true;for(let t=.1;t<=1.001;t+=.1){const u=avatar.position.x+(x-avatar.position.x)*t,v=avatar.position.z+(z-avatar.position.z)*t;if(api.playerBlocked(u,v)){clear=false;break;}}
+   if(clear)candidates.push(V(x,y,z));
+  }
+  return candidates[0]||null;
+ }
+ function beginInteraction(p,action){
+  if(interaction)return false;const dest=approachPoint(p);if(!dest){message('Chegue um pouco mais perto por um caminho livre.',p);return false;}
+  api.cancelInput();p.pending=null;p.path=[];p.lastCare=p.brain.time;p.interaction=action;
+  p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);
+  state(p,action,100);interaction={p,action,dest,phase:'approach',elapsed:0,contact:0,toyOrigin:null,toyEnd:null};
+  return true;
+ }
+ function completeInteraction(a){
+  const p=a.p,d=data[p.id],before=d.affinity;
+  d.affinity=clamp01(before+(a.action==='pet'?.025:.04));
+  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;message('♥ Afinidade aumentou',p);}
+  toys[p.id].root.setEnabled(false);p.interaction=null;state(p,'idle',2);interaction=null;api.playerFinish();
+ }
+ function updateInteraction(dt){
+  const a=interaction;if(!a)return;const p=a.p,root=p.rig.root;
+  if(p.inShelter||Math.abs(avatar.position.y-root.position.y)>.8||dist(avatar.position,root.position)>2.1){cancelInteraction();return;}
+  a.elapsed+=dt;
+  if(a.phase==='approach'){
+   const dx=a.dest.x-avatar.position.x,dz=a.dest.z-avatar.position.z,dd=Math.hypot(dx,dz);
+   if(dd>.045){const k=Math.min(1,1.6*dt/dd);api.playerMove(dx*k,dz*k,dt);if(a.elapsed>2.2)cancelInteraction();return;}
+   a.phase='perform';a.elapsed=0;return;
+  }
+  const t=a.elapsed,fade=Math.max(0,Math.min(1,t/.32,(a.action==='pet'?2.6:3.4)-t>0?((a.action==='pet'?2.6:3.4)-t)/.32:0));
+  if(a.action==='pet'){
+   const target=contactPoint(p);target.x+=Math.sin(t*9)*.08;target.z+=Math.cos(t*9)*.09;
+   const result=api.playerPose(target,fade,dt);if(fade>.98&&result.error<.035&&result.reach<.86){a.contact+=dt;stats.handContacts++;}
+   if(t>=2.6){if(a.contact>.65)completeInteraction(a);else cancelInteraction();}
+  }else{
+   const toy=toys[p.id],base=root.position,dx=avatar.position.x-base.x,dz=avatar.position.z-base.z,dd=Math.max(.001,Math.hypot(dx,dz));
+   if(!a.toyOrigin){a.toyOrigin=point(base.x+dx/dd*.30,base.z+dz/dd*.30);const end=point(base.x+dz/dd*.65,base.z-dx/dd*.65);a.toyEnd=valid(end.x,end.z)&&Math.abs(end.y-base.y)<.20?end:a.toyOrigin.clone();toy.root.position.copyFrom(a.toyOrigin);toy.root.position.y+=toy.radius;toy.root.setEnabled(true);}
+   const u=(1-Math.cos(Math.min(1,t/3.1)*Math.PI*4))/2;
+   const x=a.toyOrigin.x+(a.toyEnd.x-a.toyOrigin.x)*u,z=a.toyOrigin.z+(a.toyEnd.z-a.toyOrigin.z)*u;
+   const y=surfaceHeight(x,z)+toy.radius+Math.abs(Math.sin(t*8))*(p.id==='dog'?.07:.035);
+   stats.toyTravel+=Math.hypot(x-toy.root.position.x,z-toy.root.position.z);toy.root.position.set(x,y,z);toy.root.rotation.x+=dt*8;toy.root.rotation.z+=dt*5;
+   root.rotation.y+=angleDelta(root.rotation.y,Math.atan2(root.position.x-x,root.position.z-z))*(1-Math.exp(-dt*12));
+   p.rig.head.rotation.x=.35+.18*Math.sin(t*8);
+   const target=toy.root.position.clone();target.y+=.25;api.playerPose(target,.62*fade,dt);
+   if(t>=3.4)completeInteraction(a);
+  }
+ }
  function message(s,p){notice=s;noticeUntil=p.brain.time+2.8;}
  function care(id,action,value){const p=pets.find(p=>p.id===id);if(!p||error)return false;const d=data[id],before={...d};
   if(action==='food'&&homeNear(p))d.food=1;
   else if(action==='water'&&homeNear(p))d.water=1;
   else if(action==='name'&&homeNear(p)&&!d.name){const name=String(value??'').trim().slice(0,24);if(!name)return false;d.name=name;}
-  else if(['pet','play'].includes(action)&&available(p)){
+  else if(['pet','play'].includes(action)&&available(p)&&!interaction){
    // Cats can decline based on needs and independent temperament; affection improves willingness.
    const willing=d.energy>=.25&&d.hunger<.30&&d.thirst<.30&&(p.id==='dog'||rnd()<Math.min(.94,.42+d.affinity*.40+(mood(p)==='Bem-humorado'?.22:0)));
    if(!willing){
@@ -233,10 +300,10 @@ export function createPets(api){
     }
     return false;
    }
-   d.affinity=clamp01(d.affinity+(action==='pet'?.025:.04));
+   return beginInteraction(p,action);
   }else return false;
   if(!save()){Object.assign(d,before);return false;}
-  if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.pending=null;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);message('♥ Afinidade aumentou',p);}
+  // Social interactions are saved only when the physical action completes.
   stats.care++;return true;
  }
  const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando',house:'Visitando a casa'};
@@ -276,7 +343,7 @@ export function createPets(api){
   if(overlaps(ui('joy'))||overlaps(ui('run-action'))){actions.hidden=true;return;}
   actions.style.left=left+'px';actions.style.top=top+'px';
  }
- function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);pumpRoutes();const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;
+ function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);updateInteraction(dt);pumpRoutes();const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;
   if(uiClock>=.10){uiClock=0;
    const n=pets.filter(homeNear).sort((a,b)=>houseDistance(a)-houseDistance(b));
    if(selected&&(!allowUI||!homeNear(selected)))close();
@@ -284,12 +351,12 @@ export function createPets(api){
    if(n.length)button.textContent=n[0].id==='dog'?'Casa dos cães':'Casa dos gatos';
    if(selected)refresh();
    activePet=pets.filter(animalNear).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position))[0]||null;
-   actions.hidden=!allowUI||!panel.hidden||!activePet;
+   actions.hidden=!allowUI||!panel.hidden||!activePet||!!interaction;
    if(activePet){ui('pet-context-name').textContent=data[activePet.id].name||activePet.label;ui('pet-play-icon').textContent=activePet.id==='cat'?'🧶':'🎾';ui('pet-pet').disabled=ui('pet-play').disabled=!available(activePet);}
    ui('pet-notice').hidden=!notice||!pets.some(p=>p.brain.time<noticeUntil);ui('pet-notice').textContent=notice;
   }
   positionActions();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
+ return {pets,stats,toys,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
 }
