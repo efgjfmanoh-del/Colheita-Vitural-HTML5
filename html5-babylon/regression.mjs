@@ -316,7 +316,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await wheatVisit(wheatIds[1]);await page.locator('#wheat-action').click();await page.locator('#crop-select').selectOption('corn');await page.locator('#farm-fertilize').click();await page.locator('#farm-irrigate').click();await page.locator('#wheat-action').click();
  const corn=await page.evaluate(id=>({crop:cvQA.wheatState.plots[id].crop,soil:cvQA.wheatState.plots[id].soil,stock:cvQA.wheatState.stocks.corn.seeds,wheat:cvQA.wheatState.seeds}),wheatIds[1]);
  assert(corn.crop==='corn'&&corn.soil.irrigated&&corn.soil.fertility>.9&&corn.stock===11&&corn.wheat===24);
- await page.locator('#farm-open').click();assert(await page.locator('#farm-center').isVisible());assert((await page.locator('#farm-catalog').innerText()).includes('Morango'));assert((await page.locator('#farm-forecast').innerText()).includes('°C'));await page.locator('#farm-close').click();
+ assert(await page.locator('#player-menu').isHidden());await page.locator('#menu-open').click();assert(await page.locator('#player-menu').isVisible());await page.locator('#farm-open').click();assert(await page.locator('#farm-center').isVisible());assert(await page.locator('#player-menu').isHidden());assert((await page.locator('#farm-catalog').innerText()).includes('Morango'));assert((await page.locator('#farm-forecast').innerText()).includes('°C'));await page.locator('#farm-close').click();
  fs.writeFileSync('qa/agricultura.json',JSON.stringify({corn},null,2));console.log('PASS agricultural controls, distinct crop stocks and forecast center');
  const saved=await page.evaluate(()=>cvQA.planters.map(p=>p.crop?.species));assert.deepEqual(saved,['rose','lavender']);
  await visit('porch-ceramic');assert(await page.locator('#wheat-panel').isHidden(),'wheat panel must release the garden controls');await page.locator('#garden-action').click();await page.locator('#garden-remove').click();await page.locator('[data-flower="daisy"]').click();
@@ -375,7 +375,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(await mobile.evaluate(()=>!cvQA.sprint.held&&cvQA.joy.x===0&&cvQA.joy.z===0),'both pointers must release on cancel');
  console.log('PASS simultaneous native touch on sprint and joystick');
  // Native floating touch from the canvas, not the existing fixed pad.
- await mobile.evaluate(()=>{document.getElementById('controls-open').click();document.getElementById('stick-floating').click();document.getElementById('controls-close').click();});
+ await mobile.locator('#menu-open').tap();await mobile.locator('#controls-open').tap();await mobile.locator('#stick-floating').tap();await mobile.locator('#controls-close').tap();
  const floating=await mobile.evaluate(()=>({x:innerWidth*.28,y:innerHeight*.69,mode:cvQA.controls.mode,saved:JSON.parse(localStorage.getItem('cv.controls.v1')).mode}));
  assert.equal(floating.mode,'floating');assert.equal(floating.saved,'floating');
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:floating.x,y:floating.y}]});
