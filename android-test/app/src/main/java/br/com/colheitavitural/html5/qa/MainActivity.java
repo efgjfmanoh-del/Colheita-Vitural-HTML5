@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private static final String HOME = ORIGIN + "/assets/index.html";
     private WebView web;
+    private UpdateCenter updates;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -57,7 +58,10 @@ public final class MainActivity extends Activity {
                 return true;
             }
         });
-        setContentView(web);
+        android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
+        frame.addView(web, new android.widget.FrameLayout.LayoutParams(-1,-1));
+        updates = new UpdateCenter(this, frame);
+        setContentView(frame);
         hideBars();
         web.loadUrl(HOME);
     }
@@ -68,6 +72,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showFailure(String message) {
+        if (updates != null) { updates.close(); updates = null; }
         TextView text = new TextView(this);
         text.setText(message);
         text.setTextColor(0xffffffff);
@@ -98,13 +103,16 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause() {
         if (web != null) { web.onPause(); web.pauseTimers(); }
+        if (updates != null) updates.pause();
         super.onPause();
     }
     @Override protected void onResume() {
         super.onResume();
         if (web != null) { web.resumeTimers(); web.onResume(); }
+        if (updates != null) updates.resume();
     }
     @Override protected void onDestroy() {
+        if (updates != null) { updates.close(); updates = null; }
         if (web != null) {
             ((android.view.ViewGroup)web.getParent()).removeView(web);
             web.destroy(); web = null;
