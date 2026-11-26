@@ -1390,7 +1390,33 @@ function exteriorCameraZone(x,z){
  }
  return best;
 }
-const cameraStability={zone:null,hold:0,switches:0,maxTurnRate:0};
+const cameraStability={zone:null,hold:0,switches:0,maxTurnRate:0,gesture:false,quiet:1,occluded:false,houseOpacity:1};
+function cameraGesture(dt,active){
+ if(active){cameraStability.gesture=true;cameraStability.quiet=0;}
+ else{cameraStability.quiet+=dt;if(cameraStability.quiet>=.20)cameraStability.gesture=false;}
+ return cameraStability.gesture;
+}
+// Exterior occlusion is tested from the actual avatar toward the camera.
+// Fade the residence only if its volume obscures the player; never alter collisions.
+function avatarOccludedByHouse(alpha,beta){
+ const p=avatar.position,dx=Math.cos(alpha),dz=Math.sin(alpha),rise=1/Math.tan(Math.max(.1,beta));
+ for(let d=.25;d<=15;d+=.25){
+  const y=p.y+1.05+d*rise;if(y>home.y+8.6)break;
+  const l=homeLocal(p.x+dx*d,p.z+dz*d);
+  if(Math.abs(l.x)<home.w/2+.20&&Math.abs(l.z)<home.d/2+.20&&y>home.y+.45)return true;
+ }
+ return false;
+}
+function updateAvatarVisibility(dt,inside){
+ const occluded=!inside&&avatarOccludedByHouse(camera.alpha,camera.beta),target=occluded?.15:1;
+ cameraStability.occluded=occluded;
+ const opacity=cameraStability.houseOpacity+(target-cameraStability.houseOpacity)*(1-Math.exp(-dt*14));
+ const next=Math.abs(opacity-target)<.015?target:opacity;
+ if(next!==cameraStability.houseOpacity){
+  cameraStability.houseOpacity=next;
+  for(const id of ['house','house-roof','house-front','house-porch-roof','house-door'])for(const mesh of groups[id]||[])mesh.visibility=next;
+ }
+}
 function stableCameraZone(front,external,near,dt){
  const prior=cameraStability.zone;
  const f=front>.001?{kind:'front',weight:front}:null;
@@ -1405,6 +1431,8 @@ function stableCameraZone(front,external,near,dt){
 }
 function updateEntry(dt){
  updateDoorAction(dt);updateSeating(dt);
+ const steering=pointer!==null||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(k=>keys.has(k));
+ const gesture=cameraGesture(dt,steering);
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
  const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+.22&&p.z<home.d/2-.12;
  const porch=Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9-porchExtension&&p.z<=f+.25;
@@ -1433,20 +1461,24 @@ function updateEntry(dt){
   const forward=home.C(0,0,1).subtract(home.C(0,0,0));
   const aim=avatar.position.add(V(0,inside?1.25:1.45,0)).add(exterior?V(-exterior.outX*.65,0,-exterior.outZ*.65):forward.scale(inside?.65:1.65));
   const baseAim=saved.follow?explorationAim():saved.target;
-  const desiredAlpha=exterior?saved.alpha+angleDelta(saved.alpha,exterior.alpha)*smooth01(Math.min(1,weight/.65)):weight>0?saved.alpha+angleDelta(saved.alpha,-Math.PI/2-home.angle)*b:saved.alpha;
-  const turn=angleDelta(camera.alpha,desiredAlpha)*factor,maxTurn=1.8*dt;
+  // While a real steering gesture is active, keep screen axes fixed. Resume
+  // the automatic orbit after release; do not fight an ongoing directional command.
+  const desiredAlpha=gesture?camera.alpha:exterior?(weight>=.65?exterior.alpha:saved.alpha+angleDelta(saved.alpha,exterior.alpha)*smooth01(weight/.65)):weight>0?saved.alpha+angleDelta(saved.alpha,-Math.PI/2-home.angle)*b:saved.alpha;
+  const turn=angleDelta(camera.alpha,desiredAlpha)*factor,maxTurn=1.15*dt;
   const applied=Math.max(-maxTurn,Math.min(maxTurn,turn));camera.alpha+=applied;
   if(dt>0)cameraStability.maxTurnRate=Math.max(cameraStability.maxTurnRate,Math.abs(applied)/dt);
-  const betaTarget=saved.beta+((inside?CAMERA_BETA:(exterior?57:65)*Math.PI/180)-saved.beta)*b;
+  const betaTarget=gesture&&!inside?camera.beta:saved.beta+((inside?CAMERA_BETA:(exterior?57:65)*Math.PI/180)-saved.beta)*b;
   const beta=camera.beta+(betaTarget-camera.beta)*factor;
-  const desiredSpan=saved.span+((inside?24:exterior?37:34)-saved.span)*b;
+  const desiredSpan=saved.span+((inside?24:exterior?(saved.follow?Math.min(saved.span,EXPLORATION_SPAN):37):34)-saved.span)*b;
   span+=(desiredSpan-span)*factor;
-  retarget(Vector3.Lerp(camera.target,Vector3.Lerp(baseAim,aim,b),factor),beta);fit();
-  if(weight===0&&b<.004&&Math.abs(angleDelta(camera.alpha,saved.alpha))<.008){camera.alpha=saved.alpha;span=saved.span;retarget(baseAim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
- }else if(follow)retarget(Vector3.Lerp(camera.target,explorationAim(),1-Math.exp(-dt*7)));
+  const trackingAim=saved.follow?avatar.position.add(V(0,inside?1.25:1.10,0)):Vector3.Lerp(baseAim,aim,b);
+  retarget(Vector3.Lerp(camera.target,trackingAim,1-Math.exp(-dt*10)),beta);fit();
+  if(!gesture&&weight===0&&b<.004&&Math.abs(angleDelta(camera.alpha,saved.alpha))<.008){camera.alpha=saved.alpha;span=saved.span;retarget(baseAim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
+ }else if(follow)retarget(Vector3.Lerp(camera.target,explorationAim(),1-Math.exp(-dt*10)));
+ updateAvatarVisibility(dt,inside);
 }
 // The ordinary gameplay camera follows the actor across the entire map.
-const EXPLORATION_SPAN=94;
+const EXPLORATION_SPAN=54;
 function explorationAim(){return avatar.position.add(V(0,1,0));}
 function setView(newSpan,target,tracking){
  if(entry.previous){Object.assign(entry.previous,{span:newSpan,target,follow:tracking});return;}
@@ -1680,4 +1712,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,cameraStability,stableCameraZone,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

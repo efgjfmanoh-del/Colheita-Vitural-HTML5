@@ -219,7 +219,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
   return {rear,right,left,restored:angle(cam.alpha,base),betaError:Math.abs(cam.beta-initialBeta),blend:q.entry.blend,registry:q.cameraBuildings.length};
  });
  const camStability=await page.evaluate(()=>{const q=cvQA,c=q.cameraStability;c.zone=null;c.hold=0;const start=c.switches;const zones=[];for(let i=0;i<120;i++){const v=i%2?.09:.11;zones.push(q.stableCameraZone(v,{weight:.1,side:'left',alpha:0,id:'house'},false,.016)?.kind);}const switches=c.switches-start;for(let i=0;i<40;i++)q.stableCameraZone(0,null,false,.016);return {switches,unique:new Set(zones).size,cleared:c.zone===null,maxTurnRate:c.maxTurnRate};});
- console.log('Camera hysteresis and angular speed',JSON.stringify(camStability));assert(camStability.switches<=2&&camStability.unique===1&&camStability.cleared&&camStability.maxTurnRate<=1.800001);
+ console.log('Camera hysteresis and angular speed',JSON.stringify(camStability));assert(camStability.switches<=2&&camStability.unique===1&&camStability.cleared&&camStability.maxTurnRate<=1.150001);
  console.log('Major-building exterior camera',JSON.stringify(orbitQA));for(const side of ['rear','right','left']){assert.equal(orbitQA[side].side,side);assert(orbitQA[side].weight>.75&&orbitQA[side].error<.08&&orbitQA[side].roofVisible&&!orbitQA[side].interior);}assert(orbitQA.restored<.02&&orbitQA.betaError<.02&&orbitQA.blend===0);
  const terrainQA=await page.evaluate(()=>{
   const q=cvQA,old=q.avatar.position.clone();let candidate=null;
@@ -454,6 +454,27 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  assert(await mobile.evaluate(()=>cvQA.stickCenter===null&&cvQA.joy.x===0&&cvQA.joy.z===0));
  await mobile.evaluate(()=>cvQA.setStickMode('fixed'));console.log('PASS native floating joystick and saved mode');
+ // Hold a real touch while crossing different camera zones. The world direction,
+ // screen axes and player tracking must remain stable until release.
+ await mobile.evaluate(()=>{const q=cvQA,H=q.home;q.engine.stopRenderLoop();const p=H.C(0,0,H.d/2+5);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<180;i++)q.updateEntry(.05);});
+ const heldStick=await mobile.locator('#joy').boundingBox(),hx=heldStick.x+heldStick.width/2,hy=heldStick.y+heldStick.height/2;
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:hx,y:hy}]});
+ let locked;
+ try{
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:hx+heldStick.width*.25,y:hy}]});
+  locked=await mobile.evaluate(()=>{const q=cvQA,H=q.home,c=q.scene.activeCamera,alpha=c.alpha,dir=q.worldInput(q.joy.x,q.joy.z),results=[];
+   for(const [x,z] of [[0,H.d/2+1],[H.w/2+1,0],[0,-H.d/2-1]]){
+    const p=H.C(x,0,z);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);
+    for(let i=0;i<100;i++)q.updateEntry(.05);
+    const d=q.worldInput(q.joy.x,q.joy.z);results.push({alphaError:Math.abs(Math.atan2(Math.sin(c.alpha-alpha),Math.cos(c.alpha-alpha))),inputError:Math.hypot(d.x-dir.x,d.z-dir.z),tracking:Math.hypot(c.target.x-p.x,c.target.z-p.z),gesture:q.cameraStability.gesture,occluded:q.cameraStability.occluded,opacity:q.cameraStability.houseOpacity});
+   }
+   return {dir,results};});
+ }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
+ console.log('Held touch camera and visibility',JSON.stringify(locked));assert(Math.hypot(locked.dir.x,locked.dir.z)>.2&&locked.results.every(v=>v.gesture&&v.alphaError<.001&&v.inputError<.001&&v.tracking<.12));assert(locked.results.some(v=>v.occluded&&v.opacity<.2));
+ const resumed=await mobile.evaluate(()=>{const q=cvQA,H=q.home,c=q.scene.activeCamera,p=H.C(0,0,H.d/2+1);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<180;i++)q.updateEntry(.05);const z=q.exteriorCameraZone(p.x,p.z);return {gesture:q.cameraStability.gesture,error:Math.abs(Math.atan2(Math.sin(c.alpha-z.alpha),Math.cos(c.alpha-z.alpha))),opacity:q.cameraStability.houseOpacity};});
+ assert(!resumed.gesture&&resumed.error<.08&&resumed.opacity>.95);console.log('PASS automatic orbit resumes after releasing native touch',JSON.stringify(resumed));
+ // Render loop remains paused for the existing native door test below.
+
 
  // Physical input path in an emulated mobile browser, not a programmatic button.click().
  // Set up a known start on the porch; actual door input and traversal use touch events.
