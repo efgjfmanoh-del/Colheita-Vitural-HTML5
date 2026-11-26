@@ -210,26 +210,86 @@ export function createPets(api){
   for(let i=0;i<p.curtain.strips.length;i++){const q=p.curtain.strips[i];q.rotation.x+=(angle*(1-i*.07)-q.rotation.x)*(1-Math.exp(-dt*12));}
   for(const [b,l] of [[p.food,d.food],[p.water,d.water]]){b.contents.setEnabled(l>.02);b.contents.position.y=b.point.y+.08+.033*l;for(let i=0;i<b.pieces.length;i++)b.pieces[i].setEnabled(l>(i+.1)/b.pieces.length);}
  }
- const near=(p)=>Math.min(dist(avatar.position,p.rig.root.position),dist(avatar.position,p.out),dist(avatar.position,p.food.point),dist(avatar.position,p.water.point))<2.0;
- function care(id,action,value){const p=pets.find(p=>p.id===id);if(!p||!near(p)||error)return false;const d=data[id],before={...d};
-  if(action==='food'&&dist(avatar.position,p.food.point)<2)d.food=1;
-  else if(action==='water'&&dist(avatar.position,p.water.point)<2)d.water=1;
-  else if(action==='name'){const name=String(value??'').trim().slice(0,24);if(!name)return false;d.name=name;}
-  else if(['pet','play'].includes(action)&&!p.inShelter&&dist(avatar.position,p.rig.root.position)<1.65&&p.brain.time-p.lastCare>=8)d.affinity=clamp01(d.affinity+(action==='pet'?.025:.04));
-  else return false;
+ // Separate the home service area from proximity to a living animal.
+ const atHeight=(a,b)=>Math.abs(a.y-b.y)<.85;
+ const houseDistance=p=>Math.min(...[p.out,p.food.point,p.water.point].filter(v=>atHeight(avatar.position,v)).map(v=>dist(avatar.position,v)),Infinity);
+ const homeNear=p=>houseDistance(p)<2.0;
+ const animalNear=p=>!p.inShelter&&atHeight(avatar.position,p.rig.root.position)&&dist(avatar.position,p.rig.root.position)<1.65;
+ const available=p=>animalNear(p)&&!p.path.some(s=>s.private)&&!['eat','drink','sleep','pet','play'].includes(p.state)&&p.brain.time-p.lastCare>=8;
+ const mood=p=>{const d=data[p.id];return d.energy<.25?'Cansado':d.hunger>=.30||d.thirst>=.30?'Precisa de cuidados':p.state==='sleep'?'Sonolento':p.id==='cat'&&p.brain.time%34>=20?'Independente':'Bem-humorado';};
+ let notice='',noticeUntil=0,activePet=null;
+ function message(s,p){notice=s;noticeUntil=p.brain.time+2.8;}
+ function care(id,action,value){const p=pets.find(p=>p.id===id);if(!p||error)return false;const d=data[id],before={...d};
+  if(action==='food'&&homeNear(p))d.food=1;
+  else if(action==='water'&&homeNear(p))d.water=1;
+  else if(action==='name'&&homeNear(p)&&!d.name){const name=String(value??'').trim().slice(0,24);if(!name)return false;d.name=name;}
+  else if(['pet','play'].includes(action)&&available(p)){
+   // Cats can decline based on needs and independent temperament; affection improves willingness.
+   const willing=d.energy>=.25&&d.hunger<.30&&d.thirst<.30&&(p.id==='dog'||rnd()<Math.min(.94,.42+d.affinity*.40+(mood(p)==='Bem-humorado'?.22:0)));
+   if(!willing){
+    p.lastCare=p.brain.time;message((d.name||p.label)+' prefere ficar sozinho agora.',p);
+    if(p.id==='cat'){
+     const root=p.rig.root.position;for(let i=0;i<8;i++){const a=i*Math.PI/4,x=root.x+Math.cos(a)*2.4,z=root.z+Math.sin(a)*2.4;if(valid(x,z)&&dist({x,z},avatar.position)>dist(root,avatar.position)+.5){plan(p,point(x,z),'idle');break;}}
+    }
+    return false;
+   }
+   d.affinity=clamp01(d.affinity+(action==='pet'?.025:.04));
+  }else return false;
   if(!save()){Object.assign(d,before);return false;}
-  if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.pending=null;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);}
+  if(['pet','play'].includes(action)){p.lastCare=p.brain.time;p.pending=null;p.path=[];p.rig.root.rotation.y=Math.atan2(p.rig.root.position.x-avatar.position.x,p.rig.root.position.z-avatar.position.z);state(p,action,action==='pet'?3:5);message('♥ Afinidade aumentou',p);}
   stats.care++;return true;
  }
  const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando',house:'Visitando a casa'};
- const panel=ui('pet-panel'),button=ui('pet-action');
- function refresh(){if(!selected)return;const p=selected,d=data[p.id];ui('pet-title').textContent=(d.name||p.label)+' · '+labels[p.state];ui('pet-levels').textContent='Ração '+Math.round(d.food*100)+'% · Água '+Math.round(d.water*100)+'% · Afinidade '+Math.round(d.affinity*100)+'%';ui('pet-needs').textContent='Saciedade '+Math.round((1-d.hunger)*100)+'% · Hidratação '+Math.round((1-d.thirst)*100)+'% · Energia '+Math.round(d.energy*100)+'%';ui('pet-care-status').textContent=d.hunger>=CARE_POLICY.returnAt&&d.food<=CARE_POLICY.minSupply?'Precisa de ração no pote.':d.thirst>=CARE_POLICY.returnAt&&d.water<=CARE_POLICY.minSupply?'Precisa de água no pote.':careGoals(d).length?'Prioridade: '+(careGoals(d)[0].id==='eat'?'procurar alimento':'procurar água')+'.':'Cuidados preventivos: retorno aos potes a partir de 70% de saciedade ou hidratação.';ui('pet-error').textContent=error;ui('pet-food').disabled=!!error||dist(avatar.position,p.food.point)>=2;ui('pet-water').disabled=!!error||dist(avatar.position,p.water.point)>=2;for(const k of ['pet-pet','pet-play'])ui(k).disabled=!!error||p.inShelter||dist(avatar.position,p.rig.root.position)>=1.65||p.brain.time-p.lastCare<8;}
- button.onclick=()=>{const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));if(!n.length)return;cancelInput();selected=n[0];ui('pet-name').value=data[selected.id].name;panel.hidden=false;refresh();};
- ui('pet-close').onclick=()=>{panel.hidden=true;selected=null;cancelInput();};
- for(const [id,action] of [['pet-food','food'],['pet-water','water'],['pet-pet','pet'],['pet-play','play'],['pet-rename','name']])ui(id).onclick=()=>{if(selected){care(selected.id,action,ui('pet-name').value);refresh();}};
- function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);pumpRoutes();const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;if(uiClock<.15)return;uiClock=0;
-  const n=pets.filter(near).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position));button.hidden=!allowUI||!n.length||!panel.hidden;if(n.length)button.textContent='Pet · '+(data[n[0].id].name||n[0].label);if(selected&&!near(selected))ui('pet-close').click();else if(!panel.hidden)refresh();
+ const panel=ui('pet-panel'),button=ui('pet-action'),actions=ui('pet-context');
+ function portrait(id){
+  const dog=id==='dog',coat=dog?'#b87944':'#92908a',cream='#f1dfbd',ear=dog?'#75472e':'#77766f';
+  return '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="10" fill="#516947"/><circle cx="32" cy="32" r="26" fill="#779066"/>'+ (dog?'<ellipse cx="12" cy="29" rx="9" ry="17" fill="'+ear+'"/><ellipse cx="52" cy="29" rx="9" ry="17" fill="'+ear+'"/>':'<path d="M12 29 9 5 29 18M52 29 55 5 35 18" fill="'+ear+'" stroke="#dab1a0" stroke-width="3"/>')+'<ellipse cx="32" cy="32" rx="22" ry="22" fill="'+coat+'"/><path d="M32 11Q24 23 27 35Q8 38 18 49Q32 60 46 49Q56 38 37 35Q40 23 32 11" fill="'+cream+'"/><circle cx="23" cy="30" r="3.2" fill="#292a25"/><circle cx="41" cy="30" r="3.2" fill="#292a25"/><ellipse cx="32" cy="39" rx="5" ry="3.6" fill="'+(dog?'#37312c':'#b77a76')+'"/><path d="M32 42q-6 7-10 1m10-1q6 7 10 1" fill="none" stroke="#694c3b" stroke-width="1.8" stroke-linecap="round"/></svg>';
+ }
+ function refresh(){if(!selected)return;const p=selected,d=data[p.id],name=d.name||p.label;
+  ui('pet-title').textContent=p.id==='dog'?'Casa dos cães':'Casa dos gatos';
+  ui('pet-fixed-name').textContent=d.name?d.name+' 🔒':p.label;
+  ui('pet-slot-name').textContent=name;ui('pet-mood').textContent=mood(p);
+  ui('pet-personality').textContent=p.id==='dog'?'Sociável · Brincalhão · Porte médio':'Curioso · Independente · Porte pequeno';
+  ui('pet-levels').textContent='Ração '+Math.round(d.food*100)+'% · Água '+Math.round(d.water*100)+'%';
+  ui('pet-needs').textContent='Saciedade '+Math.round((1-d.hunger)*100)+'% · Hidratação '+Math.round((1-d.thirst)*100)+'%';
+  ui('pet-affinity').value=Math.round(d.affinity*100);ui('pet-affinity-value').textContent=Math.round(d.affinity*100)+'%';
+  ui('pet-care-status').textContent=d.hunger>=CARE_POLICY.returnAt&&d.food<=CARE_POLICY.minSupply?'Repor ração':d.thirst>=CARE_POLICY.returnAt&&d.water<=CARE_POLICY.minSupply?'Repor água':labels[p.state];
+  ui('pet-error').textContent=error;
+  ui('pet-food').disabled=ui('pet-water').disabled=!!error||!homeNear(p);
+  ui('pet-name-form').hidden=!!d.name;ui('pet-rename').disabled=!!error||!!d.name||!homeNear(p);
+ }
+ function close(){panel.hidden=true;selected=null;}
+ button.onclick=()=>{const n=pets.filter(homeNear).sort((a,b)=>houseDistance(a)-houseDistance(b));if(!n.length)return;selected=n[0];ui('pet-name').value='';ui('pet-portrait').innerHTML=portrait(selected.id);ui('pet-slot-portrait').innerHTML=portrait(selected.id);panel.hidden=false;refresh();actions.hidden=true;};
+ ui('pet-close').onclick=close;
+ for(const [id,action] of [['pet-food','food'],['pet-water','water'],['pet-rename','name']])ui(id).onclick=()=>{if(selected){care(selected.id,action,ui('pet-name').value);refresh();}};
+ for(const [id,action] of [['pet-pet','pet'],['pet-play','play']])ui(id).onclick=()=>{if(activePet){care(activePet.id,action);}};
+ function positionActions(){
+  if(actions.hidden||!activePet)return;
+  const p=activePet.rig.root.position;
+  const pos=api.project(p.add(V(0,.12,0)));
+  if(!pos||pos.z<0||pos.z>1){actions.hidden=true;return;}
+  const width=actions.offsetWidth||130,height=actions.offsetHeight||65;
+  const left=Math.min(innerWidth-width-12,Math.max(12,pos.x-width/2)),top=Math.min(innerHeight-height-12,Math.max(65,pos.y+14));
+  // A projected interaction must not intercept the two physical control regions.
+  const bounds={left,top,right:left+width,bottom:top+height};
+  const overlaps=el=>{const r=el.getBoundingClientRect();return bounds.left<r.right+8&&bounds.right>r.left-8&&bounds.top<r.bottom+8&&bounds.bottom>r.top-8;};
+  if(overlaps(ui('joy'))||overlaps(ui('run-action'))){actions.hidden=true;return;}
+  actions.style.left=left+'px';actions.style.top=top+'px';
+ }
+ function update(dt,allowUI=true){dt=Math.max(0,Math.min(.10,dt));for(const p of pets)tickPet(p,dt);pumpRoutes();const crossing=pets.find(p=>p.state==='walk'&&p.path[0]?.portal&&dist(p.rig.root.position,houseThreshold)<1.1);const flapTarget=crossing&&doorState().open<.1?crossing.path[0].portal*1.36:0;home.petFlap.rotation.x+=(flapTarget-home.petFlap.rotation.x)*(1-Math.exp(-dt*14));saveClock+=dt;if(saveClock>20){saveClock=0;save();}uiClock+=dt;
+  if(uiClock>=.10){uiClock=0;
+   const n=pets.filter(homeNear).sort((a,b)=>houseDistance(a)-houseDistance(b));
+   if(selected&&(!allowUI||!homeNear(selected)))close();
+   button.hidden=!allowUI||!n.length||!panel.hidden;
+   if(n.length)button.textContent=n[0].id==='dog'?'Casa dos cães':'Casa dos gatos';
+   if(selected)refresh();
+   activePet=pets.filter(animalNear).sort((a,b)=>dist(avatar.position,a.rig.root.position)-dist(avatar.position,b.rig.root.position))[0]||null;
+   actions.hidden=!allowUI||!panel.hidden||!activePet;
+   if(activePet){ui('pet-context-name').textContent=data[activePet.id].name||activePet.label;ui('pet-play-icon').textContent=activePet.id==='cat'?'🧶':'🎾';ui('pet-pet').disabled=ui('pet-play').disabled=!available(activePet);}
+   ui('pet-notice').hidden=!notice||!pets.some(p=>p.brain.time<noticeUntil);ui('pet-notice').textContent=notice;
+  }
+  positionActions();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,get data(){return data}};
+ return {pets,stats,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
 }
