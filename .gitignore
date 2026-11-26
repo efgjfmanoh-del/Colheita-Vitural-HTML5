@@ -7,3 +7,8 @@ qa/
 *.pem
 .env
 .env.*
+android-test/.gradle/
+android-test/app/build/
+android-test/app/src/main/assets/
+android-test/qa/
+android-test/local.properties

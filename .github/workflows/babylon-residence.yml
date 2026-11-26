@@ -2,7 +2,7 @@ name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
     branches: [main]
-    paths: ['html5-babylon/**', '.github/workflows/babylon-residence.yml']
+    paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,5 +40,45 @@ jobs:
         with:
           name: Colheita-Babylon-Etapa1-Web
           path: html5-babylon/dist/
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Preparar SDK Android
+        working-directory: .
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compilar APK experimental offline
+        working-directory: .
+        run: |
+          mkdir -p android-test/app/src/main/assets
+          cp html5-babylon/dist/index.html html5-babylon/dist/game.js android-test/app/src/main/assets/
+          gradle -p android-test --no-daemon :app:assembleDebug
+      - name: Validar pacote, assinatura e conteúdo
+        working-directory: .
+        run: |
+          set -euo pipefail
+          mkdir -p android-test/qa
+          APK=android-test/app/build/outputs/apk/debug/app-debug.apk
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee android-test/qa/signature.txt
+          "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
+          grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
+          if grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt; then exit 1; fi
+          unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
+          unzip -p "$APK" assets/game.js | cmp - html5-babylon/dist/game.js
+          cp "$APK" android-test/qa/ColheitaVitural-Teste-1J2.apk
+          cd android-test/qa
+          sha256sum ColheitaVitural-Teste-1J2.apk > SHA256SUMS.txt
+          ls -lh ColheitaVitural-Teste-1J2.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Colheita-Vitural-APK-Teste-1J2
+          path: android-test/qa/
           retention-days: 3
           if-no-files-found: error
