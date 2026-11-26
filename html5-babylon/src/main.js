@@ -112,7 +112,7 @@ const roadMetrics={sections:sections.length,vertices:road.getTotalVertices(),seg
 entity('bridge home');const [ba,bb]=layout.bridges[0].ends.map(p=>P(...p,2.85));const bd=bb.subtract(ba),bl=bd.length(),ang=Math.atan2(bd.x,bd.z),bs=V(Math.cos(ang),0,-Math.sin(ang));
 for(let k=0;k<Math.ceil(bl/.36);k++){let p=Vector3.Lerp(ba,bb,k/Math.ceil(bl/.36));box('bridge plank',p.x,p.y,p.z,3.15,.19,.35,k%3?M.woodLight:M.wood,ang);for(let s of [-1,1]){let q=p.add(bs.scale(s*1.48));if(k%4===0){box('bridge rail post',q.x,q.y+.55,q.z,.20,1.1,.20,M.woodDark);box('bridge pier',q.x,q.y-.75,q.z,.27,1.6,.27,M.woodDark)}}}for(let s of [-1,1])beam('bridge railing',ba.add(bs.scale(s*1.48)).add(V(0,.91,0)),bb.add(bs.scale(s*1.48)).add(V(0,.91,0)),.14,M.woodLight);
 function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=height(x,z),C=(a,b,c)=>V(x+a*Math.cos(angle)+c*Math.sin(angle),y+b,z-a*Math.sin(angle)+c*Math.cos(angle));const B=(n,a,b,c,ww,hh,dd,m)=>{let p=C(a,b,c);return box(n,p.x,p.y,p.z,ww,hh,dd,m,angle)};const L=(n,a,b,ww,m)=>beam(n,C(...a),C(...b),ww,m);
- const doorW=small?w*.47:1.35,doorH=small?h*.65:2.2,wall=.22;let doorRoot=null;
+ const doorW=small?w*.47:1.35,doorH=small?h*.65:2.2,wall=.22;let doorRoot=null;const handles={};
  B('stone foundation',0,.22,0,w+.25,.44,d+.25,M.stoneLight);
  if(small)B('plaster walls',0,.45+h/2,0,w,h,d,M.woodLight);
  else{
@@ -166,7 +166,15 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  const leafW=doorW-.07;leaf('solid swinging door',leafW/2,doorH/2,0,leafW,doorH-.04,.095,M.wood);
  for(const x of [.13,leafW-.13])leaf('door vertical trim',x,doorH/2,-.07,.075,doorH-.11,.05,M.woodLight);
  for(const y of [.2,doorH-.2])leaf('door cross trim',leafW/2,y,-.07,leafW-.13,.09,.05,M.woodLight);
- leaf('door handle',leafW-.19,1.01,-.13,.12,.12,.13,M.black);
+ // Both sides have independent real lever geometry and a grip anchor.
+ for(const side of [-1,1]){
+  const pivot=new Mesh('handle spindle '+side,scene);pivot.parent=doorRoot;pivot.position=V(leafW-.19,1.01,side*.115);
+  const plate=leaf('handle backplate',leafW-.19,1.01,side*.065,.14,.23,.045,M.black);
+  const hub=box('handle hub',0,0,side*.035,.11,.11,.075,M.black);hub.parent=pivot;
+  const lever=box('handle lever',-.105,0,side*.075,.24,.065,.075,M.black);lever.parent=pivot;
+  const grip=new Mesh('handle grip '+side,scene);grip.parent=pivot;grip.position=V(-.145,0,side*.075);
+  handles[side]={pivot,grip};
+ }
  entity('house-front');
  const window=(xx,yy)=>{B('window frame',xx,yy,-d/2-.12,1.37,1.43,.20,M.woodDark);B('window amber glass',xx,yy,-d/2-.24,1.11,1.17,.09,M.glass);B('window vertical bar',xx,yy,-d/2-.30,.10,1.2,.08,M.woodDark);B('window horizontal bar',xx,yy,-d/2-.30,1.17,.10,.08,M.woodDark);B('window sill',xx,yy-.73,-d/2-.33,1.55,.14,.42,M.woodLight)};
  for(let xx of [-w*.3,w*.3]){window(xx,1.8);window(xx,h*.76)}entity('house-roof');window(0,h+.88);entity(id);for(let xx of [-w/2-.10,w/2+.10])for(let zz of [-d*.22,d*.22]){B('side window frame',xx,h*.69,zz,.18,1.34,1.36,M.woodDark);B('side window glass',xx+Math.sign(xx)*.11,h*.69,zz,.10,1.08,1.07,M.glass);B('side mullion',xx+Math.sign(xx)*.17,h*.69,zz,.08,1.09,.09,M.woodDark);B('side window sill',xx+Math.sign(xx)*.22,h*.69-.73,zz,.35,.13,1.55,M.woodLight)}for(let side of [-1,1]){for(let i=0;i<5;i++){let yy=.55+i*.18;B('foundation stone trim',side*(w/2+.02),yy,d*.36,.13,.13,1.15,i%2?M.stone:M.stoneLight);}}
@@ -177,12 +185,12 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55+i*.35,2.2,top,.35,M.stoneLight);}
  entity('house-roof');B('chimney',w*.29,h+1.75,d*.26,.86,3.5,.86,M.stoneLight);for(let i=0;i<7;i++)B('chimney course',w*.29,h+.42+i*.48,d*.26,.89,.045,.89,M.stone);B('chimney cap',w*.29,h+3.55,d*.26,1.1,.20,1.1,M.woodDark);
  }else{B('doghouse name plaque',0,h*.84,-d/2-.11,.59,.24,.09,M.woodDark);for(let xx of [-.19,.19])B('paw mark',xx,h*.85,-d/2-.17,.07,.08,.035,M.woodLight)}
- entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot};
+ entity(id);return {x,z,w,d,angle,y,C,doorW,doorRoot,handles};
 }
 const home=house('house',409,137,14.5,9,5.6,-.30);
 // The rendered architectural surfaces and the movement surfaces share local coordinates.
 const homeLocal=(x,z)=>{const dx=x-home.x,dz=z-home.z,c=Math.cos(home.angle),s=Math.sin(home.angle);return {x:dx*c-dz*s,z:dx*s+dz*c};};
-const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false};
+const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false,action:null,lastAction:null};
 function surfaceHeight(x,z){
  const p=homeLocal(x,z),f=-home.d/2;
  if(Math.abs(p.x)<=home.w/2&&Math.abs(p.z)<=home.d/2)return home.y+.53;
@@ -190,12 +198,14 @@ function surfaceHeight(x,z){
  if(Math.abs(p.x)<=1.1&&p.z>=f-3.725&&p.z<f-2.85){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725)/.35)));return home.y+[.18,.35,.53][i];}
  return onBridge(x,z)?2.96:height(x,z);
 }
-function homeBlocked(x,z){
+function homeBlocked(x,z,interacting=false){
  const p=homeLocal(x,z),f=-home.d/2,half=home.w/2,r=.20,wall=.22;
  // Real perimeter walls, with a front opening that only permits passage when the door is open.
  if(Math.abs(p.z)<=home.d/2+r&&Math.abs(Math.abs(p.x)-half)<wall+r)return true;
  if(Math.abs(p.x)<half+r&&Math.abs(p.z-home.d/2)<wall+r)return true;
- if(Math.abs(p.x)<half+r&&Math.abs(p.z-f)<wall+r&&(Math.abs(p.x)>home.doorW/2-r||entry.door<.88))return true;
+ if(Math.abs(p.x)<half+r&&Math.abs(p.z-f)<wall+r&&(Math.abs(p.x)>home.doorW/2-r||(!interacting&&entry.door<.88)))return true;
+ const theta=-entry.door*Math.PI*.49,hx=-home.doorW/2+.035,hz=f-.055,dx=Math.cos(theta)*(home.doorW-.07),dz=-Math.sin(theta)*(home.doorW-.07),u=Math.max(0,Math.min(1,((p.x-hx)*dx+(p.z-hz)*dz)/(dx*dx+dz*dz)));
+ if(Math.hypot(p.x-hx-dx*u,p.z-hz-dz*u)<r+.055)return true;
  if(Math.abs(p.z-(f-2.50))<.22&&Math.abs(p.x)>home.w*.155&&Math.abs(p.x)<home.w*.39)return true;
  for(const k of [-1,1])if(Math.hypot(p.x-k*home.w*.34,p.z-(f-2.4))<.33)return true;
  return false;
@@ -295,6 +305,19 @@ entity('dog');const dog=P(325,183);dog.y=height(dog.x,dog.z);const dogFur=mat('d
 entity('garden border');for(let k=0;k<30;k++){const u=350+k*4.1,v=181+3*Math.sin(k*.5),p=P(u,v);p.y=height(p.x,p.z)+.07;rock('garden edging',p,.20,.13,.17,M.stoneLight)}
 entity('grass details');const grassBase=MeshBuilder.CreateCylinder('grass tuft', {diameterTop:0,diameterBottom:.10,height:.36,tessellation:3},scene);grassBase.material=M.leaf2;grassBase.isPickable=false;const mats=[];for(let i=0;i<1800;i++){let u=35+random()*700,v=8+random()*310,x=X(u),z=Z(v),nr=nearRiver(x,z);if(nr.dist<nr.w/2+1.5||(u>320&&u<490&&v>96&&v<183)||pathPoints.some(p=>Math.hypot(x-p.x,z-p.z)<1.4))continue;let y=height(x,z)+.13;let matrix=Matrix.Compose(V(.7+random()*.8,.55+random()*.75,.7+random()*.8),Quaternion.RotationYawPitchRoll(random()*6.28,0,(random()-.5)*.4),V(x,y,z));mats.push(...matrix.asArray())}grassBase.thinInstanceSetBuffer('matrix',new Float32Array(mats),16,true);grassBase.receiveShadows=false;groups['grass details'].push(grassBase);
 entity('farm visitor');const player=P(538,205);player.y=height(player.x,player.z);const avatar=new Mesh('visitor root',scene);avatar.position=player.clone();const bodyParts=[];for(const [n,x,y,z,w,h,d,m] of [['body',0,.97,0,.42,.63,.30,M.woodLight],['leg L',-.13,.36,0,.15,.62,.17,M.woodDark],['leg R',.13,.36,0,.15,.62,.17,M.woodDark],['arm L',-.29,.95,0,.14,.52,.16,M.plaster],['arm R',.29,.95,0,.14,.52,.16,M.plaster]]){let p=box(n,x,y,z,w,h,d,m);p.parent=avatar;bodyParts.push(p)}let head=sphere('head',0,1.5,0,.22,.25,.22,M.plaster);head.parent=avatar;let hat=cyl('straw hat',0,1.72,0,.37,.09,M.sand);hat.parent=avatar;let hatTop=cyl('hat crown',0,1.82,0,.21,.20,M.woodLight);hatTop.parent=avatar;
+// Articulated arm used for grasping: two segments, elbow and a separate hand.
+const reachUpper=box('interaction upper arm',0,0,0,.145,1,.155,M.plaster),reachLower=box('interaction forearm',0,0,0,.125,1,.135,M.plaster),reachHand=sphere('interaction hand',0,0,0,.085,.085,.09,M.plaster);
+const reachMeshes=[reachUpper,reachLower,reachHand];for(const m of reachMeshes){m.parent=avatar;m.setEnabled(false);}
+const restingHand=V(.29,.69,0),shoulder=V(.29,1.19,0);
+function poseSegment(m,a,b){const delta=b.subtract(a),n=delta.normalizeToNew(),axis=Vector3.Cross(Vector3.Up(),n),dot=Vector3.Dot(Vector3.Up(),n);m.position.copyFrom(a.add(b).scale(.5));m.scaling.y=Math.max(.001,delta.length());m.rotationQuaternion=dot<-.99999?Quaternion.RotationAxis(Vector3.Right(),Math.PI):new Quaternion(axis.x,axis.y,axis.z,1+dot).normalize();}
+function handPose(world,blend){
+ avatar.computeWorldMatrix(true);const local=Vector3.TransformCoordinates(world,Matrix.Invert(avatar.getWorldMatrix()));
+ const hand=Vector3.Lerp(restingHand,local,blend),elbow=Vector3.Lerp(shoulder,hand,.48).add(V(.075,-.095,-.045));
+ for(const m of reachMeshes)m.setEnabled(true);bodyParts[4].setEnabled(false);
+ poseSegment(reachUpper,shoulder,elbow);poseSegment(reachLower,elbow,hand);reachHand.position.copyFrom(hand);reachHand.computeWorldMatrix(true);
+ return {error:Vector3.Distance(reachHand.getAbsolutePosition(),world),reach:Vector3.Distance(shoulder,local)};
+}
+function releaseHand(){for(const m of reachMeshes)m.setEnabled(false);bodyParts[4].setEnabled(true);}
 // Pose the actual 3D limbs around hip and shoulder pivots, driven by distance walked.
 const gait={phase:0,distance:0,moving:false,stride:0};
 const limbRest=bodyParts.map(m=>m.position.clone());
@@ -312,14 +335,76 @@ function walkPose(distance,dt){
 let joy={x:0,z:0},keys=new Set(),follow=false;window.addEventListener('keydown',e=>{keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{keys.clear();joy.x=joy.z=0});
 let pointer=null;const pad=$('joy'),knob=$('knob');function reset(){pointer=null;joy.x=joy.z=0;knob.style.transform=''}function move(e){if(e.pointerId!==pointer)return;const r=pad.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,k=Math.min(1,36/Math.max(1,Math.hypot(dx,dy)));joy.x=dx*k/36;joy.z=-dy*k/36;knob.style.transform='translate('+dx*k+'px,'+dy*k+'px)'}pad.addEventListener('pointerdown',e=>{if(pointer!==null)return;pointer=e.pointerId;pad.setPointerCapture(pointer);move(e)});pad.addEventListener('pointermove',move);for(const e of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(e,v=>{if(v.pointerId===pointer)reset()});
 function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz);return t>=0&&t<=1&&Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<1.28}
-function blocked(x,z){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const nr=nearRiver(x,z);if(!onBridge(x,z)&&nr.dist<nr.w*.54+.12)return true;if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!onBridge(x,z)&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;return false}
+function blocked(x,z,interacting=false){if(x<minX+1||x>maxX-1||z<minZ+1||z>maxZ-1)return true;const nr=nearRiver(x,z);if(!onBridge(x,z)&&nr.dist<nr.w*.54+.12)return true;if(trunkColliders.some(t=>Math.hypot(x-t.x,z-t.z)<t.r+.18))return true;if(!onBridge(x,z)&&fenceColliders.some(([a,b])=>segDist(x,z,a,b)<.24))return true;if(homeBlocked(x,z,interacting))return true;const ddx=x-dogHome.x,ddz=z-dogHome.z,dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);if(Math.abs(ddx*dc-ddz*ds)<dogHome.w/2+.18&&Math.abs(ddx*ds+ddz*dc)<dogHome.d/2+.18)return true;if(Math.hypot(x-well.x,z-well.z)<1.34)return true;return false}
 function setHouseGroup(id,visible){for(const mesh of groups[id]||[])mesh.setEnabled(visible);}
-function doorNearby(){const p=homeLocal(avatar.position.x,avatar.position.z);return Math.abs(p.x)<1.8&&Math.abs(p.z+home.d/2)<2.0;}
+// Interaction state owns the leaf: proximity and the button never drive it directly.
+const doorAngle=()=>home.angle-entry.door*Math.PI*.49;
+function setDoorPose(turn=0){
+ home.doorRoot.rotation.y=doorAngle();home.doorRoot.computeWorldMatrix(true);
+ for(const side of [-1,1]){const h=home.handles[side];h.pivot.rotation.z=turn*.72;h.pivot.computeWorldMatrix(true);h.grip.computeWorldMatrix(true);}
+}
+function gripPoint(side){return home.handles[side].grip.getAbsolutePosition().clone();}
+function stance(side){
+ const yaw=doorAngle()+(side===1?Math.PI:0),grip=gripPoint(side);
+ const forward=V(Math.sin(yaw),0,Math.cos(yaw)),right=V(Math.cos(yaw),0,-Math.sin(yaw));
+ const p=grip.subtract(right.scale(.29)).subtract(forward.scale(.46));p.y=surfaceHeight(p.x,p.z);return {p,yaw};
+}
+function doorNearby(){const p=homeLocal(avatar.position.x,avatar.position.z);return Math.abs(p.x)<2.25&&Math.abs(p.z+home.d/2)<2.55;}
 function toggleDoor(){
- if(!doorNearby())return false;
+ if(entry.action||!doorNearby())return false;
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
- if(entry.open&&Math.hypot(p.x+home.doorW/2,p.z-f)<home.doorW+.30)return false;
- entry.open=!entry.open;return true;
+ const side=p.z>f+.23?1:-1,target=entry.door>.5?0:1;
+ setDoorPose(0);
+ const action={phase:'approach',elapsed:0,from:entry.door,target,side,waypoints:[],gripped:false,turn:0,maxGripError:0,maxReach:0,gripFrames:0,turnBeforeSwing:false,swingDistance:0,start:avatar.position.clone()};
+ // If the open leaf separates the player from the desired side, walk around its free edge.
+ const theta=-entry.door*Math.PI*.49,hx=-home.doorW/2+.035,hz=f-.055,rx=Math.cos(theta),rz=-Math.sin(theta),nx=Math.sin(theta),nz=Math.cos(theta);
+ const currentSide=(p.x-hx)*nx+(p.z-hz)*nz>=0?1:-1;
+ if(entry.door>.85&&currentSide!==side){
+  const tip=home.doorW-.07+.58;
+  for(const k of [currentSide,side])action.waypoints.push(home.C(hx+rx*tip+nx*k*.53,0,hz+rz*tip+nz*k*.53));
+ }
+ entry.action=action;entry.lastAction=null;return true;
+}
+function finishDoorAction(a,success){
+ setDoorPose(0);releaseHand();
+ entry.open=entry.door>=.999;
+ entry.lastAction={success,target:a.target,gripFrames:a.gripFrames,maxGripError:a.maxGripError,maxReach:a.maxReach,turnBeforeSwing:a.turnBeforeSwing,swingDistance:a.swingDistance,door:entry.door};
+ entry.action=null;
+}
+function updateDoorAction(dt){
+ const a=entry.action;if(!a)return;
+ a.elapsed+=dt;
+ const advance=phase=>{a.phase=phase;a.elapsed=0;};
+ if(a.phase==='approach'){
+  const dest=a.waypoints[0]||stance(a.side).p,dx=dest.x-avatar.position.x,dz=dest.z-avatar.position.z,dist=Math.hypot(dx,dz);
+  if(dist>.035){const k=Math.min(1,2.2*dt/dist);moveAvatar(dx*k,dz*k,dt,true);}
+  else if(a.waypoints.length){a.waypoints.shift();a.elapsed=0;}
+  else{avatar.rotation.y=stance(a.side).yaw;walkPose(0,dt);advance('reach');}
+  if(a.elapsed>5)finishDoorAction(a,false);return;
+ }
+ if(a.phase==='reach'){
+  avatar.rotation.y=stance(a.side).yaw;const p=handPose(gripPoint(a.side),smooth01(a.elapsed/.32));
+  if(a.elapsed>=.32){if(p.reach>.78){finishDoorAction(a,false);return;}a.gripped=true;advance('turn');}return;
+ }
+ if(a.phase==='turn'){
+  a.turn=smooth01(a.elapsed/.27);setDoorPose(a.turn);const p=handPose(gripPoint(a.side),1);
+  a.maxGripError=Math.max(a.maxGripError,p.error);a.maxReach=Math.max(a.maxReach,p.reach);a.gripFrames++;
+  if(a.elapsed>=.27){a.turnBeforeSwing=a.gripped&&entry.door===a.from&&a.turn>.99;advance('swing');}return;
+ }
+ if(a.phase==='swing'){
+  const old=entry.door,next=a.from+(a.target-a.from)*smooth01(a.elapsed/1.15);entry.door=next;setDoorPose(1);
+  const target=stance(a.side),delta=target.p.subtract(avatar.position),dist=Math.hypot(delta.x,delta.z);
+  if(blocked(target.p.x,target.p.z,true)||Math.abs(delta.y)>.34||dist>.20){
+   entry.door=old;setDoorPose(0);finishDoorAction(a,false);return;
+  }
+  avatar.position.copyFrom(target.p);avatar.rotation.y=target.yaw;walkPose(dist,dt);a.swingDistance+=dist;
+  const p=handPose(gripPoint(a.side),1);a.maxGripError=Math.max(a.maxGripError,p.error);a.maxReach=Math.max(a.maxReach,p.reach);a.gripFrames++;
+  if(a.elapsed>=1.15){entry.door=a.target;entry.open=a.target===1;advance('release');}return;
+ }
+ if(a.phase==='release'){
+  const u=smooth01(a.elapsed/.30);setDoorPose(1-u);handPose(gripPoint(a.side),1-u);
+  if(a.elapsed>=.30)finishDoorAction(a,true);
+ }
 }
 // A single pointer gesture invokes the action once, even during joystick input.
 // Do not rely on the browser synthesizing a click after a touch gesture.
@@ -348,6 +433,7 @@ function entryInfluence(p,inside,porch){
  return smooth01((p.z-f+6.2)/3.25)*smooth01((3.0-Math.abs(p.x))/1.8);
 }
 function updateEntry(dt){
+ updateDoorAction(dt);
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
  const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+.22&&p.z<home.d/2-.12;
  const porch=Math.abs(p.x)<home.w*.385+.15&&p.z>=f-2.9&&p.z<=f+.25;
@@ -358,9 +444,8 @@ function updateEntry(dt){
  if(weight>.001&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
  if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
  entry.inside=inside;
- const targetDoor=entry.open?1:0;entry.door+=(targetDoor-entry.door)*(1-Math.exp(-dt*7));if(Math.abs(targetDoor-entry.door)<.002)entry.door=targetDoor;
- home.doorRoot.rotation.y=home.angle-entry.door*Math.PI*.49;
- const nearDoor=doorNearby(),doorLabel=entry.open?'Fechar porta':'Abrir porta';
+ const nearDoor=doorNearby()||!!entry.action,doorLabel=entry.action?(entry.action.target?'Abrindo…':'Fechando…'):(entry.door>.5?'Fechar porta':'Abrir porta');
+ doorAction.disabled=!!entry.action;
  if(doorAction.hidden===nearDoor)doorAction.hidden=!nearDoor;
  if(doorAction.textContent!==doorLabel)doorAction.textContent=doorLabel;
  const status=$('entry-status'),statusText=inside?'Interior':near?'Entrada da casa':'';
@@ -393,18 +478,18 @@ $('wide').onclick=()=>setView(94,V(-2,2.7,0),false);
 $('close').onclick=()=>setView(66,V(0,3.5,0),false);
 $('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
 $('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
-function moveAvatar(dx,dz,dt){
+function moveAvatar(dx,dz,dt,interacting=false){
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  // A raised deck can be reached only via the stairs; prevent jumping through its edge.
- const can=(x,z)=>!blocked(x,z)&&Math.abs(surfaceHeight(x,z)-surfaceHeight(avatar.position.x,avatar.position.z))<=.34;
+ const can=(x,z)=>!blocked(x,z,interacting)&&Math.abs(surfaceHeight(x,z)-surfaceHeight(avatar.position.x,avatar.position.z))<=.34;
  if(can(oldX+dx,oldZ))avatar.position.x+=dx;
  if(can(avatar.position.x,oldZ+dz))avatar.position.z+=dz;
  const mx=avatar.position.x-oldX,mz=avatar.position.z-oldZ,travel=Math.hypot(mx,mz);
  avatar.position.y=surfaceHeight(avatar.position.x,avatar.position.z);
  if(travel>.0001)avatar.rotation.y=Math.atan2(mx,mz);walkPose(travel,dt);return travel;
 }
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;moveAvatar(dx,dz,dt);updateEntry(dt);
- const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const dt=Math.min(.05,engine.getDeltaTime()/1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const a=camera.alpha+Math.PI/2,dx=(x*Math.cos(a)-z*Math.sin(a))*dt*5,dz=(x*Math.sin(a)+z*Math.cos(a))*dt*5;if(!entry.action)moveAvatar(dx,dz,dt);else walkPose(0,dt);updateEntry(dt);
+ const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(camera.alpha*100),Math.round(camera.beta*100),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x*2),Math.round(camera.target.z*2),Math.round(span*10)].join('|');if(sig!==shadowCache.lastSignature){shadowCache.lastSignature=sig;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,frames:0,last:null,windowStart:null,samples:[]};
 scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros';perf.samples=[];perf.windowStart=now;}});
@@ -448,4 +533,4 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
-window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,moveAvatar,updateEntry,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
