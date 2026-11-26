@@ -46,6 +46,10 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('Physical connection and wheat sector',JSON.stringify(links));fs.writeFileSync('qa/conexoes-campo.json',JSON.stringify(links,null,2));
  for(const p of [links.entry,links.exit])assert(p.centerError<1e-6&&p.axisError<1e-6&&Math.abs(p.left+1.575)<1e-6&&Math.abs(p.right-1.575)<1e-6&&p.deckGap<1e-6&&p.verticalError<1e-6,'bridge full-width flush abutment required');
  assert(links.clearGate&&links.fence&&links.traversable&&links.inside&&links.beds>=6&&links.plots>=30&&links.aisle,'wheat field must be connected and accessible');assert(links.residenceClearance>.34&&links.fieldClearance>.10,'fences must not cross paths');
+ const landscape=await page.evaluate(()=>({terrain:cvQA.terrainSkirtStats,beds:cvQA.bedSurfaceStats,road:cvQA.roadMetrics,plots:cvQA.wheatPlots.length}));
+ assert(landscape.terrain.margin>=64&&landscape.terrain.maxJoinGap<1e-6&&landscape.terrain.vertices<10000);
+ assert(landscape.beds.continuousBeds===8&&landscape.beds.plotGaps===0&&landscape.plots===72&&landscape.road.fineGravel&&landscape.road.stones===0);
+ fs.writeFileSync('qa/paisagem.json',JSON.stringify(landscape,null,2));console.log('PASS continuous landscape, bed ribbons and fine gravel texture',JSON.stringify(landscape));
  await capture('campo-trigo','field-view');
  await capture('visao-geral-retorno','wide');
  // Verify the optimized nearest-river calculation against the previous hypot algorithm.
@@ -207,6 +211,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  const wheatIds=await page.evaluate(()=>cvQA.wheatPlots.slice(0,2).map(p=>p.id));
  await wheatVisit(wheatIds[0]);assert.equal(await page.locator('#wheat-action').innerText(),'Arar');
  await page.locator('#wheat-action').click();assert.equal(await page.locator('#wheat-action').innerText(),'Plantar trigo');
+ const ridge=await page.evaluate(id=>{const q=cvQA,before=q.moundHeight(id);for(let i=0;i<35;i++)q.tickMounds(.025);return {before,after:q.moundHeight(id),updates:q.moundQA.updates,vertices:q.wheatFurrows.getTotalVertices()};},wheatIds[0]);assert(ridge.before<.15&&Math.abs(ridge.after-.15)<.001&&ridge.updates>0&&ridge.vertices>0);fs.writeFileSync('qa/sulcos.json',JSON.stringify(ridge,null,2));console.log('PASS animated raised soil furrows',JSON.stringify(ridge));
  await page.locator('#wheat-undo').click();assert.equal(await page.locator('#wheat-action').innerText(),'Arar');
  await page.locator('#wheat-action').click();await page.locator('#wheat-action').click();
  assert.equal(await page.locator('#wheat-action').innerText(),'Regar');await page.locator('#wheat-action').click();
