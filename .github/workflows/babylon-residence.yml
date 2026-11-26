@@ -52,7 +52,8 @@ jobs:
       - name: Preparar SDK Android
         working-directory: .
         run: |
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          bash -n android-test/prepare-sdk.sh
+          bash android-test/prepare-sdk.sh
       - name: Compilar APK experimental offline
         working-directory: .
         run: |
