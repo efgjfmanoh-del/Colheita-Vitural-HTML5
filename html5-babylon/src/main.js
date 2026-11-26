@@ -482,8 +482,8 @@ function moveAvatar(dx,dz,dt,interacting=false){
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  // A raised deck can be reached only via the stairs; prevent jumping through its edge.
  const can=(x,z)=>!blocked(x,z,interacting)&&Math.abs(surfaceHeight(x,z)-surfaceHeight(avatar.position.x,avatar.position.z))<=.34;
- if(can(oldX+dx,oldZ))avatar.position.x+=dx;
- if(can(avatar.position.x,oldZ+dz))avatar.position.z+=dz;
+ if(can(oldX+dx,oldZ+dz)){avatar.position.x+=dx;avatar.position.z+=dz;}
+ else{if(can(oldX+dx,oldZ))avatar.position.x+=dx;if(can(avatar.position.x,oldZ+dz))avatar.position.z+=dz;}
  const mx=avatar.position.x-oldX,mz=avatar.position.z-oldZ,travel=Math.hypot(mx,mz);
  avatar.position.y=surfaceHeight(avatar.position.x,avatar.position.z);
  if(travel>.0001)avatar.rotation.y=Math.atan2(mx,mz);walkPose(travel,dt);return travel;

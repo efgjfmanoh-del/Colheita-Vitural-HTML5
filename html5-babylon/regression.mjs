@@ -33,8 +33,22 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(interior.opened&&interior.inside&&interior.roofHidden&&interior.frontHidden&&interior.wallBlocked);assert(interior.action.turnBeforeSwing&&interior.action.gripFrames>10&&interior.action.maxGripError<.02&&interior.action.maxReach<.78&&interior.action.swingDistance>.5,'hand must grip and follow door during opening');assert(Math.abs(interior.floor-.53)<.01);await capture('interior-casa',null,48);
  const closeReopen=await page.evaluate(()=>{const q=cvQA,H=q.home,f=-H.d/2;const tick=()=>{for(let i=0;i<180;i++)q.updateEntry(.05);};const before=q.entry.door;tick();const noAuto=q.entry.door===before;document.getElementById('door-action').click();tick();const closed=q.entry.lastAction,closedLeaf=q.entry.door===0;document.getElementById('door-action').click();tick();return {noAuto,closed,closedLeaf,reopened:q.entry.door===1&&q.entry.lastAction?.success};});
  assert(closeReopen.noAuto&&closeReopen.closedLeaf&&closeReopen.closed?.success&&closeReopen.closed.turnBeforeSwing&&closeReopen.closed.maxGripError<.02&&closeReopen.closed.swingDistance>.5&&closeReopen.reopened,'manual close and reopen');console.log('PASS articulated door open and close',JSON.stringify({open:interior.action,close:closeReopen.closed}));
- const exit=await page.evaluate(()=>{const q=cvQA,H=q.home,f=-H.d/2,p=H.C(0,0,f-4.1);for(let i=0;i<180;i++){const dx=p.x-q.avatar.position.x,dz=p.z-q.avatar.position.z,dist=Math.hypot(dx,dz);if(dist<.015)break;const k=Math.min(1,.08/dist);q.moveAvatar(dx*k,dz*k,.025);q.updateEntry(.025);}for(let i=0;i<90;i++)q.updateEntry(.05);const partialBeta=q.scene.activeCamera.beta*180/Math.PI,mode=q.entry.mode,restored=q.groups['house-roof'].every(m=>m.isEnabled())&&q.groups['house-front'].every(m=>m.isEnabled());const outside=H.C(0,0,f-6.5);q.avatar.position.copyFrom(outside);q.avatar.position.y=q.surfaceHeight(outside.x,outside.z);for(let i=0;i<120;i++)q.updateEntry(.05);return {mode,restored,partialBeta,beta:q.scene.activeCamera.beta*180/Math.PI,blend:q.entry.blend};});
- assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
+ const exit=await page.evaluate(()=>{
+ const q=cvQA,H=q.home,f=-H.d/2;
+ const walk=(x,z)=>{const p=H.C(x,0,z);for(let i=0;i<220;i++){const dx=p.x-q.avatar.position.x,dz=p.z-q.avatar.position.z,dist=Math.hypot(dx,dz);if(dist<.015)break;const k=Math.min(1,.08/dist);q.moveAvatar(dx*k,dz*k,.025);q.updateEntry(.025);}return Math.hypot(p.x-q.avatar.position.x,p.z-q.avatar.position.z);};
+ const initial=q.homeLocal(q.avatar.position.x,q.avatar.position.z);
+ const hinge=-H.doorW/2+.035,theta=-q.entry.door*Math.PI*.49;
+ const leaf=H.C(hinge+Math.cos(theta)*.6,0,f-.055-Math.sin(theta)*.6);
+ const leafBlocked=q.homeBlocked(leaf.x,leaf.z);
+ // Reopening from indoors leaves the actor on the hinge side of the open leaf.
+ // Move around its free tip, then down the clear doorway and the stairs.
+ const routeErrors=[walk(initial.x,f+2.2),walk(0,f+2.2),walk(0,f+.8),walk(0,f-4.1)];
+ for(let i=0;i<90;i++)q.updateEntry(.05);
+ const partialBeta=q.scene.activeCamera.beta*180/Math.PI,mode=q.entry.mode,restored=q.groups['house-roof'].every(m=>m.isEnabled())&&q.groups['house-front'].every(m=>m.isEnabled());
+ const outside=H.C(0,0,f-6.5);q.avatar.position.copyFrom(outside);q.avatar.position.y=q.surfaceHeight(outside.x,outside.z);
+ for(let i=0;i<120;i++)q.updateEntry(.05);
+ return {initial,leafBlocked,routeErrors,mode,restored,partialBeta,beta:q.scene.activeCamera.beta*180/Math.PI,blend:q.entry.blend};});
+ console.log('Exit route diagnostics',JSON.stringify(exit));assert(exit.leafBlocked,'open leaf must still block its physical footprint');assert(exit.routeErrors.every(e=>e<.06),'walk around open leaf, not through it');assert.equal(exit.mode,'exterior');assert(exit.restored);assert(exit.partialBeta>48&&exit.partialBeta<65);assert(Math.abs(exit.beta-48)<.25&&exit.blend===0);assert.deepEqual(errors,[]);fs.writeFileSync('qa/entrada-casa.json',JSON.stringify({entrance,tracking,interior,exit},null,2));console.log('PASS physical entrance surfaces, door and automatic camera',JSON.stringify({entrance,tracking,interior,exit}));
  await page.close();
  // Emulated Android viewport validates the DPR bug; not a hardware benchmark.
  const mobile=await browser.newPage({viewport:{width:834,height:375},deviceScaleFactor:3.25,isMobile:true,hasTouch:true});
@@ -74,7 +88,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:entryTouch.cx,y:entryTouch.cy}]});
  try{
   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:entryTouch.cx+entryTouch.dx,y:entryTouch.cy+entryTouch.dy}]});
-  await mobile.waitForFunction(()=>cvQA.entry.inside,null,{timeout:30000});
+  await mobile.waitForFunction(()=>cvQA.entry.inside&&cvQA.homeLocal(cvQA.avatar.position.x,cvQA.avatar.position.z).z> -cvQA.home.d/2+1.65,null,{timeout:30000});
  }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const touchEntry=await mobile.evaluate(()=>({open:cvQA.entry.open,inside:cvQA.entry.inside,roofHidden:cvQA.groups['house-roof'].every(m=>!m.isEnabled()),local:cvQA.homeLocal(cvQA.avatar.position.x,cvQA.avatar.position.z)}));
  assert(touchEntry.open&&touchEntry.inside&&touchEntry.roofHidden);console.log('PASS actual Chromium touch on door and joystick entry',JSON.stringify(touchEntry));
