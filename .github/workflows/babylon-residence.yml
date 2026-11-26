@@ -18,6 +18,16 @@ jobs:
         working-directory: html5-babylon
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Conferir configuração de assinatura QA
+        env:
+          CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
+        run: |
+          if [[ -z "$CV_QA_SIGNING_BUNDLE" ]]; then
+            echo "::error::Cadastre o segredo CV_QA_SIGNING_BUNDLE nas configurações de Actions do repositório. Nenhum APK temporário será distribuído."
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -60,26 +70,34 @@ jobs:
           mkdir -p android-test/app/src/main/assets
           cp html5-babylon/dist/index.html html5-babylon/dist/game.js android-test/app/src/main/assets/
           gradle -p android-test --no-daemon :app:assembleDebug
+      - name: Assinar APK QA com certificado permanente
+        working-directory: .
+        env:
+          CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
+        run: bash android-test/sign-qa.sh
       - name: Validar pacote, assinatura e conteúdo
         working-directory: .
         run: |
           set -euo pipefail
           mkdir -p android-test/qa
-          APK=android-test/app/build/outputs/apk/debug/app-debug.apk
+          APK=android-test/qa-signed.apk
           TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           "$TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee android-test/qa/signature.txt
+          grep -Fx "Signer #1 certificate SHA-256 digest: fdefa3921fb2e0010e5f4a677589a7f8f8a450738626caab4c97dc7ad25f6f21" android-test/qa/signature.txt
+          grep -Fx "Verified using v2 scheme (APK Signature Scheme v2): true" android-test/qa/signature.txt
+          grep -Fx "Number of signers: 1" android-test/qa/signature.txt
           "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
           grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
           if grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt; then exit 1; fi
           unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
           unzip -p "$APK" assets/game.js | cmp - html5-babylon/dist/game.js
-          cp "$APK" android-test/qa/ColheitaVitural-Teste-1J4.apk
+          cp "$APK" android-test/qa/ColheitaVitural-Teste-1J4-AssinaturaFixa.apk
           cd android-test/qa
-          sha256sum ColheitaVitural-Teste-1J4.apk > SHA256SUMS.txt
-          ls -lh ColheitaVitural-Teste-1J4.apk
+          sha256sum ColheitaVitural-Teste-1J4-AssinaturaFixa.apk > SHA256SUMS.txt
+          ls -lh ColheitaVitural-Teste-1J4-AssinaturaFixa.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Colheita-Vitural-APK-Teste-1J4
+          name: Colheita-Vitural-APK-Teste-1J4-AssinaturaFixa
           path: android-test/qa/
           retention-days: 3
           if-no-files-found: error
