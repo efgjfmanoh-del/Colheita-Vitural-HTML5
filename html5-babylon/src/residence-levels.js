@@ -40,3 +40,13 @@ export function railTargets(p){return STAIR_RAILS.map(([a,b])=>{const dx=b[0]-a[
 export const GROUND_DIVIDER=Object.freeze({z:.85,thickness:.18,from:.95,to:7.03,doorLeft:3.65,doorRight:5.35,height:2.82,doorHeight:2.25});
 export function groundWallSegments(){const d=GROUND_DIVIDER;return [[d.from,d.doorLeft],[d.doorRight,d.to]];}
 export function groundDividerBlocked(p,radius=.20){const d=GROUND_DIVIDER;if(Math.abs(p.z-d.z)>=d.thickness/2+radius)return false;return groundWallSegments().some(([a,b])=>p.x>a-radius&&p.x<b+radius);}
+
+// Upper rooms share a wall with a central hall. Keep the stair opening and front approach free.
+export const UPPER_WALLS=Object.freeze([{axis:'z',fixed:3.2,from:-4.28,to:-2.8},{axis:'z',fixed:3.2,from:-1.4,to:2},{axis:'z',fixed:3.2,from:3.4,to:4.28},{axis:'x',fixed:.65,from:3.2,to:7.03}]);
+export const INTERIOR_DOORS=Object.freeze([{id:'kitchen-door',label:'Porta da cozinha',floor:1,axis:'x',fixed:GROUND_DIVIDER.z,from:3.65,to:5.35},{id:'bath-door',label:'Porta do banheiro',floor:2,axis:'z',fixed:3.2,from:-2.8,to:-1.4},{id:'bed-door',label:'Porta do quarto',floor:2,axis:'z',fixed:3.2,from:2,to:3.4}]);
+export function wallSegmentBlocked(p,w,r=.2){const along=w.axis==='x'?p.x:p.z,cross=w.axis==='x'?p.z:p.x;return Math.abs(cross-w.fixed)<.09+r&&along>w.from-r&&along<w.to+r;}
+export function upperWallBlocked(p,r=.2){return UPPER_WALLS.some(w=>wallSegmentBlocked(p,w,r));}
+// Sliding leaf travels along the wall, retaining its own physical collision at every position.
+export function doorLeaf(d,open){const shift=(d.to-d.from)*Math.max(0,Math.min(1,open));const direction=d.id==='kitchen-door'||d.id==='bed-door'?-1:1;return {...d,from:d.from+direction*shift,to:d.to+direction*shift,fixed:d.fixed+.13};}
+export function doorLeafBlocked(p,d,open,r=.2){return wallSegmentBlocked(p,doorLeaf(d,open),r);}
+export function fixtureBlocked(p,f,r=.18){return Math.abs(p.x-f.x)<f.hx+r&&Math.abs(p.z-f.z)<f.hz+r;}

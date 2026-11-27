@@ -98,3 +98,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - 02.01: proprietário optou por circulação manual contínua sem animação guiada. Escada em L preservada; suporte suavizado entre degraus, limite local de velocidade, sem inércia na escada, abertura física e pórtico superior. Testes direcionados e nova regressão obrigatória. Porta e divisão dos cômodos, varanda cultivável e aprovação visual/física pendentes.
 
 - QA 210: run 46049762646 aprovou escada manual e assinatura. 02.01: divisória física sala/cozinha, passagem aberta e corredor para escada implementados; testes integrados pendentes. Porta móvel, cômodos superiores e varanda/jardim permanecem abertos.
+
+- QA 210: divisória térrea aprovada no build/regressão 46054934705, assinatura ainda em andamento na consulta. 02.01/02.02: quarto e banheiro com paredes no superior, cama, guarda-roupa e pia deslocados ao piso correto, três portas internas deslizantes funcionais em código. Nova regressão pendente; varanda/jardim, equipamentos de banheiro e acabamento continuam abertos.
