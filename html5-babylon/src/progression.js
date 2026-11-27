@@ -3,12 +3,12 @@ export const SKILLS=Object.freeze({cultivo:'Cultivo',manejo:'Manejo animal',flor
 export const ACTIVE_SKILLS=['cultivo','manejo','construcao','comercio'];
 export const EVENTS={till:['cultivo',3,'Preparar canteiros'],plant:['cultivo',4,'Plantar sementes'],water:['cultivo',2,'Regar plantações'],harvest:['cultivo',12,'Colher produtos'],weed:['cultivo',4,'Capinar canteiros'],build:['construcao',8,'Construir cercas'],paint:['construcao',3,'Pintar cercas'],care:['manejo',7,'Cuidar dos pets'],sell:['comercio',4,'Vender produtos']};
 export const LAND=[
-{id:'pomar',name:'Pomar do Leste',price:300,level:2,rect:[1480,35,1620,145]},
-{id:'pastagem',name:'Pastagem Alta',price:650,level:3,rect:[1480,180,1620,290]},
-{id:'varzea',name:'Várzea',price:950,level:5,rect:[1480,325,1620,435]},
-{id:'bosque',name:'Bosque das Araucárias',price:1400,level:6,rect:[1480,470,1620,580]},
-{id:'campos',name:'Campos do Sul',price:1800,level:7,rect:[1480,615,1620,725]},
-{id:'serra',name:'Serra dos Pastos',price:2300,level:8,rect:[1480,760,1620,870]}];
+{id:'pomar',name:'Pomar do Leste',price:300,level:2,rect:[100,920,315,1030]},
+{id:'pastagem',name:'Pastagem Alta',price:650,level:3,rect:[355,920,570,1030]},
+{id:'varzea',name:'Várzea',price:950,level:5,rect:[100,1065,315,1175]},
+{id:'bosque',name:'Bosque das Araucárias',price:1400,level:6,rect:[355,1065,570,1175]},
+{id:'campos',name:'Campos do Sul',price:1800,level:7,rect:[100,1210,315,1320]},
+{id:'serra',name:'Serra dos Pastos',price:2300,level:8,rect:[355,1210,570,1320]}];
 export const PERKS=[
 {id:'solo',skill:'cultivo',level:2,name:'Solo fértil',description:'Adubo recupera mais 8% de fertilidade.'},
 {id:'colheita',skill:'cultivo',level:4,requires:'solo',name:'Colheita cuidadosa',description:'+1 produto por colheita.'},

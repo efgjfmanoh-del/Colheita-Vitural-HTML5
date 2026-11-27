@@ -2675,6 +2675,79 @@
       1450,
       1330
     ],
-    "reserved": "West: livestock, east: crops. No animal simulation until its workstream."
+    "reserved": "West: livestock, east: crops. No animal simulation until its workstream.",
+    "expansion": [
+      [
+        100,
+        920,
+        315,
+        1030
+      ],
+      [
+        355,
+        920,
+        570,
+        1030
+      ],
+      [
+        100,
+        1065,
+        315,
+        1175
+      ],
+      [
+        355,
+        1065,
+        570,
+        1175
+      ],
+      [
+        100,
+        1210,
+        315,
+        1320
+      ],
+      [
+        355,
+        1210,
+        570,
+        1320
+      ]
+    ],
+    "zones": [
+      {
+        "id": "pasture",
+        "name": "Pastagens e criação",
+        "rect": [
+          100,
+          270,
+          610,
+          855
+        ],
+        "icon": "🐄"
+      },
+      {
+        "id": "forest",
+        "name": "Bosque reservado",
+        "rect": [
+          35,
+          970,
+          95,
+          1320
+        ],
+        "icon": "🌳"
+      },
+      {
+        "id": "stone",
+        "name": "Recursos rochosos · futuro",
+        "rect": [
+          590,
+          970,
+          665,
+          1320
+        ],
+        "icon": "⛰"
+      }
+    ]
   }
 }
