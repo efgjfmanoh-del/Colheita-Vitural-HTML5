@@ -11,3 +11,6 @@ Aprovado em 27/11/2026. Complementa EFG MASTER STANDARD 2.2.
 - Preservar saves, progresso, assinatura e desempenho. Não alterar arte aprovada sem consentimento.
 - Testar proximidade e afastamento, ação remota negada, estado e persistência, expansão/recolhimento, toque mobile, geometria, captura visual real e regressão final. Separar emulação de aprovação no hardware. Falha bloqueia publicação e exige correção.
 - Aplicar a pesca, criação, floresta, mineração, armazém, oficina, residência e sistemas futuros. Usar componentes rurais compartilhados no código.
+
+## Exceção aprovada em 27/11 — ações de coleta imediata
+Árvore e pedra: proximidade substitui o botão de correr pelo machado/picareta; cada toque executa um golpe animado, sem abrir painel ou mochila. Afastar restaura corrida. Recompensa apenas no último golpe, queda/fragmentação antes de desaparecer, remoção da colisão e renovação natural persistente. Pesca: pontos específicos identificados no atlas/minimapa; painel contextual permitido. Atlas deve permitir seleção/centralização e filtros recolhíveis.

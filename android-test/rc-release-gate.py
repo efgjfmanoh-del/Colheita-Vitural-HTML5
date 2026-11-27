@@ -42,4 +42,12 @@ elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.5',205):
         ready=(parent in {validated,previous} and clean and bool(changes) and set(changes)<=set(allowed))
     except (OSError,subprocess.CalledProcessError):
         ready=False
+elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.6',206):
+    # Scope explicitly approved for an experimental physical test after all CI gates.
+    try:
+        base='89d09e1c211775ca37850679b8159af7fedc39ac'
+        ready=(subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],cwd=root.parent,stderr=subprocess.DEVNULL).returncode==0 and
+               (root/'qa-206-authorization.json').read_text().strip()=='{"version":206,"channel":"qa","scope":"direct-resource-actions-fishing-atlas"}')
+    except (OSError,subprocess.CalledProcessError):
+        ready=False
 print('ready='+str(ready).lower())

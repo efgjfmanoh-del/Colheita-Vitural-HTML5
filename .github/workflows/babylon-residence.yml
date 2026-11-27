@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 3
+          fetch-depth: 0
       - name: Testar leitura independente das senhas QA
         working-directory: .
         run: python3 android-test/test-sign-qa.py
@@ -242,7 +242,7 @@ jobs:
           version=$(jq -er '.versionName' update.json)
           case "$GITHUB_REF" in
             refs/heads/qa/0.1.52) [[ "$code" == 152 && "$version" == "0.1.52" ]] ;;
-            refs/heads/qa/lote-final-025) [[ "$code" == 205 && "$version" == "0.2.5" ]] ;;
+            refs/heads/qa/lote-final-025) [[ "$code" == 205 && "$version" == "0.2.5" || "$code" == 206 && "$version" == "0.2.6" ]] ;;
             refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" || "$code" == 202 && "$version" == "0.2.2" || "$code" == 203 && "$version" == "0.2.3" || "$code" == 204 && "$version" == "0.2.4" ]] ;;
             *) exit 1 ;;
           esac
