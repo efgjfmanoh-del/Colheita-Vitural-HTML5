@@ -350,3 +350,5 @@
 
 ## RC 0.2.0 — interações contextuais unificadas
 - Feedback físico da 0.1.50: botão da porta sobre o minimapa e rótulo da casa dos gatos visível a distância. Substituir ações rápidas existentes por círculos compactos com nomes acessíveis; manter mecanismos reais de porta, banco, vaso, pets, mural, cercas e cultivo recolhido. Posicionamento projetado com zonas de exclusão do HUD, minimapa, joystick, corrida, avatar, painéis e outros círculos; sem espaço livre, suprimir ação em vez de sobrepor. Casa dos pets exige 1,40m de ponto de entrada/saída e diferença de altura menor que 0,85m; cuidado mantém regras existentes. Não criar comandos de luz ou escada sem sistema funcional. Gate RC mantido. Regressão mobile de toque, geometria e captura; CI e teste físico pendentes.
+
+- Revisão subsequente: uma passagem de posicionamento por frame, saída antecipada sem ações visíveis e revalidação de proximidade da porta/banco/vaso. Testes adicionais de alcance e desnível de cada pet. Mantido gate de distribuição.
