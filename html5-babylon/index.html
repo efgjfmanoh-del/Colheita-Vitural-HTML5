@@ -154,6 +154,8 @@ body:has(.world-manager:not([hidden])) #run-action{right:max(24px,env(safe-area-
 #build-panel .build-grid{margin-top:2px}
 #build-panel .build-angle-label{gap:4px}
 @media(max-height:420px){#minimap{width:88px}#minimap canvas{width:80px;height:80px}#build-panel{max-height:40vh}}
+/* Modal priority: CSS reacts even when the world render loop is paused. */
+body:has(#wheat-panel:not([hidden]),#build-panel:not([hidden]),#garden-panel:not([hidden]),#pet-panel:not([hidden]),#ranch-panel:not([hidden]),#farm-center:not([hidden]),#player-menu:not([hidden]),#controls-menu:not([hidden]),#inventory-dialog[open]) #tool-bar{display:none!important}
 </style>
 </head>
 <body><canvas id="view"></canvas>

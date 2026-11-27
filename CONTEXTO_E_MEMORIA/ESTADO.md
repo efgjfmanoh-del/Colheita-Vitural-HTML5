@@ -357,3 +357,5 @@ Barra recolhível global, arco de construção (cercas ativas; celeiros, currais
 
 ## QA 0.1.53 — minimapa e painel de construção
 Minimapa superior direito ancorado abaixo do HUD, com tamanho reduzido, sem sobreposição do HUD/corrida; ocultação somente se faltar espaço. Painel de construção reduzido e rebaixado, mantendo comandos. Testes mobile de geometria e captura. Versão incremental devido à execução em curso da 0.1.52, sem sobrescrever artefatos. RC continua pausada. CI e teste físico pendentes.
+
+- 0.1.52 run 45932568363 falhou: tool-toggle interceptou farm-fertilize durante regressão com render loop pausado. Corrigido em 0.1.53 por prioridade CSS reativa aos painéis, independente do tick; regressão exige barra oculta antes do toque real. Não publicar 0.1.52 falha.
