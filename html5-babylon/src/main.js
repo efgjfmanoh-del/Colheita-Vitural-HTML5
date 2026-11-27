@@ -1,7 +1,7 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer} from '@babylonjs/core';
 import layout from '../layout.json';
 import {createPets} from './pets.js';
-import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice} from './farm-simulation.js';
+import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
 const $=id=>document.getElementById(id),canvas=$('view');
 const engine=new Engine(canvas,true,{preserveDrawingBuffer:true,stencil:true,adaptToDeviceRatio:false});
@@ -196,7 +196,7 @@ entity('waterfall rocks');for(const [u,v] of [[181,42],[159,143]]){let p=P(u,v),
 const HOUSE={u:409,v:137,w:14.5,d:9,h:5.6,angle:-.30,porchRatio:.77,porchDepth:3.65};
 const porchExtension=HOUSE.porchDepth-2.8;
 const houseXZ=(x,z)=>V(X(HOUSE.u)+x*Math.cos(HOUSE.angle)+z*Math.sin(HOUSE.angle),0,Z(HOUSE.v)-x*Math.sin(HOUSE.angle)+z*Math.cos(HOUSE.angle));
-let gateBlocked=()=>false;const fenceColliders=[];const fencePoints=layout.residence.boundary.map(([u,v])=>{let p=P(u,v);if(v<=115&&u>=278&&u<=533){const candidate=P(u,v-4);const n=nearRiver(candidate.x,candidate.z);if(n.dist>n.w/2+1.0)p=candidate;}const center=P(430,153);for(let n=0;n<25&&nearRiver(p.x,p.z).dist<nearRiver(p.x,p.z).w/2+.8;n++)p=Vector3.Lerp(p,center,.045);p.y=height(p.x,p.z);return p});
+let gateBlocked=()=>false,archBlocked=()=>false,archRainSurface=()=>null;const fenceColliders=[];const fencePoints=layout.residence.boundary.map(([u,v])=>{let p=P(u,v);if(v<=115&&u>=278&&u<=533){const candidate=P(u,v-4);const n=nearRiver(candidate.x,candidate.z);if(n.dist>n.w/2+1.0)p=candidate;}const center=P(430,153);for(let n=0;n<25&&nearRiver(p.x,p.z).dist<nearRiver(p.x,p.z).w/2+.8;n++)p=Vector3.Lerp(p,center,.045);p.y=height(p.x,p.z);return p});
 // Preserve random sequence for unchanged scenery; replace only the residence walkway.
 const oldPath=layout.residence.path.map(p=>P(...p));
 for(let i=1;i<oldPath.length;i++)for(let k=0;k<Math.ceil(Vector3.Distance(oldPath[i-1],oldPath[i])/.72)*2;k++)random();
@@ -732,7 +732,7 @@ function saveWorldClock(now=Date.now()){
  try{localStorage.setItem(WORLD_KEY,JSON.stringify(next));worldClock=next;clockLastSave=now;clockError='';return true;}catch{clockError='Relógio: falha ao salvar';return false;}
 }
 // The simulation's rain flag is unchanged; sunny showers are a visual subtype.
-let weatherVisual={kind:'sun',rain:false,night:false,showers:false};
+let weatherVisual={kind:'sun',rain:false,night:false,showers:false};let worldWind=windAt(0);
 function weatherPresentation(w,daylight,hour){
  const night=daylight.daylight<.20,showers=w.kind==='rain'&&!night&&hour>=7&&hour<18&&w.slot%3===1;
  const icon=night?({sun:'🌙',cloud:'☁️',rain:'🌙🌧️',storm:'⛈️'}[w.kind]):({sun:'☀️',cloud:'🌤️',rain:showers?'🌦️':'🌧️',storm:'⛈️'}[w.kind]);
@@ -1393,7 +1393,7 @@ function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.
 function blocked(x,z,interacting=false,from=null,ignoreFences=false){
  const check=fn=>obstacleEntered(fn(x,z),from?fn(from.x,from.z):null);
  if(check((a,b)=>Math.min(a-minX-1,maxX-1-a,b-minZ-1,maxZ-1-b)))return true;
- const bridge=onBridge(x,z);if(gateBlocked(x,z,from))return true;
+ const bridge=onBridge(x,z);if(gateBlocked(x,z,from)||archBlocked(x,z,from))return true;
  if(!bridge&&check((a,b)=>{const n=nearRiver(a,b);return n.dist-n.w*.54-.12;}))return true;
  if(rockBlocked(x,z,from))return true;
  if(trunkColliders.some(t=>check((a,b)=>Math.hypot(a-t.x,b-t.z)-t.r-.18)))return true;
@@ -1722,7 +1722,7 @@ function updateLocomotion(x,z,rawDt,held=sprint.held||keys.has('shift')){
 entity('world precipitation');
 const rainStats={capacity:420,active:0,impacts:{ground:0,roof:0,river:0,deck:0},runoff:0,wetness:0,puddles:0};
 let rainSeed=76531;const rainRnd=()=>((rainSeed=Math.imul(1664525,rainSeed)+1013904223|0)>>>0)/4294967296;
-const rainMaterial=mat('world rain droplet','#c6e4ee');rainMaterial.disableLighting=true;rainMaterial.emissiveColor=Color3.FromHexString('#91c4d8');rainMaterial.alpha=.67;rainMaterial.disableDepthWrite=true;
+const rainMaterial=mat('world rain droplet','#c6e4ee');rainMaterial.disableLighting=true;rainMaterial.emissiveColor=Color3.FromHexString('#91c4d8');rainMaterial.alpha=.56;rainMaterial.disableDepthWrite=true;
 const rippleMaterial=mat('water impact ripples','#c1e6ed');rippleMaterial.disableLighting=true;rippleMaterial.emissiveColor=Color3.FromHexString('#80b9ce');rippleMaterial.alpha=.52;rippleMaterial.disableDepthWrite=true;
 const rainDropMesh=MeshBuilder.CreateSphere('world falling drops',{diameter:2,segments:5},scene);
 const splashMesh=MeshBuilder.CreateSphere('world splash beads',{diameter:2,segments:4},scene);
@@ -1733,10 +1733,11 @@ const dropMatrices=new Float32Array(rainPool.length*16),ringMatrices=new Float32
 for(const [mesh,material,buffer] of [[rainDropMesh,rainMaterial,dropMatrices],[splashMesh,rainMaterial,splashMatrices],[rainRingMesh,rippleMaterial,ringMatrices]]){
  own(mesh,material,false);mesh.receiveShadows=false;mesh.alwaysSelectAsActiveMesh=true;mesh.thinInstanceSetBuffer('matrix',buffer,16,false);mesh.setEnabled(false);
 }
-function rainMatrix(buffer,i,x,y,z,sx,sy,sz){
- const o=i*16;buffer[o]=sx;buffer[o+5]=sy;buffer[o+10]=sz;buffer[o+12]=x;buffer[o+13]=y;buffer[o+14]=z;buffer[o+15]=1;
+function rainMatrix(buffer,i,x,y,z,sx,sy,sz,leanX=0,leanZ=0){
+ const o=i*16;buffer[o]=sx;buffer[o+4]=leanX*sy;buffer[o+5]=sy;buffer[o+6]=leanZ*sy;buffer[o+10]=sz;buffer[o+12]=x;buffer[o+13]=y;buffer[o+14]=z;buffer[o+15]=1;
 }
 function rainSurface(x,z){
+ const archSurface=archRainSurface(x,z);if(archSurface)return archSurface;
  const p=homeLocal(x,z),ow=home.w/2+.55,od=home.d/2+.65,e=HOUSE.h+.5,r=e+home.w*.26;
  if(Math.abs(p.x)<=ow&&Math.abs(p.z)<=od){
   let y=home.y+r+(e-r)*Math.abs(p.x)/ow+.13;
@@ -1780,7 +1781,7 @@ function respawnRain(p,i,initial=false){
   const a=Math.max(1,engine.getRenderWidth()/Math.max(1,engine.getRenderHeight())),w=span,h=span/a;
   x=Math.max(minX+.5,Math.min(maxX-.5,camera.target.x+(rainRnd()-.5)*w));z=Math.max(minZ+.5,Math.min(maxZ-.5,camera.target.z+(rainRnd()-.5)*Math.max(h*1.6,26)));
  }
- p.x=x;p.z=z;p.target=rainSurface(x,z);p.runoff=runoff;p.speed=runoff?7+rainRnd()*3:13+rainRnd()*9;
+ p.x=x;p.z=z;p.target=rainSurface(x,z);p.runoff=runoff;p.speed=runoff?7+rainRnd()*3:13+rainRnd()*9;p.radius=.021+rainRnd()*.009;p.length=.075+rainRnd()*.12;
  p.y=runoff?Math.max(p.target.y+.2,y):p.target.y+9+rainRnd()*9;
  if(initial)p.y=p.target.y+(p.y-p.target.y)*rainRnd();
  p.life=1;
@@ -1806,8 +1807,10 @@ function updateRain(dt,weather=weatherVisual){
   }
   // Invisible roofs still shelter interior/porch; never draw through their cutaway.
   const hidden=p.target.kind==='roof'&&(p.target.hidden||entry.inside&&Math.abs(homeLocal(p.x,p.z).x)<home.w/2)||p.runoff&&entry.mode!=='exterior';
-  const len=p.runoff?.10:.16+p.speed*.012;
-  rainMatrix(dropMatrices,i,p.x,p.y,p.z,hidden?0:.018,hidden?0:len,hidden?0:.018);
+  // Short variable droplets, inclined and displaced by the same wind
+  // field. p.x/z are the actual landing coordinates used by the splashes.
+  const len=p.runoff?.08:p.length,fall=Math.max(0,p.y-p.target.y),wx=p.runoff?0:worldWind.x*.24/p.speed,wz=p.runoff?0:worldWind.z*.24/p.speed;
+  rainMatrix(dropMatrices,i,p.x-wx*fall,p.y,p.z-wz*fall,hidden?0:p.radius,hidden?0:len,hidden?0:p.radius,-wx,-wz);
  }
  let visible=0;
  for(let i=0;i<impactPool.length;i++){
@@ -2034,28 +2037,111 @@ const RANCH_KEY='cv.ranch.v1';let ranchName='Meu Rancho',ranchLocked=false;
 try{const raw=localStorage.getItem(RANCH_KEY);if(raw!==null){const v=JSON.parse(raw);if(typeof v.name!=='string'||!v.name.trim()||v.name.length>32)throw Error('invalid');ranchName=v.name;}}catch{ranchLocked=true;}
 entity('ranch arch');const arch=bridgeExit.add(bridgeAxis.scale(1.25));arch.y=height(arch.x,arch.z);const archAngle=Math.atan2(bridgeAxis.x,bridgeAxis.z);
 for(const k of [-1,1]){const v=arch.add(bridgeSide.scale(k*1.95));box('ranch arch post',v.x,arch.y+1.75,v.z,.23,3.5,.23,M.woodDark,archAngle);worldFixtures.push({id:'ranch-arch-'+k,x:v.x,z:v.z,hx:.13,hz:.13});}
-box('ranch name board',arch.x,arch.y+3.12,arch.z,4.10,.62,.20,M.woodLight,archAngle);
+// Crossbeam is fixed, while the board and both text faces share a top hinge.
+box('ranch fixed crossbeam',arch.x,arch.y+3.31,arch.z,4.10,.16,.22,M.woodDark,archAngle);
+entity('ranch sign moving');const signSupport=new Mesh('ranch sign support',scene);signSupport.position=V(arch.x,arch.y+3.14,arch.z);signSupport.rotation.y=archAngle;
+const signPivot=new Mesh('ranch sign hanging hinge',scene);signPivot.parent=signSupport;
+for(const x of [-1.36,1.36]){const hook=cyl('sign hanging iron link',x,-.10,0,.034,.30,M.black);hook.parent=signPivot;}
+const nameBoard=box('ranch hanging name board',0,-.49,0,3.48,.64,.15,M.woodLight);nameBoard.parent=signPivot;
+entity('ranch arch');
 for(const k of [-1,1]){const v=arch.add(bridgeAxis.scale(k*.38)),roof=box('ranch arch roof',v.x,arch.y+3.58,v.z,4.42,.14,.89,M.roof,archAngle);roof.rotation.x=k*.29;}
 const ranchTex=new DynamicTexture('ranch personalized sign',{width:512,height:96},scene,true),ranchMat=mat('ranch name sign','#ffffff');ranchMat.diffuseTexture=ranchTex;ranchMat.backFaceCulling=false;ranchMat.emissiveColor=new Color3(.12,.10,.06);
-for(const k of [-1,1]){const v=arch.add(bridgeAxis.scale(k*.115)),plane=MeshBuilder.CreatePlane('ranch name face',{width:3.94,height:.53},scene);plane.position=V(v.x,arch.y+3.12,v.z);plane.rotation.y=archAngle+(k===1?Math.PI:0);own(plane,ranchMat,false);}
+entity('ranch sign moving');
+for(const k of [-1,1]){const plane=MeshBuilder.CreatePlane('ranch name face',{width:3.36,height:.56},scene);plane.parent=signPivot;plane.position=V(0,-.49,k*.081);plane.rotation.y=k===1?Math.PI:0;own(plane,ranchMat,false);}
+ranchMat.maxSimultaneousLights=8;ranchMat.emissiveColor=new Color3(.26,.22,.16);
+entity('ranch wind vane');
+cyl('wind vane fixed mast',arch.x,arch.y+3.96,arch.z,.043,.65,M.black);
+const vane=new Mesh('wind vane rotating head',scene);vane.position=V(arch.x,arch.y+4.29,arch.z);
+// Arrow points toward the source of wind (local +Z).
+const vanePart=(name,mesh)=>{mesh.name=name;mesh.parent=vane;return mesh;};
+vanePart('wind arrow shaft',box('arrow',0,0,0,.055,.055,1.18,M.black));
+const headArrow=cyl('wind arrow head',0,0,.65,.13,.30,M.black,0);headArrow.rotation.x=Math.PI/2;headArrow.parent=vane;
+vanePart('vane tail',box('tail',0,.12,-.53,.045,.32,.32,M.black));
+vanePart('rooster body',sphere('rooster body',0,.27,-.10,.052,.18,.25,M.black));
+vanePart('rooster head',sphere('rooster head',0,.48,.085,.048,.10,.11,M.black));
+vanePart('rooster beak',box('rooster beak',0,.48,.22,.055,.05,.13,M.woodLight));
+for(let i=0;i<3;i++)vanePart('rooster comb',sphere('comb',0,.58+.026*(i===1),.015+i*.06,.035,.052,.045,M.roof));
+for(let i=0;i<3;i++){const feather=vanePart('rooster tail feather',box('feather',0,.34+i*.08,-.35-i*.04,.04,.08,.31,M.black));feather.rotation.x=-.6-i*.2;}
+for(const x of [-.09,.09])vanePart('rooster foot',box('foot',x*.15,.09,-.10+x,.035,.22,.035,M.black));
+const signMotion={angle:0,velocity:0,vaneYaw:0,peak:0,contacts:0};
+function updateWindObjects(dt,wind=worldWind){
+ dt=Math.max(0,Math.min(.10,dt));
+ const pressure=wind.z*Math.cos(archAngle)+wind.x*Math.sin(archAngle),target=Math.max(-.30,Math.min(.30,pressure*.045));
+ // Damped hinge with angular hard stops, stable even after a frame delay.
+ const steps=Math.max(1,Math.ceil(dt/.012)),step=dt/steps;
+ for(let i=0;i<steps;i++){signMotion.velocity+=(target-signMotion.angle)*22*step-signMotion.velocity*5.2*step;signMotion.angle+=signMotion.velocity*step;if(Math.abs(signMotion.angle)>.33){signMotion.angle=Math.sign(signMotion.angle)*.33;signMotion.velocity*=-.20;signMotion.contacts++;}}
+ signMotion.peak=Math.max(signMotion.peak,Math.abs(signMotion.angle));signPivot.rotation.x=signMotion.angle;
+ const desired=Math.atan2(-wind.x,-wind.z);signMotion.vaneYaw+=angleDelta(signMotion.vaneYaw,desired)*(1-Math.exp(-dt*4));vane.rotation.y=signMotion.vaneYaw;
+ signSupport.computeWorldMatrix(true);signPivot.computeWorldMatrix(true);vane.computeWorldMatrix(true);
+}
+function archLocal(x,z){const dx=x-arch.x,dz=z-arch.z;return {x:dx*Math.cos(archAngle)-dz*Math.sin(archAngle),z:dx*Math.sin(archAngle)+dz*Math.cos(archAngle)};}
+archRainSurface=(x,z)=>{const p=archLocal(x,z);return Math.abs(p.x)<2.22&&Math.abs(p.z)<.83?{y:arch.y+3.72-.29*Math.abs(p.z),kind:'roof',hidden:false}:null;};
+archBlocked=(x,z,from)=>{
+ const clearance=(a,b)=>{const p=archLocal(a,b),bottom=arch.y+3.14-.82*Math.cos(signMotion.angle)-.08*Math.abs(Math.sin(signMotion.angle)),head=surfaceHeight(a,b)+1.94;if(head<bottom-.02)return 1;return Math.max(Math.abs(p.x)-1.92,Math.abs(p.z-.49*Math.sin(signMotion.angle))-.24);};
+ return obstacleEntered(clearance(x,z),from?clearance(from.x,from.z):null);
+};
+
 function drawRanch(){const c=ranchTex.getContext();c.fillStyle='#b58650';c.fillRect(0,0,512,96);c.strokeStyle='#69482d';c.lineWidth=5;c.strokeRect(4,4,504,88);c.fillStyle='#38281b';c.font='bold 39px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(ranchName,256,48,470);ranchTex.update();$('ranch-hud').textContent=ranchName;}
 function ranchNearby(){return Math.hypot(avatar.position.x-arch.x,avatar.position.z-arch.z)<3.0;}
 function setRanchName(name){name=String(name).trim().slice(0,32);if(!name||!ranchNearby()||ranchLocked)return false;try{localStorage.setItem(RANCH_KEY,JSON.stringify({name}));ranchName=name;drawRanch();return true;}catch{return false;}}
 drawRanch();$('ranch-open').onclick=()=>{if(!ranchNearby())return;$('ranch-name').value=ranchName;$('ranch-panel').hidden=false;};$('ranch-close').onclick=()=>{$('ranch-panel').hidden=true;};$('ranch-save').onclick=()=>{if(setRanchName($('ranch-name').value))$('ranch-panel').hidden=true;};
 function boardNearby(){return Math.hypot(avatar.position.x-fieldSignCollider.x,avatar.position.z-fieldSignCollider.z)<2.3;}
 $('gate-action').onclick=()=>toggleGate();
-function updateWorldActions(dt){if(!farmCenter.hidden&&!boardNearby())farmCenter.hidden=true;contextClock+=dt;if(contextClock<.15)return;contextClock=0;const now=worldElapsed();if(now-lastCareRefresh>REAL_MS_PER_GAME_MINUTE*10){lastCareRefresh=now;accrueFence(now);for(const piece of editableFences.values())fenceLook(piece);saveFenceCare();}
+function projectWorld(p){const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}
+const contextRects=()=>['world-calendar','hud','joy','run-action','minimap','wheat-panel','wheat-expand','pet-panel','pet-action','pet-context','garden-action','seat-action','door-action'].map(id=>$(id)).filter(e=>e&&!e.hidden&&e.getBoundingClientRect().width>0).map(e=>e.getBoundingClientRect());
+function positionWorldContext(el){
+ if(el.hidden)return;
+ const feet=projectWorld(avatar.position),head=projectWorld(avatar.position.add(V(0,1.95,0))),w=el.offsetWidth,h=el.offsetHeight,margin=6;
+ const ax=Number.isFinite(feet.x)?feet.x:innerWidth/2,ay=Number.isFinite(feet.y)?feet.y:innerHeight/2,hy=Number.isFinite(head.y)?head.y:ay-42;
+ const playerRect={left:Math.min(ax,head.x)-19,right:Math.max(ax,head.x)+19,top:Math.min(ay,hy)-10,bottom:Math.max(ay,hy)+8};
+ const obstacles=[playerRect,...contextRects()],fits=(x,y)=>x>=margin&&y>=margin&&x+w<=innerWidth-margin&&y+h<=innerHeight-margin&&!obstacles.some(r=>x<r.right+4&&x+w>r.left-4&&y<r.bottom+4&&y+h>r.top-4);
+ const candidates=[[ax-w/2,ay+14],[ax+29,hy+8],[ax-w-29,hy+8],[ax-w/2,hy-h-16],[innerWidth/2-w/2,innerHeight-h-12],[innerWidth/2-w/2,innerHeight*.66]];
+ const p=candidates.map(([x,y])=>[Math.max(margin,Math.min(innerWidth-w-margin,x)),Math.max(margin,Math.min(innerHeight-h-margin,y))]).find(([x,y])=>fits(x,y));
+ if(!p){el.style.visibility='hidden';return;}el.style.visibility='visible';el.style.left=Math.round(p[0])+'px';el.style.top=Math.round(p[1])+'px';
+}
+function updateWorldActions(dt){if(!farmCenter.hidden&&!boardNearby())farmCenter.hidden=true;contextClock+=dt;if(contextClock<.15){positionWorldContext($('world-quick'));positionWorldContext($('fence-context'));return;}contextClock=0;const now=worldElapsed();if(now-lastCareRefresh>REAL_MS_PER_GAME_MINUTE*10){lastCareRefresh=now;accrueFence(now);for(const piece of editableFences.values())fenceLook(piece);saveFenceCare();}
  nearFence=nearbyFence();const free=!build.open&&!build.work&&!entry.action&&seating.phase==='idle'&&!tillWork&&playerMenu.hidden&&controlsMenu.hidden&&farmCenter.hidden&&gardenPanel.hidden&&$('pet-panel').hidden&&$('ranch-panel').hidden;
- $('fence-context').hidden=!free||!nearFence;if(nearFence){$('fence-condition').textContent='Madeira '+Math.round(fenceCondition(nearFence.id)*100)+'% · '+woodNames[fenceCare.items[nearFence.id]?.paint??0];$('fence-repair').disabled=!!fenceCareError||fenceCondition(nearFence.id)>.995;$('fence-paint').disabled=!!fenceCareError;}
- const gate=nearGate();$('gate-action').hidden=!free||!gate;$('gate-action').disabled=!!gateWork;if(gate)$('gate-action').textContent=gate.target>.5?'Fechar portão':'Abrir portão';$('ranch-open').hidden=!free||!ranchNearby();$('farm-open').hidden=!free||!boardNearby();if(!ranchNearby())$('ranch-panel').hidden=true;
+ const gate=nearGate(),board=boardNearby(),ranch=ranchNearby(),other=board||ranch||!!gate,petNear=petSystem.pets.some(p=>petSystem.homeNear(p)||petSystem.animalNear(p));
+ $('fence-context').hidden=!free||!nearFence||other||petNear||!wheatPanel.hidden||!$('wheat-expand').hidden;if(nearFence){$('fence-condition').textContent='Madeira '+Math.round(fenceCondition(nearFence.id)*100)+'% · '+woodNames[fenceCare.items[nearFence.id]?.paint??0];$('fence-repair').disabled=!!fenceCareError||fenceCondition(nearFence.id)>.995;$('fence-paint').disabled=!!fenceCareError;}
+ $('gate-action').hidden=!free||!gate;$('gate-action').disabled=!!gateWork;if(gate){$('gate-action').title=gate.target>.5?'Fechar portão':'Abrir portão';$('gate-action').setAttribute('aria-label',$('gate-action').title);$('gate-action').querySelector('.context-icon').textContent=gate.target>.5?'⇥':'⇤';}$('ranch-open').hidden=!free||!ranch;$('farm-open').hidden=!free||!board;$('world-quick').hidden=!free||!other;positionWorldContext($('world-quick'));positionWorldContext($('fence-context'));if(!ranch)$('ranch-panel').hidden=true;
 }
 accrueFence();for(const piece of editableFences.values())fenceLook(piece);window.addEventListener('pagehide',()=>{accrueFence();saveFenceCare();});
+// Draw actual world geometry on a cached north-up map; no second 3D camera.
+// World coordinates +X east, +Z north. Player yaw follows the model.
+const mapCanvas=$('minimap-canvas'),mapCtx=mapCanvas.getContext('2d'),mapBase=document.createElement('canvas');mapBase.width=mapBase.height=512;const baseCtx=mapBase.getContext('2d'),mapScale=512/Math.max(maxX-minX,maxZ-minZ);
+const mapXY=(x,z)=>[(x-minX)*mapScale,(maxZ-z)*mapScale];
+function mapLine(points,color,width,close=false){if(points.length<2)return;baseCtx.beginPath();for(const [i,p] of points.entries()){const q=mapXY(p.x,p.z);i?baseCtx.lineTo(...q):baseCtx.moveTo(...q);}if(close)baseCtx.closePath();baseCtx.strokeStyle=color;baseCtx.lineWidth=width*mapScale;baseCtx.lineJoin='round';baseCtx.lineCap='round';baseCtx.stroke();}
+function mapPoly(points,color){baseCtx.beginPath();points.forEach((p,i)=>{const q=mapXY(p.x,p.z);i?baseCtx.lineTo(...q):baseCtx.moveTo(...q);});baseCtx.closePath();baseCtx.fillStyle=color;baseCtx.fill();}
+baseCtx.fillStyle='#435d37';baseCtx.fillRect(0,0,512,512);
+for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z+seg.dz)],'#357f94',seg.w);}
+mapLine(pathRows.map(row=>row[1]),'#c6b38a',2.3);mapLine(approachRows.map(row=>row[1]),'#b89664',2.6);mapLine([bridgeEntry,bridgeExit],'#c6a273',3.0);
+mapPoly([home.C(-home.w/2,0,-home.d/2),home.C(home.w/2,0,-home.d/2),home.C(home.w/2,0,home.d/2),home.C(-home.w/2,0,home.d/2)],'#a96342');
+mapPoly(wheatPolygon,'#73824d');for(const b of wheatBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
+for(const tree of treePositions){const x=tree.x??tree[0],z=tree.z??tree[2];if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
+let mapClock=0;const mapQA={heading:0,frames:0,north:'+Z',east:'+X'};
+function drawMinimap(dt,force=false){
+ mapClock+=dt;if(!force&&mapClock<.10)return;mapClock=0;
+ const c=mapCtx,W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17,scale=rad/27;
+ const [mx,my]=mapXY(avatar.position.x,avatar.position.z),view=54*mapScale;
+ c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
+ // drawImage clips source bounds correctly; padded base is drawn through a transform.
+ c.drawImage(mapBase,mid-mx*scale/mapScale,mid-my*scale/mapScale,512*scale/mapScale,512*scale/mapScale);
+ const screen=p=>[mid+(p.x-avatar.position.x)*scale,mid-(p.z-avatar.position.z)*scale];
+ c.lineWidth=1.6;c.strokeStyle='#d6c095';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
+ for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
+ c.translate(mid,mid);c.rotate(avatar.rotation.y);c.beginPath();c.moveTo(0,-12);c.lineTo(7,7);c.lineTo(0,3);c.lineTo(-7,7);c.closePath();c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
+ c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
+ c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';c.fillText('N',mid,9);c.fillText('S',mid,H-8);c.fillText('L',W-8,mid);c.fillText('O',9,mid);
+ mapQA.heading=avatar.rotation.y;mapQA.frames++;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='↝ '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
+}
+drawMinimap(0,true);
+
 const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
 petBodyBlocked=petSystem.bodyBlocked;
 // Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
 for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=8;
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||build.open))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);tickBuild(dt,Math.hypot(input.x,input.z)>.03);tickGates(dt,Math.hypot(input.x,input.z)>.03);updateWorldActions(dt);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork&&!build.open&&wheatPanel.hidden&&$('wheat-expand').hidden&&$('ranch-panel').hidden);refreshFarmCenter();
- const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x/3),Math.round(camera.target.z/3),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/(entry.blend>.02?20:30)){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||build.open))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);tickBuild(dt,Math.hypot(input.x,input.z)>.03);tickGates(dt,Math.hypot(input.x,input.z)>.03);updateWorldClock();worldWind=windAt(worldElapsed(),weatherVisual.kind);updateWindObjects(dt);drawMinimap(dt);updateWorldActions(dt);updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork&&!build.open&&wheatPanel.hidden&&$('wheat-expand').hidden&&$('ranch-panel').hidden&&$('world-quick').hidden&&$('fence-context').hidden);refreshFarmCenter();
+ const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(entry.door*20),Math.round(signMotion.angle*8),Math.round(signMotion.vaneYaw*3),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x/3),Math.round(camera.target.z/3),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/(entry.blend>.02?20:30)){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
 scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];perf.maxMs=a.at(-1);perf.slowFrames=a.filter(ms=>ms>33.33).length;$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros · pico '+perf.maxMs.toFixed(1)+' ms · lentos '+perf.slowFrames;perf.samples=[];perf.windowStart=now;}});
@@ -2079,7 +2165,7 @@ if(waterMotion.length){
 const animated=new Set(flowBatch?[flowBatch]:[]);
 const casters=new Set(shadow.getShadowMap().renderList||[]);
 for(const [id,parts] of Object.entries(groups)){
- if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','residence fence','hoe soil effects','construction preview','construction tools','bridge gates','chimney smoke','world precipitation','dog','cat','pet bowls','pet toys','hoe tool'].includes(id))continue;
+ if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','residence fence','hoe soil effects','construction preview','construction tools','bridge gates','ranch sign moving','ranch wind vane','chimney smoke','world precipitation','dog','cat','pet bowls','pet toys','hoe tool'].includes(id))continue;
  const buckets=new Map(),kept=[];
  for(const m of parts){
   if(animated.has(m)||m.parent||!m.material||m.getTotalVertices()===0||m.hasThinInstances){kept.push(m);continue}
@@ -2103,4 +2189,4 @@ const residenceCasters=new Set(shadow.getShadowMap().renderList||[]);for(const i
 // Assign interior emitters to interior surfaces, not the outside façade/roof.
 for(const {id,light:l} of nightLights){if(id==='warm interior'||id==='warm loft')l.includedOnlyMeshes=[...(groups.house||[]),...(groups['farm visitor']||[]),...(groups.dog||[]),...(groups.cat||[])];}
 
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

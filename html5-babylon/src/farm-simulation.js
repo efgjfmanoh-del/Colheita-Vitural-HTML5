@@ -64,3 +64,13 @@ export function cropAdvice(id,elapsed){
  });
  return {id,crop,schedule,days,best:days.slice().sort((a,b)=>b.score-a.score||a.date.absoluteDay-b.date.absoluteDay)[0]};
 }
+
+// Shared offline wind field. North is +Z; east is +X. The vector points
+// where air travels, while the vane's arrow points into the wind.
+export function windAt(elapsed,kind=weatherAt(elapsed).kind){
+ const hour=Math.max(0,elapsed)/gameHoursToRealMs(1),slot=Math.floor(hour/3),u=hour/3-slot,mix=u*u*(3-2*u);
+ const a=hash(slot+44000)*Math.PI*2,b=hash(slot+44001)*Math.PI*2,angle=a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*mix;
+ const speed=({sun:1.5,cloud:2.8,rain:4.6,storm:9.5})[kind]??1.5;
+ const gust=.78+.28*(.5+.5*Math.sin(hour*2.4))+.15*(.5+.5*Math.sin(hour*7.7));
+ return {angle,speed:speed*gust,x:Math.sin(angle)*speed*gust,z:Math.cos(angle)*speed*gust};
+}
