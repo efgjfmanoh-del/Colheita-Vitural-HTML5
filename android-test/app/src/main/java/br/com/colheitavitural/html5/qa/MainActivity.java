@@ -21,7 +21,7 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private static final String HOME = ORIGIN + "/assets/index.html";
     private WebView web;
-    private UpdateCenter updates;
+    private volatile UpdateCenter updates;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -61,10 +61,15 @@ public final class MainActivity extends Activity {
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
         frame.addView(web, new android.widget.FrameLayout.LayoutParams(-1,-1));
         updates = new UpdateCenter(this, frame);
-        web.addJavascriptInterface(new Object(){ @android.webkit.JavascriptInterface public void openUpdates(){runOnUiThread(()->{if(updates!=null)updates.show();});} @android.webkit.JavascriptInterface public String version(){return updates==null?"0.2.3":updates.installedName;}},"CVAndroid");
+        web.addJavascriptInterface(new LocalUpdates(),"CVAndroid");
         setContentView(frame);
         hideBars();
         web.loadUrl(HOME);
+    }
+
+    public final class LocalUpdates {
+        @android.webkit.JavascriptInterface public void openUpdates(){runOnUiThread(()->{if(updates!=null)updates.show();});}
+        @android.webkit.JavascriptInterface public String updateStatus(){UpdateCenter center=updates;return center==null?"{\"text\":\"0.2.3\",\"available\":false}":center.menuState;}
     }
 
     private static WebResourceResponse notFound() {

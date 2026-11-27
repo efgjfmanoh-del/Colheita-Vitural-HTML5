@@ -30,6 +30,7 @@ final class UpdateCenter {
     final ExecutorService worker=Executors.newSingleThreadExecutor();
     final Button badge; final long installed; final String installedName; final SharedPreferences history;
     boolean showReport=false; long downloadedBytes=0;
+    volatile String menuState="{\"text\":\"Atualizações\",\"available\":false}";
     long id=-1,checkedAt=0; Info info;
     boolean alive=true,active=false,checking=false,verifying=false,verified=false;
     int progress=0; String status="Verificar novas versões";
@@ -175,7 +176,8 @@ final class UpdateCenter {
         dialog.setOnDismissListener(v->{dialog=null;detail=null;bar=null;checkButton=null;downloadButton=null;installButton=null;cancelButton=null;});dialog.show();refresh();
     }
     void refresh(){
-        badge.setText(verified?"Atualização pronta":id>=0?"Atualização "+progress+"%":info!=null?"Atualização • 1":showReport?"Atualizado • "+installedName:"Atualizações");
+        String label=verified?"Atualização pronta":id>=0?"Baixando "+progress+"%":info!=null?"Nova versão • "+info.name:showReport?"Atualizado • "+installedName:"Versão "+installedName;
+        menuState="{\"text\":"+JSONObject.quote(label)+",\"available\":"+(info!=null||verified)+"}";badge.setText(label);
         if(detail!=null){detail.setText("Canal experimental · "+installedName+(info==null?"":"\nNova versão "+info.name)+"\n"+status+(id>=0&&info!=null?String.format(new Locale("pt","BR"),"\nProgresso: %d%% · %.2f / %.2f MB",progress,downloadedBytes/1000000.0,info.size/1000000.0):""));bar.setProgress(progress);
             checkButton.setEnabled(!checking&&id<0&&!verified);downloadButton.setEnabled(info!=null&&id<0&&!checking&&!verified&&!verifying);installButton.setEnabled(verified&&!verifying);cancelButton.setEnabled(id>=0&&!verified&&!verifying);}
     }
