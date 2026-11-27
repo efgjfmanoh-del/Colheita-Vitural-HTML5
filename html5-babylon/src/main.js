@@ -154,8 +154,11 @@ function nearRiver(x,z){
  const result={dist:Math.sqrt(best),y,w};riverCache={x,z,result};return result;
 }
 function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const flat=2.65+west+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
-entity('terrain');const minX=X(20),maxX=X(20+730*204/170),minZ=Z(-20+350*121/110),maxZ=Z(-20),nx=204,nz=121,pos=[],idx=[],colors=[],uvs=[];
-for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=minX+(maxX-minX)*i/nx,z=minZ+(maxZ-minZ)*j/nz,y=height(x,z),n=nearRiver(x,z),d=n.dist-n.w/2;pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
+entity('terrain');const minX=X(20),oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(950),maxZ=Z(-20),nx=284,nz=217,pos=[],idx=[],colors=[],uvs=[];
+const axis=(a,b,n)=>Array.from({length:n+1},(_,i)=>a+(b-a)*i/n);
+const terrainXs=[...axis(minX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,oldMinZ,96),...axis(oldMinZ,maxZ,121).slice(1)];
+const expansionQA={originalVertices:205*122,terrainVertices:(nx+1)*(nz+1),roads:[],sectors:[],activeSector:null};
+for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=terrainXs[i],z=terrainZs[j],y=height(x,z),n=nearRiver(x,z),d=n.dist-n.w/2;pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
 for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){let a=j*(nx+1)+i;idx.push(a,a+nx+1,a+1,a+1,a+nx+1,a+nx+2)}
 const ground=new Mesh('sculpted terrain mesh',scene),gd=new VertexData();gd.positions=pos;gd.indices=idx;gd.colors=colors;gd.uvs=uvs;gd.normals=[];VertexData.ComputeNormals(pos,idx,gd.normals);if(gd.normals[1]<0){for(let i=0;i<idx.length;i+=3)[idx[i+1],idx[i+2]]=[idx[i+2],idx[i+1]];gd.indices=idx;VertexData.ComputeNormals(pos,idx,gd.normals);}gd.applyToMesh(ground);own(ground,M.grass,false);
 const terrainSkirtStats={rings:0,vertices:0,margin:64,maxJoinGap:0};
@@ -228,7 +231,7 @@ entity('stone walkway');
 const pathVertices=[],pathIndices=[],pathUV=[],pathColors=[];
 // Match the rendered terrain triangles, not only the continuous height function.
 function renderedTerrainY(x,z){
- const u=Math.max(0,Math.min(nx-1e-8,(x-minX)/(maxX-minX)*nx)),v=Math.max(0,Math.min(nz-1e-8,(z-minZ)/(maxZ-minZ)*nz));
+ const coord=(a,x)=>{let lo=0,hi=a.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(a[m]<=x)lo=m;else hi=m;}return lo+Math.max(0,Math.min(1-1e-8,(x-a[lo])/(a[hi]-a[lo])));};const u=coord(terrainXs,x),v=coord(terrainZs,z);
  const i=Math.floor(u),j=Math.floor(v),fx=u-i,fz=v-j,k=j*(nx+1)+i;
  const a=pos[k*3+1],b=pos[(k+1)*3+1],c=pos[(k+nx+1)*3+1],dd=pos[(k+nx+2)*3+1];
  return fx+fz<=1?a+(b-a)*fx+(c-a)*fz:dd+(c-dd)*(1-fx)+(b-dd)*(1-fz);
@@ -349,6 +352,18 @@ const dirtGravelTex=new DynamicTexture('fine pebbles in light earth',{width:256,
 const dirtRoadMaterial=mat('light compacted farm dirt with fine gravel','#ffffff');dirtRoadMaterial.diffuseTexture=dirtGravelTex;dirtRoadMaterial.backFaceCulling=false;dirtRoadMaterial.specularColor=Color3.Black();dirtRoadMaterial.emissiveColor=new Color3(.025,.017,.009);
 const road=new Mesh('continuous compacted farm dirt road',scene),dirtRoadData=new VertexData();dirtRoadData.positions=rp;dirtRoadData.indices=ri;dirtRoadData.colors=rc;dirtRoadData.uvs=ru;dirtRoadData.normals=Array.from({length:rp.length},(_,i)=>i%3===1?1:0);dirtRoadData.applyToMesh(road);own(road,dirtRoadMaterial,false);
 const roadMetrics={sections:sections.length,vertices:road.getTotalVertices(),indices:road.getTotalIndices(),segments:approachCurve.length-1,material:'dirt',fineGravel:true,textureSize:256,stones:pavingStats.approach,stoneColors:pavingStats.colors.size,maxStoneSize:pavingStats.maxStoneSize};
+// Reference roads, sampled as smooth ground-following ribbons, never a grid.
+const expansionRoads=[];
+for(const spec of layout.roads){
+ const points=spec.points.map(p=>P(...p)),curve=[];
+ for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],n=Math.max(2,Math.ceil(Vector3.Distance(a,b)/.65));for(let j=0;j<n;j++)curve.push(Vector3.CatmullRom(points[Math.max(0,i-2)],a,b,points[Math.min(points.length-1,i+1)],j/n));}
+ curve.push(points.at(-1));const p=[],ix=[],uv=[],co=[],half=spec.width/16;
+ let length=0,previous=false;for(let i=0;i<curve.length;i++){const q=curve[i],d=curve[Math.min(i+1,curve.length-1)].subtract(curve[Math.max(0,i-1)]);d.y=0;d.normalize();if(i)length+=Vector3.Distance(q,curve[i-1]);const side=V(-d.z,0,d.x),start=p.length/3,nr=nearRiver(q.x,q.z),clear=nr.dist>nr.w*.54+.15&&roadClearance(sections.map(r=>[r[0],r[3],r[6]]),q.x,q.z)>-.3;
+ for(const off of [-1,0,1]){const v=q.add(side.scale(off*half));p.push(v.x,Math.max(renderedTerrainY(v.x,v.z),height(v.x,v.z))+.075,v.z);uv.push((off+1)/2,length/3);co.push(.78-.07*Math.abs(off),.60-.05*Math.abs(off),.41-.035*Math.abs(off),1);}
+ if(i&&clear&&previous){for(let k=0;k<2;k++){const a=start-3+k,b=start+k;ix.push(a,b,a+1,a+1,b,b+1);}}previous=clear;
+ }
+ if(ix.length){entity('farm road '+spec.id);const mesh=new Mesh('curved road '+spec.id,scene),vd=new VertexData();vd.positions=p;vd.indices=ix;vd.uvs=uv;vd.colors=co;vd.normals=Array.from({length:p.length},(_,i)=>i%3===1?1:0);vd.applyToMesh(mesh);own(mesh,dirtRoadMaterial,false);mesh.freezeWorldMatrix();expansionRoads.push({id:spec.id,curve,width:spec.width/8,mesh});expansionQA.roads.push({id:spec.id,samples:curve.length,triangles:ix.length/3});}
+}
 entity('bridge home');const [ba,bb]=layout.bridges[0].ends.map(p=>P(...p,2.85));const bd=bb.subtract(ba),bl=bd.length(),ang=Math.atan2(bd.x,bd.z),bs=V(Math.cos(ang),0,-Math.sin(ang));
 const bridgePlankCount=Math.ceil(bl/.36),bridgePlankDepth=bl/bridgePlankCount;
 for(let k=0;k<bridgePlankCount;k++){let p=Vector3.Lerp(ba,bb,(k+.5)/bridgePlankCount);box('bridge plank',p.x,p.y,p.z,3.15,.19,bridgePlankDepth,k%3?M.woodLight:M.wood,ang);for(let s of [-1,1]){let q=p.add(bs.scale(s*1.48));if(k%4===0){box('bridge rail post',q.x,q.y+.55,q.z,.20,1.1,.20,M.woodDark);box('bridge pier',q.x,q.y-.75,q.z,.27,1.6,.27,M.woodDark)}}}for(let s of [-1,1])beam('bridge railing',ba.add(bs.scale(s*1.48)).add(V(0,.91,0)),bb.add(bs.scale(s*1.48)).add(V(0,.91,0)),.14,M.woodLight);
@@ -395,6 +410,31 @@ const fieldSignCollider={x:wheatGate.x+2.2,z:wheatGate.z-.65};
  const tex=new DynamicTexture('local field sign trigo',{width:256,height:96},scene,true),ctx=tex.getContext();ctx.fillStyle='#c38b50';ctx.fillRect(0,0,256,96);ctx.strokeStyle='#805631';ctx.lineWidth=7;ctx.strokeRect(5,5,246,86);ctx.fillStyle='#372718';ctx.font='bold 43px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 25px sans-serif';ctx.fillText('GUIA DE CULTIVOS',128,34);ctx.font='22px sans-serif';ctx.fillText(`${Object.keys(CROP_CALENDAR).length} CULTURAS · CONSULTE AQUI`,128,69,230);tex.update();
  const material=mat('field sign text','#ffffff');material.diffuseTexture=tex;material.emissiveColor=new Color3(.15,.12,.08);material.backFaceCulling=false;for(const side of [-1,1]){const sign=MeshBuilder.CreatePlane('crop guide label '+side,{width:1.72,height:.53},scene);sign.position=V(x,y+1.25,z+side*.067);sign.rotation.y=side===1?Math.PI:0;own(sign,material,false);}
 }
+// All reference sectors receive real beds, stable IDs, a curved perimeter and a physical sign.
+// Existing wheat IDs, rails and geometry are never renumbered.
+const farmSectors=[{id:'trigo',name:'Trigo',polygon:wheatPolygon,beds:wheatBeds,plots:wheatPlots,gate:wheatGate,sign:fieldSignCollider,preferred:'wheat'}],extraFarmRails=[];
+const sectorCrop={milho:'corn',arroz:'rice',tomate:'tomato',alface:'lettuce',cenoura:'carrot',ervilha:'pea',ervas:'basil'};
+function insidePolygon(points,x,z){let inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)inside=!inside;}return inside;}
+function sectorAt(x,z){return farmSectors.find(f=>insidePolygon(f.polygon,x,z));}
+for(const spec of layout.fields.filter(f=>f.id!=='trigo')){
+ const polygon=spec.polygon.map(p=>P(...p)),gate=P(...spec.gate.at),beds=[],plots=[],sign={x:gate.x+2.2,z:gate.z-.65};
+ const f={id:spec.id,name:spec.name,polygon,gate,beds,plots,sign,preferred:sectorCrop[spec.id]||null};farmSectors.push(f);
+ const minx=Math.min(...polygon.map(p=>p.x)),maxx=Math.max(...polygon.map(p=>p.x)),minz=Math.min(...polygon.map(p=>p.z)),maxz=Math.max(...polygon.map(p=>p.z));
+ for(const side of [-1,1]){const x1=side<0?minx+1.5:gate.x+1.65,x2=side<0?gate.x-1.65:maxx-1.5;
+ for(let z=minz+1.65;z+1.35<maxz-1.1;z+=2.25){if(x2-x1<1.2)continue;const bed={id:spec.id+'-'+beds.length,x1,x2,z1:z,z2:z+1.35};if(![[x1,z],[x2,z],[x1,z+1.35],[x2,z+1.35]].every(([x,y])=>insidePolygon(polygon,x,y)))continue;
+ beds.push(bed);const parts=[],count=Math.max(1,Math.floor((x2-x1)/1.18));for(let i=0;i<count;i++){const a=x1+(x2-x1)*i/count,b=x1+(x2-x1)*(i+1)/count;const p={id:bed.id+'-'+plots.length,bedId:bed.id,x1:a,x2:b,z1:z,z2:z+1.35,x:(a+b)/2,z:z+.675};plots.push(p);parts.push(p);}bedPlots.set(bed.id,parts);
+ }}
+ entity('agricultural fence '+spec.id);
+ // Round each polygon corner without shifting the gate opening.
+ const rounded=[];for(let i=0;i<polygon.length;i++){const prev=polygon[(i+polygon.length-1)%polygon.length],p=polygon[i],next=polygon[(i+1)%polygon.length],a=Vector3.Lerp(p,prev,.22),b=Vector3.Lerp(p,next,.22);for(let j=0;j<=3;j++){const t=j/3;rounded.push(a.scale((1-t)**2).add(p.scale(2*t*(1-t))).add(b.scale(t*t)));}}
+ for(let i=0;i<rounded.length;i++){const a=rounded[i],b=rounded[(i+1)%rounded.length],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/2));for(let k=0;k<n;k++){const p=Vector3.Lerp(a,b,k/n),q=Vector3.Lerp(a,b,(k+1)/n),m=Vector3.Lerp(p,q,.5);if(Math.hypot(m.x-gate.x,m.z-gate.z)<spec.gate.width/16+.4)continue;p.y=Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z));q.y=Math.max(height(q.x,q.z),renderedTerrainY(q.x,q.z));extraFarmRails.push([p,q]);box('field post',p.x,p.y+.48,p.z,.14,.96,.14,M.woodDark,0,false);for(const y of [.32,.72])beam('field rail',p.add(V(0,y,0)),q.add(V(0,y,0)),.10,M.woodLight,.10,false);}}
+ entity('agricultural sign '+spec.id);const {x,z}=sign,y=Math.max(height(x,z),renderedTerrainY(x,z));
+ for(const side of [-1,1])box('sign post',x+side*.64,y+.62,z,.12,1.24,.12,M.woodDark,0,false);box('sign board',x,y+1.25,z,1.85,.63,.12,M.woodLight,0,false);
+ const tex=new DynamicTexture('field label '+spec.id,{width:256,height:96},scene,true),c=tex.getContext();c.fillStyle='#c38b50';c.fillRect(0,0,256,96);c.strokeStyle='#805631';c.lineWidth=6;c.strokeRect(5,5,246,86);c.fillStyle='#372718';c.textAlign='center';c.textBaseline='middle';c.font='bold 29px sans-serif';c.fillText(spec.name.toUpperCase(),128,34,232);c.font='17px sans-serif';c.fillText(f.preferred?'GUIA DE CULTIVO':'CULTIVO LIVRE',128,70,230);tex.update();
+ const material=mat('field label '+spec.id,'#ffffff');material.diffuseTexture=tex;material.emissiveColor=new Color3(.15,.12,.08);material.backFaceCulling=false;for(const side of [-1,1]){const m=MeshBuilder.CreatePlane('field label '+spec.id+' '+side,{width:1.72,height:.53},scene);m.position=V(x,y+1.25,z+side*.067);m.rotation.y=side===1?Math.PI:0;own(m,material,false);}
+}
+const allFarmPlots=farmSectors.flatMap(f=>f.plots),allFarmBeds=farmSectors.flatMap(f=>f.beds),farmPlotById=new Map(allFarmPlots.map(p=>[p.id,p])),farmBedById=new Map(allFarmBeds.map(b=>[b.id,b]));
+expansionQA.sectors=farmSectors.map(f=>({id:f.id,beds:f.beds.length,plots:f.plots.length,gate:[f.gate.x,f.gate.z],preferred:f.preferred}));
 const approachRows=sections.map(r=>[r[0],r[3],r[6]]);
 const connectionQA={bridgeEntryRow:pathRows.at(-1),bridgeExitRow:approachRows[0],bridgePlankDepth,bridgePlankCount,bridgeHalf,bridgeAxis,bridgeSide,deckLength:bl,deckTop:2.945,fieldEnd:approachCurve.at(-1),fieldGate:wheatGate};
 function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=height(x,z),C=(a,b,c)=>V(x+a*Math.cos(angle)+c*Math.sin(angle),y+b,z-a*Math.sin(angle)+c*Math.cos(angle));const B=(n,a,b,c,ww,hh,dd,m)=>{let p=C(a,b,c);return box(n,p.x,p.y,p.z,ww,hh,dd,m,angle)};const L=(n,a,b,ww,m)=>beam(n,C(...a),C(...b),ww,m);
@@ -796,7 +836,7 @@ let wheatState=freshWheat(),wheatSaveError='',wheatSaveLocked=false;
 try{
  const raw=localStorage.getItem(WHEAT_SAVE);
  if(raw!==null){const v=JSON.parse(raw);if(v.schema!==1||!Number.isSafeInteger(v.seeds)||v.seeds<0||!Number.isSafeInteger(v.grain)||v.grain<0||!v.plots||typeof v.plots!=='object'||Array.isArray(v.plots))throw Error('invalid wheat save');
- for(const [id,p] of Object.entries(v.plots)){if(!p||!wheatPlots.some(q=>q.id===id)||!['raw','tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>3600000)))throw Error('invalid plot');}
+ for(const [id,p] of Object.entries(v.plots)){if(!p||!farmPlotById.has(id)||!['raw','tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>3600000)))throw Error('invalid plot');}
  for(const p of Object.values(v.plots)){if(p.crop!==undefined&&!Object.hasOwn(CROP_CALENDAR,p.crop)||p.soil!==undefined&&!validSoil(p.soil))throw Error('invalid agricultural state');}
  if(v.warehouse!==undefined&&!validWarehouse(v.warehouse))throw Error('invalid warehouse');
  if(v.coins!==undefined&&!validBalance(v.coins))throw Error('invalid economy balance');
@@ -831,13 +871,14 @@ function wheatProgress(id,now=Date.now()){const p=evaluatedPlot(id,now);return p
 const selectedSpecies=()=>$('crop-select').value||'wheat';
 const stockFor=(state,id)=>id==='wheat'?{seeds:state.seeds,grain:state.grain}:state.stocks[id];
 function nearestWheat(){
- if(entry.action||seating.phase!=='idle'||entry.inside||!gardenPanel.hidden||buildModeActive||!inWheat(avatar.position.x,avatar.position.z))return null;
- let best=null,dist=1.20;for(const p of wheatPlots){const n=Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z);if(n<dist){best=p;dist=n;}}return best;
+ if(entry.action||seating.phase!=='idle'||entry.inside||!gardenPanel.hidden||buildModeActive )return null;
+ const sector=sectorAt(avatar.position.x,avatar.position.z);if(!sector)return null;
+ let best=null,dist=1.20;for(const p of sector.plots){const n=Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z);if(n<dist){best=p;dist=n;}}return best;
 }
 function applyWheatAction(action,id,now=Date.now()){
  if(wheatSaveLocked||tillWork||nearestWheat()?.id!==id)return false;
  if(action==='till')return beginTill(id);
- if(action==='undo')return commitBed(wheatPlots.find(p=>p.id===id).bedId,false,now);
+ if(action==='undo')return commitBed(farmPlotById.get(id).bedId,false,now);
  const status=wheatStatus(id,now),next=JSON.parse(JSON.stringify(wheatState)),elapsed=worldElapsed(now);
  let p=simulatePlot(next.plots[id],elapsed)||{state:'raw',crop:'wheat',soil:newSoil(elapsed)};
  // Existing saved crops keep their original countdown, not a new growth penalty.
@@ -872,7 +913,14 @@ const wheatPlants=mat('wheat plants','#ffffff');wheatPlants.backFaceCulling=fals
 const wheatFurrows=own(new Mesh('one continuous surface per agricultural bed',scene),wheatSoil,false),wheatStalks=own(new Mesh('batched real wheat stalks and ears',scene),wheatPlants,false);
 const selectionMat=mat('wheat selection','#e7d5a0');selectionMat.emissiveColor=Color3.FromHexString('#e7d5a0');selectionMat.disableLighting=true;
 const plotOutline=MeshBuilder.CreateLines('selected wheat plot',{points:[V(-.28,0,-.73),V(0,0,-.66),V(.28,0,-.73)]},scene);plotOutline.color=Color3.FromHexString('#f7e5ac');plotOutline.isPickable=false;plotOutline.setEnabled(false);
-let wheatVisualKey='',lastWheatTick=0;
+let wheatVisualKey='',lastWheatTick=0,renderFarmSector=farmSectors[0];
+// Distant beds use a single low-poly soil mesh per sector. Only the active
+// sector receives detailed mutable furrow/plant geometry.
+for(const f of farmSectors){entity('wheat dynamic cultivation');const m=new Mesh('distant agricultural beds '+f.id,scene),p=[],ix=[],uv=[],co=[];
+ for(const b of f.beds){const k=p.length/3;for(const [x,z] of [[b.x1,b.z1],[b.x2,b.z1],[b.x1,b.z2],[b.x2,b.z2]]){p.push(x,Math.max(height(x,z),renderedTerrainY(x,z))+.065,z);uv.push(x/1.2,z/1.2);co.push(.48,.32,.20,1);}ix.push(k,k+2,k+1,k+1,k+2,k+3);}
+ if(ix.length){const v=new VertexData();v.positions=p;v.indices=ix;v.uvs=uv;v.colors=co;v.normals=Array.from({length:p.length},(_,i)=>i%3===1?1:0);v.applyToMesh(m);own(m,wheatSoil,false);m.freezeWorldMatrix();}f.low=m;m.setEnabled(f!==renderFarmSector);}
+function chooseRenderSector(){const f=sectorAt(avatar.position.x,avatar.position.z);if(!f||f===renderFarmSector||tillWork)return;renderFarmSector.low.setEnabled(true);renderFarmSector=f;f.low.setEnabled(false);moundState.clear();wheatVisualKey='';}
+
 const moundPeaks={raw:0,tilled:.15,sown:.15,sprout:.15,green:.15,ripe:.15};
 const moundState=new Map();let moundVertices=[],moundPositions=null,moundTimer=0,moundDirty=false;
 const moundQA={active:0,updates:0,peak:0};
@@ -907,20 +955,20 @@ function tickMounds(dt){
 }
 function wheatStage(p,now){const state=wheatStatus(p.id,now);return state==='watered'?(wheatProgress(p.id,now)<.35?'sprout':'green'):state;}
 function rebuildWheat(now){
- const key=wheatPlots.map(p=>{const v=evaluatedPlot(p.id,now);return [wheatStage(p,now),v?.crop,v?.soil?.irrigated,v?.soil?Math.floor(v.soil.moisture*4):0,Math.floor((v?.soil?.weeds??0)*5)].join(':');}).join('|');if(key===wheatVisualKey)return;wheatVisualKey=key;
+ const {plots:localPlots,beds:localBeds}=renderFarmSector;expansionQA.activeSector=renderFarmSector.id;const key=renderFarmSector.id+'|'+localPlots.map(p=>{const v=evaluatedPlot(p.id,now);return [wheatStage(p,now),v?.crop,v?.soil?.irrigated,v?.soil?Math.floor(v.soil.moisture*4):0,Math.floor((v?.soil?.weeds??0)*5)].join(':');}).join('|');if(key===wheatVisualKey)return;wheatVisualKey=key;
  const soil={p:[],i:[],c:[],uv:[]},plants={p:[],i:[],c:[]};moundVertices=[];
  const plotLook=new Map();
  function tri(buf,a,b,c,col){const i=buf.p.length/3;buf.p.push(...a,...b,...c);buf.i.push(i,i+1,i+2);for(let k=0;k<3;k++)buf.c.push(col.r,col.g,col.b,1);}
  function quad(buf,a,b,c,d,col){tri(buf,a,b,c,col);tri(buf,a,c,d,col);}
  const green=Color3.FromHexString('#548b32'),leaf=Color3.FromHexString('#8dab3c'),gold=Color3.FromHexString('#d4ad48'),ear=Color3.FromHexString('#e7c66a');
- for(const p of wheatPlots){
+ for(const p of localPlots){
   const stage=wheatStage(p,now),data=evaluatedPlot(p.id,now),target=moundPeaks[stage]||0;
   const prior=moundState.get(p.id);if(!prior)moundState.set(p.id,{current:target,target});else if(!tillWork||p.bedId!==tillWork.bed.id)prior.target=target;
   const moisture=data?.soil?.moisture??(['sprout','green','ripe'].includes(stage)?.88:.38);
   plotLook.set(p.id,{stage,data,target,color:soilTone(stage,moisture)});
  }
  // Each bed has a single indexed surface, not stacked base and per-plot patches.
- for(const bed of wheatBeds){
+ for(const bed of localBeds){
   const parts=bedPlots.get(bed.id),cols=parts.length*8,rows=24,start=soil.p.length/3;
   for(let k=0;k<=cols;k++)for(let l=0;l<=rows;l++){
    const x=bed.x1+(bed.x2-bed.x1)*k/cols,z=bed.z1+(bed.z2-bed.z1)*l/rows;
@@ -931,9 +979,9 @@ function rebuildWheat(now){
   }
   for(let k=0;k<cols;k++)for(let l=0;l<rows;l++){const a=start+k*(rows+1)+l,b=a+rows+1;soil.i.push(a,b,a+1,b,b+1,a+1);}
  }
- bedSurfaceStats.vertices=soil.p.length/3;
- for(const p of wheatPlots){
-  const {stage,data,target}=plotLook.get(p.id),crop=data?.crop||'wheat',bed=wheatBeds.find(b=>b.id===p.bedId);
+ if(renderFarmSector.id==='trigo')bedSurfaceStats.vertices=soil.p.length/3;
+ for(const p of localPlots){
+  const {stage,data,target}=plotLook.get(p.id),crop=data?.crop||'wheat',bed=farmBedById.get(p.bedId);
   const y=(x,z,rise)=>Math.max(height(x,z),renderedTerrainY(x,z))+bedHeightAt(x,z,bed)+rise;
   const weeds=Math.floor((data?.soil?.weeds??0)*5);for(let n=0;n<weeds;n++){const x=p.x1+(p.x2-p.x1)*(.14+n*.17),z=p.z1+.1+(n%3)*.45,b=y(x,z,target+.015);for(const side of [-1,1])tri(plants,[x,b,z],[x+side*.08,b+.12,z+.02],[x,b+.19,z],Color3.FromHexString('#577744'));}
   if(!['sprout','green','ripe'].includes(stage))continue;
@@ -968,7 +1016,7 @@ const wheatActions={raw:'till',tilled:'plant',sown:'water',ripe:'harvest'};
 const wheatLabels={till:'Arar',plant:'Plantar trigo',water:'Regar',harvest:'Colher'};
 let wheatSelected=null;
 function updateWheat(now=Date.now(),force=false){
- const p=tillWork?wheatPlots.find(p=>p.bedId===tillWork.bed.id):nearestWheat();if(!p)wheatCollapsed=false;if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
+ chooseRenderSector();const p=tillWork?bedPlots.get(tillWork.bed.id)[0]:nearestWheat();if(!p)wheatCollapsed=false;if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
  const expanded=!!p&&!wheatCollapsed;wheatPanel.hidden=!expanded;$('wheat-expand').hidden=!p||expanded;
  // Keep the runner reachable when the farm panel is displayed.
  if(document.body.classList.contains('wheat-near')!==!!p)document.body.classList.toggle('wheat-near',!!p);
@@ -1010,7 +1058,7 @@ function refreshFarmCenter(now=Date.now(),force=false){
  if(farmCenter.hidden||!force&&now>=lastFarmCenter&&now-lastFarmCenter<1000)return;lastFarmCenter=now;
  const elapsed=worldElapsed(now),c=calendarAt(elapsed),w=weatherAt(elapsed),a=cropAdvice(guideCrop,elapsed),crop=a.crop,stock=stockFor(wheatState,guideCrop);
  $('farm-overview').textContent=c.day+' de '+c.monthName+' · Ano '+c.year+' · '+c.season;
- const overview=$('farm-summary');overview.replaceChildren();farmCard(overview,'🌤️',w.label,w.temperature+' °C agora');farmCard(overview,'🌱',wheatPlots.length+' parcelas','Adubo '+wheatState.compost+' · Tratamentos '+wheatState.treatments);
+ const overview=$('farm-summary');overview.replaceChildren();farmCard(overview,'🌤️',w.label,w.temperature+' °C agora');farmCard(overview,'🌱',allFarmPlots.length+' parcelas','Adubo '+wheatState.compost+' · Tratamentos '+wheatState.treatments);
  const forecast=$('farm-forecast');forecast.replaceChildren();
  for(let i=1;i<=4;i++){const at=(w.slot+i)*WEATHER_INTERVAL,v=weatherAt(at),d=calendarAt(at);farmCard(forecast,({sun:'☀️',cloud:'☁️',rain:'🌧️',storm:'⛈️'})[v.kind],String(d.hour).padStart(2,'0')+':00 · '+d.day+'/'+d.month,v.label+' · '+v.temperature+' °C');}
  for(const b of $('farm-catalog').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.guide===guideCrop));
@@ -1027,7 +1075,7 @@ function refreshFarmCenter(now=Date.now(),force=false){
  $('guide-tip').textContent='Melhor previsão: '+a.best.date.day+'/'+a.best.date.month+' · '+a.best.label+'. '+(!a.schedule.preferred?'Fora da estação, o crescimento base leva 50% a mais. ': '')+'Previsão estimada; umidade, fertilidade e pragas também influenciam.';
  $('farm-quality').textContent='Qualidade da colheita · '+Object.entries(wheatState.quality).map(([k,v])=>k+' '+v).join(' · ');
 }
-function openCropGuide(id='wheat'){if(!boardNearby())return false;guideCrop=id;closeGarden();cancelInput();playerMenu.hidden=true;farmCenter.hidden=false;refreshFarmCenter(Date.now(),true);return true;}
+function openCropGuide(id=nearbyFarmSign()?.preferred||'wheat'){if(!boardNearby())return false;guideCrop=id;closeGarden();cancelInput();playerMenu.hidden=true;farmCenter.hidden=false;refreshFarmCenter(Date.now(),true);return true;}
 $('farm-open').addEventListener('click',()=>openCropGuide());
 $('farm-close').addEventListener('click',()=>{farmCenter.hidden=true;});
 for(const b of $('farm-catalog').querySelectorAll('button'))b.onclick=()=>{guideCrop=b.dataset.guide;refreshFarmCenter(Date.now(),true);};
@@ -1038,7 +1086,7 @@ function surfaceHeight(x,z){
  if(Math.abs(p.x)<=(home.w*HOUSE.porchRatio/2)&&p.z>=f-2.85-porchExtension&&p.z<=f)return home.y+.53;
  if(Math.abs(p.x)<=1.1&&p.z>=f-3.725-porchExtension&&p.z<f-2.85-porchExtension){const i=Math.max(0,Math.min(2,Math.floor((p.z-f+3.725+porchExtension)/.35)));return home.y+[.18,.35,.53][i];}
  if(onBridge(x,z))return 2.945;
- let groundY=renderedTerrainY(x,z);if(inWheat(x,z)){const bed=wheatBeds.find(b=>x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2);if(bed){const b=bedBlend(bed,x);groundY=Math.max(height(x,z),groundY)+bedHeightAt(x,z,bed)+ridgeProfile(bed,x,z)*blendedMound(b.a,b.b,b.t);}}
+ let groundY=renderedTerrainY(x,z);const sector=sectorAt(x,z);if(sector){const bed=sector.beds.find(b=>x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2);if(bed){const b=bedBlend(bed,x);groundY=Math.max(height(x,z),groundY)+bedHeightAt(x,z,bed)+ridgeProfile(bed,x,z)*blendedMound(b.a,b.b,b.t);}}
  let closest=Infinity,roadY=groundY;
  for(const [rows,half,relief] of [[pathRows,1.24,.08],[approachRows,1.65,0]]){
  if(x<Math.min(rows[0][1].x,rows.at(-1)[1].x)-4||x>Math.max(rows[0][1].x,rows.at(-1)[1].x)+4)continue;
@@ -1447,7 +1495,8 @@ function blocked(x,z,interacting=false,from=null,ignoreFences=false){
  const dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);
  if(check((a,b)=>{const dx=a-dogHome.x,dz=b-dogHome.z;return Math.max(Math.abs(dx*dc-dz*ds)-dogHome.w/2-.18,Math.abs(dx*ds+dz*dc)-dogHome.d/2-.18);}))return true;
  if(check((a,b)=>Math.hypot(a-well.x,b-well.z)-1.34))return true;
- if(check((a,b)=>Math.max(Math.abs(a-fieldSignCollider.x)-1.08,Math.abs(b-fieldSignCollider.z)-.26)))return true;
+ if(farmSectors.some(f=>check((a,b)=>Math.max(Math.abs(a-f.sign.x)-1.08,Math.abs(b-f.sign.z)-.26))))return true;
+ if(!ignoreFences&&!bridge&&extraFarmRails.some(([a,b])=>Math.abs(x-a.x)<3&&Math.abs(z-a.z)<3&&check((u,v)=>segDist(u,v,a,b)-.24)))return true;
  if(worldFixtures.some(f=>check((a,b)=>Math.max(Math.abs(a-f.x)-f.hx-.18,Math.abs(b-f.z)-f.hz-.18))))return true;
  return false;
 }
@@ -1922,7 +1971,7 @@ function commitBed(id,prepared,now=Date.now()){
  wheatState=next;farmCache.clear();wheatVisualKey='';updateWheat(now,true);return true;
 }
 function beginTill(id){
- const p=wheatPlots.find(p=>p.id===id),bed=wheatBeds.find(b=>b.id===p?.bedId);
+ const p=farmPlotById.get(id),bed=farmBedById.get(p?.bedId);
  if(!bed||tillWork||wheatSaveLocked||wheatStatus(id)!=='raw'||bedPlots.get(bed.id).some(p=>!['raw','tilled'].includes(wheatStatus(p.id))))return false;
  const dir=avatar.position.x<(bed.x1+bed.x2)/2?1:-1,start=dir===1?bed.x1+.18:bed.x2-.18,end=dir===1?bed.x2-.18:bed.x1+.18;
  const sides=[bed.z1-.30,bed.z2+.30].sort((a,b)=>Math.abs(a-avatar.position.z)-Math.abs(b-avatar.position.z));
@@ -2162,7 +2211,8 @@ function drawRanch(){const c=ranchTex.getContext();c.fillStyle='#b58650';c.fillR
 function ranchNearby(){return Math.hypot(avatar.position.x-arch.x,avatar.position.z-arch.z)<3.0;}
 function setRanchName(name){name=String(name).trim().slice(0,32);if(!name||!ranchNearby()||ranchLocked)return false;try{localStorage.setItem(RANCH_KEY,JSON.stringify({name}));ranchName=name;drawRanch();return true;}catch{return false;}}
 drawRanch();$('ranch-open').onclick=()=>{if(!ranchNearby())return;$('ranch-name').value=ranchName;$('ranch-panel').hidden=false;};$('ranch-close').onclick=()=>{$('ranch-panel').hidden=true;};$('ranch-save').onclick=()=>{if(setRanchName($('ranch-name').value))$('ranch-panel').hidden=true;};
-function boardNearby(){return Math.hypot(avatar.position.x-fieldSignCollider.x,avatar.position.z-fieldSignCollider.z)<2.3;}
+function nearbyFarmSign(){return farmSectors.find(f=>Math.hypot(avatar.position.x-f.sign.x,avatar.position.z-f.sign.z)<2.3);}
+function boardNearby(){return !!nearbyFarmSign();}
 // Small physical access points for the same authoritative trade and warehouse.
 // Place only on clear ground, outside crop beds and paths; never move existing objects.
 const farmStations=[];
@@ -2228,7 +2278,7 @@ function layoutContextActions(){
  'seat-action':bench?seatStand(bench).add(V(0,.65,0)):avatar.position,
  'garden-action':planter?home.C(planter.x,1.0,planter.z):avatar.position,
  'wheat-expand':wheatSelected?V(wheatSelected.x,surfaceHeight(wheatSelected.x,wheatSelected.z)+.7,wheatSelected.z):avatar.position,
- 'world-quick':stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+1.9,warehouseStation.z):boardNearby()?V(fieldSignCollider.x,surfaceHeight(fieldSignCollider.x,fieldSignCollider.z)+1.5,fieldSignCollider.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
+ 'world-quick':stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+1.9,warehouseStation.z):boardNearby()?V(nearbyFarmSign().sign.x,surfaceHeight(nearbyFarmSign().sign.x,nearbyFarmSign().sign.z)+1.5,nearbyFarmSign().sign.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
  'pet-action':petHome?petHome.threshold.add(V(0,.65,0)):avatar.position,
  'pet-context':animal?animal.rig.root.position.add(V(0,.5,0)):avatar.position,
  'fence-context':nearFence?Vector3.Lerp(nearFence.a,nearFence.b,.5).add(V(0,1.35,0)):avatar.position};
@@ -2267,7 +2317,7 @@ for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z
 mapLine(pathRows.map(row=>row[1]),'#c6b38a',2.3);mapLine(approachRows.map(row=>row[1]),'#b89664',2.6);mapLine([bridgeEntry,bridgeExit],'#c6a273',3.0);
 mapPoly([home.C(-home.w/2,0,-home.d/2),home.C(home.w/2,0,-home.d/2),home.C(home.w/2,0,home.d/2),home.C(-home.w/2,0,home.d/2)],'#a96342');
 for(const f of farmStations)mapPoly([V(f.x-f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z+f.hz),V(f.x-f.hx,0,f.z+f.hz)],f.id==='farm-warehouse'?'#9a724c':'#c99e70');
-mapPoly(wheatPolygon,'#73824d');for(const b of wheatBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
+for(const road of expansionRoads)mapLine(road.curve,'#b89664',road.width);for(const f of farmSectors)mapPoly(f.polygon,'#73824d');for(const b of allFarmBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
 for(const tree of treePositions){const x=X(tree[0]),z=Z(tree[1]);if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
 function layoutMinimap(){
  const el=$('minimap'),head=$('hud').getBoundingClientRect(),control=$('run-action').getBoundingClientRect();
@@ -2416,4 +2466,4 @@ $('inventory-open').onclick=openInventory;$('inventory-close').onclick=()=>inven
 inventoryDialog.addEventListener('close',()=>{cancelInput();updateWheat(Date.now(),true);});
 for(const b of inventoryDialog.querySelectorAll('[data-inventory-category]'))b.onclick=()=>{inventoryCategory=b.dataset.inventoryCategory;$('inventory-message').textContent=inventoryCategory==='market'?'Feira agrícola · estoque e moedas reais.':'Selecione uma semente para preparar seu próximo plantio.';renderInventory(true);};
 $('market-quantity').onchange=()=>{tradeQuantity=Number($('market-quantity').value);renderInventory(true);};
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();setTitle(true);window.cvQA.ready=true});
+window.cvQA={scene,engine,expansionQA,farmSectors,allFarmPlots,allFarmBeds,sectorAt,nearbyFarmSign,expansionRoads,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();setTitle(true);window.cvQA.ready=true});

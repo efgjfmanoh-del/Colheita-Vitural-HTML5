@@ -85,6 +85,8 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  console.log('Physical connection and wheat sector',JSON.stringify(links));fs.writeFileSync('qa/conexoes-campo.json',JSON.stringify(links,null,2));
  for(const p of [links.entry,links.exit])assert(p.centerError<1e-6&&p.axisError<1e-6&&Math.abs(p.left+1.575)<1e-6&&Math.abs(p.right-1.575)<1e-6&&p.deckGap<1e-6&&p.verticalError<1e-6,'bridge full-width flush abutment required');
  assert(links.clearGate&&links.fence&&links.traversable&&links.inside&&links.beds>=6&&links.plots>=30&&links.aisle,'wheat field must be connected and accessible');assert(links.residenceClearance>.34&&links.fieldClearance>.10,'fences must not cross paths');
+ const expanded=await page.evaluate(()=>{const q=cvQA;return {stats:q.expansionQA,sectors:q.farmSectors.map(f=>({id:f.id,beds:f.beds.length,plots:f.plots.length,open:!q.blocked(f.gate.x,f.gate.z)})),unique:new Set(q.allFarmPlots.map(p=>p.id)).size,total:q.allFarmPlots.length};});
+ assert.equal(expanded.sectors.length,18);assert(expanded.sectors.every(f=>f.beds>0&&f.plots>0&&f.open));assert.equal(expanded.unique,expanded.total);assert(expanded.stats.roads.length>=20);assert(expanded.stats.terrainVertices<65000);fs.writeFileSync('qa/expansao.json',JSON.stringify(expanded,null,2));
  const landscape=await page.evaluate(()=>({terrain:cvQA.terrainSkirtStats,beds:cvQA.bedSurfaceStats,road:cvQA.roadMetrics,plots:cvQA.wheatPlots.length}));
  assert(landscape.terrain.margin>=64&&landscape.terrain.maxJoinGap<1e-6&&landscape.terrain.vertices<10000);
  assert(landscape.beds.continuousBeds===8&&landscape.beds.plotGaps===0&&landscape.plots===72&&landscape.road.fineGravel&&landscape.road.stones===0);
