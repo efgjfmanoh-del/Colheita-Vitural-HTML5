@@ -1,3 +1,4 @@
+import {GOODS} from './household.js';
 import {PRODUCTS} from './husbandry.js';
 import {CROP_CALENDAR} from './world-calendar.js';
 // Read-through catalog: existing subsystem saves remain the sole source of truth.
@@ -19,6 +20,7 @@ export function inventorySnapshot(farm,construction,{farmLocked=false,constructi
  for(const [id,name,icon] of [['wood','Madeira','🪵'],['stone','Pedra','🪨'],['saplings','Muda de árvore verde','🌱'],['pinkSaplings','Muda de cerejeira','🌸']]){add('resource:'+id,id.endsWith('aplings')?'seeds':'building',name,icon,farm?.nature?.[id]??0,'nature',null,farmLocked);if(id.endsWith('aplings'))items.at(-1).treeSpecies=id==='pinkSaplings'?'pink':'green';}
  add('fish','harvest','Peixe de rio','🐟',farm?.fishery?.fish??0,'fishing',null,farmLocked);
  for(const [id,p] of Object.entries(PRODUCTS))add('animal:'+id,'harvest',p.name,p.icon,farm?.husbandry?.products?.[id]??0,'livestock',null,farmLocked);
+ for(const [id,g] of Object.entries(GOODS))if(Object.hasOwn(farm?.household?.goods??{},id))add('good:'+id,'harvest',g.name,g.icon,farm.household.goods[id],'household',null,farmLocked);
  add('fence','building','Peça de cerca','🪵',construction?.stock,'construction',null,constructionLocked);
  return items;
 }
