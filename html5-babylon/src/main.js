@@ -188,10 +188,10 @@ function eastWaterAt(x,z){
  }
  const value={edge,y,id};eastCache={x,z,value};return value;
 }
-function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const east=eastWaterAt(x,z);if(x>X(896)&&east.edge<edge&&east.edge<2){a={y:east.y};edge=east.edge;}const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const ramp=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);},outside=ramp((-z-37)/20)*ramp((14-x)/24),hill=.62*outside*(.5+.5*Math.sin(x*.075-z*.047))*(.5+.5*Math.cos(z*.09+x*.031));const flat=2.65+west+hill+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
-entity('terrain');const minX=X(20),oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(1370),maxZ=Z(-20),nx=284,nz=281,pos=[],idx=[],colors=[],uvs=[];
+function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const east=eastWaterAt(x,z);if(x>X(896)&&east.edge<edge&&east.edge<2){a={y:east.y};edge=east.edge;}const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const ramp=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);},outside=ramp((-z-37)/20)*ramp((14-x)/24),hill=.62*outside*(.5+.5*Math.sin(x*.075-z*.047))*(.5+.5*Math.cos(z*.09+x*.031));const ridge=ramp((X(20)-x-32)/14)*(1.1+2.6*(.5+.5*Math.sin(z*.115+x*.07)));const flat=2.65+west+hill+ridge+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
+entity('terrain');const originalMinX=X(20),minX=originalMinX-48,oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(1370),maxZ=Z(-20),nx=332,nz=281,pos=[],idx=[],colors=[],uvs=[];
 const axis=(a,b,n)=>Array.from({length:n+1},(_,i)=>a+(b-a)*i/n);
-const terrainXs=[...axis(minX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,Z(950),64),...axis(Z(950),oldMinZ,96).slice(1),...axis(oldMinZ,maxZ,121).slice(1)];
+const terrainXs=[...axis(minX,originalMinX,48).slice(0,-1),...axis(originalMinX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,Z(950),64),...axis(Z(950),oldMinZ,96).slice(1),...axis(oldMinZ,maxZ,121).slice(1)];
 const expansionQA={originalVertices:205*122,terrainVertices:(nx+1)*(nz+1),roads:[],sectors:[],activeSector:null};
 for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=terrainXs[i],z=terrainZs[j],y=height(x,z),n=nearRiver(x,z),d=Math.min(n.dist-n.w/2,eastWaterAt(x,z).edge);pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
 for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){let a=j*(nx+1)+i;idx.push(a,a+nx+1,a+1,a+1,a+nx+1,a+nx+2)}
@@ -209,9 +209,9 @@ function terrainPatchData(i0,i1,j0,j1){
 function uploadTerrainPatch(p){const vd=new VertexData();Object.assign(vd,terrainPatchData(p.i0,p.i1,p.j0,p.j1));vd.applyToMesh(p.mesh);p.mesh.refreshBoundingInfo();p.mesh.computeWorldMatrix(true);p.mesh.freezeWorldMatrix();}
 function terrainPatch(name,i0,i1,j0,j1){const mesh=new Mesh(name,scene),p={id:'terrain:'+i0+':'+j0,mesh,i0,i1,j0,j1};uploadTerrainPatch(p);own(mesh,M.grass,false);const b=mesh.getBoundingInfo().boundingBox;p.bounds={minX:b.minimumWorld.x,maxX:b.maximumWorld.x,minY:b.minimumWorld.y,maxY:b.maximumWorld.y,minZ:b.minimumWorld.z,maxZ:b.maximumWorld.z};terrainPatches.push(p);return mesh;
 }
-const ground=terrainPatch('sculpted terrain mesh',0,204,160,281);
+const ground=terrainPatch('sculpted terrain mesh',48,252,160,281);
 function tileTerrain(i0,i1,j0,j1){for(let j=j0;j<j1;j+=24)for(let i=i0;i<i1;i+=24)terrainPatch('countryside terrain patch '+i+' '+j,i,Math.min(i1,i+24),j,Math.min(j1,j+24));}
-tileTerrain(0,204,0,160);tileTerrain(204,nx,0,nz);
+tileTerrain(48,252,0,160);tileTerrain(252,nx,0,nz);tileTerrain(0,48,0,nz);
 expansionQA.terrainPatches=terrainPatches.length;expansionQA.patchCells=terrainPatches.reduce((n,p)=>n+(p.i1-p.i0)*(p.j1-p.j0),0);
 expansionQA.maxPatchVertices=Math.max(...terrainPatches.slice(1).map(p=>p.mesh.getTotalVertices()));
 const terrainSkirtStats={rings:0,vertices:0,margin:64,maxJoinGap:0};
@@ -415,7 +415,7 @@ const roadMetrics={sections:sections.length,vertices:road.getTotalVertices(),ind
 const expansionRoads=[],roadMaskSize=2048,roadMask=new DynamicTexture('continuous farm road union',{width:roadMaskSize,height:roadMaskSize},scene,true,Texture.TRILINEAR_SAMPLINGMODE),roadCtx=roadMask.getContext();
 const roadPixel=(x,z)=>[(x-minX)/(maxX-minX)*roadMaskSize,(maxZ-z)/(maxZ-minZ)*roadMaskSize],roadSx=roadMaskSize/(maxX-minX),roadSz=roadMaskSize/(maxZ-minZ);
 function paintRoad(points,width){if(points.length<2)return;roadCtx.save();roadCtx.scale(roadSx,roadSz);roadCtx.translate(-minX,maxZ);roadCtx.beginPath();points.forEach((p,i)=>i?roadCtx.lineTo(p.x,-p.z):roadCtx.moveTo(p.x,-p.z));roadCtx.lineWidth=width;roadCtx.lineCap='round';roadCtx.lineJoin='round';roadCtx.stroke();roadCtx.restore();}
-for(const spec of layout.roads){
+for(const spec of [...layout.roads,{id:'western_rural_link',width:18,points:[[70,527],[-20,527],[-48,520],[-48,185]]},{id:'western_south_lane',width:18,points:[[-48,520],[-48,760],[-48,1010],[-48,1210]]}]){
  const points=spec.points.map(p=>P(...p)),curve=[];
  for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],n=Math.max(2,Math.ceil(Vector3.Distance(a,b)/.45));for(let j=0;j<n;j++)curve.push(Vector3.CatmullRom(points[Math.max(0,i-2)],a,b,points[Math.min(points.length-1,i+1)],j/n));}
  curve.push(points.at(-1));expansionRoads.push({id:spec.id,curve,width:spec.width/8});expansionQA.roads.push({id:spec.id,samples:curve.length,triangles:0});
@@ -1280,6 +1280,7 @@ let planted=0;for(let i=0;i<650&&planted<41;i++){const a=treeZones[i%treeZones.l
  if(nr.dist<nr.w*.54+1.5||eastWaterAt(x,z).edge<2||sectorAt(x,z)||treePositions.some(p=>Math.hypot((u-p[0])/8,(v-p[1])/6.553)<3.5)||roadSegments.some(([a,b,w])=>segDist(x,z,a,b)<w+1.5))continue;
  treePositions.push([u,v]);tree('forest '+planted,u,v,planted%11===0,.90+placeRnd()*.54);planted++;
 }
+for(let i=0;i<12;i++){const x=-89+(i%2)*1.7,z=-169+i*15;tree('ridge-'+i,x*8+400,145-z*6.553,false,.9+(i%3)*.12);}
 // Low-growing woodland vegetation, grouped into one real vertex-colored mesh.
 // Do not put shrubs in river, roads, the residence, or the bridge approach.
 entity('woodland understory');{

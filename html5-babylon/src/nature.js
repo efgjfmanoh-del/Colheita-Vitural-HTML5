@@ -5,7 +5,7 @@ const count=n=>Number.isSafeInteger(n)&&n>=0;
 export const MAX_PLANTED=24;
 export const treeSpecies=id=>/^sakura |^planted-pink-/.test(id)||(/^forest \d+$/.test(id)&&Number(id.slice(7))%11===0)?'pink':'green';
 export const seedKey=species=>species==='pink'?'pinkSaplings':'saplings';
-export const validNodeId=(id,kind)=>kind==='tree'?/^(?:forest (?:[0-9]|[1-3][0-9]|40)|sakura (?:residence|west|lower)|residence green tree|planted-(?:green|pink)-(?:[1-9]|1[0-9]|2[0-4]))$/.test(id):kind==='stone'&&/^stone-[0-9]+$/.test(id);
+export const validNodeId=(id,kind)=>kind==='tree'?/^(?:forest (?:[0-9]|[1-3][0-9]|40)|sakura (?:residence|west|lower)|residence green tree|ridge-(?:[0-9]|1[01])|planted-(?:green|pink)-(?:[1-9]|1[0-9]|2[0-4]))$/.test(id):kind==='stone'&&/^stone-[0-9]+$/.test(id);
 export const validSite=s=>s&&Number.isFinite(s.x)&&Number.isFinite(s.z)&&Math.abs(s.x)<=1000&&Math.abs(s.z)<=1000;
 export function validNature(n){
  return n?.schema===1&&['wood','stone','saplings'].every(k=>count(n[k]))&&(n.pinkSaplings===undefined||count(n.pinkSaplings))&&n.nodes&&typeof n.nodes==='object'&&!Array.isArray(n.nodes)&&Object.keys(n.nodes).length<=124&&Object.entries(n.nodes).every(([id,s])=>s&&validNodeId(id,s.kind)&&Number.isInteger(s.hits)&&s.hits>=0&&s.hits<=3&&['ready','stump','growing','renewing','planted'].includes(s.phase)&&count(s.at)&&(s.site===undefined||validSite(s.site))&&((s.kind==='tree'&&['ready','stump','growing','planted'].includes(s.phase))||(s.kind==='stone'&&['ready','renewing'].includes(s.phase)))&&(!id.startsWith('planted-')||validSite(s.site))&&(s.phase!=='planted'||id.startsWith('planted-'))&&(s.phase==='ready'?s.hits<3:s.hits===3));
