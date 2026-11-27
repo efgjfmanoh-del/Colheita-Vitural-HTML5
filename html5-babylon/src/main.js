@@ -209,7 +209,7 @@ const terrainSkirtStats={rings:0,vertices:0,margin:64,maxJoinGap:0};
  for(let i=nx-1;i>=0;i--)boundary.push(nz*(nx+1)+i);
  for(let j=nz-1;j>0;j--)boundary.push(j*(nx+1));
  const pv=[],pi=[],pc=[],pu=[],n=boundary.length,cx=(minX+maxX)/2,cz=(minZ+maxZ)/2,hx=(maxX-minX)/2,hz=(maxZ-minZ)/2;
- const margins=[0,1,2,3,5,7,10,14,19,25,32,40,48,56,64];
+ const margins=[0,2,5,10,18,30,45,64];
  for(let ring=0;ring<margins.length;ring++){
   const m=margins[ring];
   for(const k of boundary){

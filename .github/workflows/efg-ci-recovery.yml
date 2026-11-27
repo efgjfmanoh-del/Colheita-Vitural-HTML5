@@ -1,0 +1,65 @@
+name: EFG - Recuperacao CI Colheita
+on:
+  workflow_run:
+    workflows: ['Colheita Babylon - Etapa 1 residencial']
+    types: [completed]
+    branches: [main]
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: efg-recovery-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  recover:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1 && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      FAILED_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Classificar e retomar somente falhas transitórias reconhecidas
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, subprocess, json, re
+          repo=os.environ['GH_REPO']
+          run=os.environ['RUN_ID']
+          sha=os.environ['FAILED_SHA']
+          def gh(*args):
+              return subprocess.check_output(['gh','api',*args],text=True)
+          def obj(path):
+              return json.loads(gh(path))
+          if not re.fullmatch(r'[0-9]+',run) or not re.fullmatch(r'[a-f0-9]{40}',sha):
+              raise SystemExit('Invalid event identifiers')
+          endpoint=f'repos/{repo}/actions/runs/{run}'
+          data=obj(endpoint)
+          if data['head_sha']!=sha or data['head_branch']!='main' or data['run_attempt']!=1 or data['conclusion']!='failure' or obj(f'repos/{repo}/branches/main')['commit']['sha']!=sha:
+              raise SystemExit('Obsolete or already retried run')
+          jobs=obj(endpoint+'/jobs?per_page=100')['jobs']
+          bad=[j for j in jobs if j['conclusion']=='failure']
+          if not bad:
+              raise SystemExit('No failed jobs')
+          allowed={'Preparar dependências Chromium sem feed externo desnecessário','Instalar Chromium e dependências verificadas','Preparar SDK Android','Run npm install --no-audit --no-fund','Run npm ci --no-audit --no-fund'}
+          transient=re.compile(r'ETIMEDOUT|ECONNRESET|EAI_AGAIN|Temporary failure resolving|Connection timed out|Connection reset by peer|HTTP (?:502|503|504)|status code (?:502|503|504)|502 Bad Gateway|503 Service Unavailable|504 Gateway Time-out',re.I)
+          deterministic=re.compile(r'AssertionError|SyntaxError|TypeError|ReferenceError|ERR_ASSERTION|EACCES|401 Unauthorized|403 Forbidden|signature verification failed|hash mismatch',re.I)
+          for job in bad:
+              failed=[s for s in job.get('steps',[]) if s.get('conclusion')=='failure']
+              if len(failed)!=1 or failed[0]['name'] not in allowed:
+                  raise SystemExit('Code, security or unclassified failure: requires corrective agent; no blind retry')
+              logs=gh(f"repos/{repo}/actions/jobs/{job['id']}/logs")
+              if not transient.search(logs) or deterministic.search(logs):
+                  raise SystemExit('No safe transient signature; no retry')
+          # A successful build must have its exact run checkpoint available.
+          if any(j['name']=='1 - Preparar e compilar código' and j['conclusion']=='success' for j in jobs):
+              artifacts=obj(endpoint+'/artifacts?per_page=100')['artifacts']
+              if not any(a['name']=='efg-web-checkpoint' and not a['expired'] and a.get('workflow_run',{}).get('head_sha')==sha for a in artifacts):
+                  raise SystemExit('Checkpoint unavailable or SHA mismatch; do not retry partial jobs')
+          # The integration and APK jobs verify the checkpoint SHA, run and file hashes again.
+          gh('--method','POST',endpoint+'/rerun-failed-jobs')
+          print('One automatic retry requested for failed jobs and dependents; all release gates retained.')
+          PY
