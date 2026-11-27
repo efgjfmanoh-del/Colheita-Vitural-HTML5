@@ -84,3 +84,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - Recuperação 209: run 45991095712 falhou no gate de boot; build/unitários verdes, publicação bloqueada. Instrumentação de diagnóstico adicionada para identificar causa raiz em nova execução; nenhuma subetapa marcada como concluída.
 
 - Recuperação 209 (run 46030343965): material procedural do avatar corrigido sem alterar o escopo. Regressão integral pendente; nenhuma subetapa concluída por inferência.
+
+- QA 209 publicada (run 46038078246, 4/4 jobs); aprovação física/arte pendente. QA 210: complemento transversal 09.05 solicitado, acesso à central pelo quarto botão do menu inicial, status de versão e disponibilidade, sem Sair; implementado, regressão e teste físico pendentes. Continuidade do lote 02 preservada.
