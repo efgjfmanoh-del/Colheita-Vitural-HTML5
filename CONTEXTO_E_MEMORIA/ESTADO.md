@@ -376,3 +376,7 @@ Minimapa superior direito ancorado abaixo do HUD, com tamanho reduzido, sem sobr
 
 ## RC lote 1 retomado após QA 0.1.53
 Base visual/funcional qa-v153 (e3ee63d), conciliação seletiva do código RC anterior: 12 espécies, saldo e comércio agrícola atômico, preferências e ambiente de áudio, testes combinados. Novo armazém agrícola na mesma transação do save de cultivo: depósito/retirada de sementes e colheitas, testes de conservação e falha de gravação. Preservadas pintura, cercas encadeadas, minimapa superior, pets e painel compacto. Armazém é interface lógica, não edifício físico. Quatro frentes permanecem parciais: ferramentas/equipamento/baús físicos, feira espacial, novas áreas/ervas, música e sons específicos ainda pendentes. Gate fechado; nenhum APK OTA RC parcial publicado. CI e validação física pendentes.
+
+
+## RC — correção minimapa fixo (feedback em vídeo 0.1.53)
+Mapa de terreno fixo em norte para cima, enquadramento geográfico estável; marcador do jogador desloca-se conforme posição. Apenas anel graduado, cardeais e leitura angular respondem à orientação. Mantida posição superior direita, vento e sem segunda câmera. Regressão verifica pixels internos invariantes em quatro orientações, centro fixo durante movimento e marcador atualizado. Incluída no lote 1 em main, sem nova release OTA isolada. Testes remotos e físicos pendentes.

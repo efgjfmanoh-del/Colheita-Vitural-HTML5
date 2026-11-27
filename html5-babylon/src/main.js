@@ -2210,20 +2210,22 @@ const mapLayoutObserver=new ResizeObserver(layoutMinimap);for(const id of ['hud'
 let mapClock=0;const mapQA={heading:0,frames:0,north:'+Z',east:'+X'};
 function drawMinimap(dt,force=false){
  mapClock+=dt;if(!force&&mapClock<.10)return;mapClock=0;
- const c=mapCtx,W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17,scale=rad/27;
- const [mx,my]=mapXY(avatar.position.x,avatar.position.z),view=54*mapScale;
- c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);c.translate(mid,mid);c.rotate(-avatar.rotation.y);c.translate(-mid,-mid);
+ const c=mapCtx,W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17;
+ const centerX=(minX+maxX)/2,centerZ=(minZ+maxZ)/2,[mx,my]=mapXY(centerX,centerZ),fixedScale=(rad-5)/Math.hypot((maxX-minX)/2,(maxZ-minZ)/2);
+ c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
  // drawImage clips source bounds correctly; padded base is drawn through a transform.
- c.drawImage(mapBase,mid-mx*scale/mapScale,mid-my*scale/mapScale,512*scale/mapScale,512*scale/mapScale);
- const screen=p=>[mid+(p.x-avatar.position.x)*scale,mid-(p.z-avatar.position.z)*scale];
+ c.drawImage(mapBase,mid-mx*fixedScale/mapScale,mid-my*fixedScale/mapScale,512*fixedScale/mapScale,512*fixedScale/mapScale);
+ const screen=p=>[mid+(p.x-centerX)*fixedScale,mid-(p.z-centerZ)*fixedScale];
  c.lineWidth=1.6;c.strokeStyle='#d6c095';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
  for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
  // Recognizable house icon, anchored to the actual footprint.
  const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
- c.restore();c.save();c.translate(mid,mid);c.beginPath();c.moveTo(0,-12);c.lineTo(7,7);c.lineTo(0,3);c.lineTo(-7,7);c.closePath();c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
+ const marker=screen(avatar.position);c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
  c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
+ // Independent compass ring; terrain stays fixed north-up.
+ for(let i=0;i<72;i++){const a=i*Math.PI/36-avatar.rotation.y,major=i%9===0,outer=rad+5,inner=rad+(major?0:3);c.beginPath();c.moveTo(mid+Math.sin(a)*inner,mid-Math.cos(a)*inner);c.lineTo(mid+Math.sin(a)*outer,mid-Math.cos(a)*outer);c.strokeStyle=major?'#e7ddb0':'#a2ae8a';c.lineWidth=major?1.3:.7;c.stroke();}
  c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';for(const [label,angle] of [['N',0],['L',Math.PI/2],['S',Math.PI],['O',-Math.PI/2]]){const a=angle-avatar.rotation.y;c.fillText(label,mid+Math.sin(a)*(mid-9),mid-Math.cos(a)*(mid-9));}const degrees=Math.round(((avatar.rotation.y*180/Math.PI)%360+360)%360)%360;$('map-heading').textContent=degrees+'° '+['N','NE','L','SE','S','SO','O','NO'][Math.round(degrees/45)%8];
- mapQA.heading=avatar.rotation.y;mapQA.frames++;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='Vento de '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
+ mapQA.heading=avatar.rotation.y;mapQA.frames++;mapQA.center=[centerX,centerZ];mapQA.scale=fixedScale;mapQA.marker=marker;mapQA.mapRotation=0;mapQA.compassRotation=-avatar.rotation.y;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='Vento de '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
 }
 drawMinimap(0,true);
 
