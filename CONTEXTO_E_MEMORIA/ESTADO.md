@@ -414,3 +414,8 @@ Concluir apenas o lote atual de quatro frentes (inventário, economia, agricultu
 
 ## Lote 1 — menu inicial e fotografia
 Menu inicial real sobre cena, opções e retorno, modo fotografia sem HUD com botão de saída discreto, bloqueio de movimento e teclado nas telas. Novo jogo seguro com arquivo de um mundo e troca entre mundos; journal durável aplicado antes de carregar saves, verificação de escrita, somente sete chaves de progresso conhecidas, preferências intactas. Confirmação explícita, nunca apagar backup existente; testes de falha de quota, interrupção, arquivo inválido e troca. Capturas e regressão desktop/mobile atualizadas para tela inicial. Não declarar validação física/estética nem reset físico verificados. Sem alteração de mapa, versão ou gate. CI pendente.
+
+
+## Lote 1 — placa agrícola, catálogo e checkpoint
+- Run 45939324964 concluído com build, regressão desktop/mobile simulada, assinatura permanente e validação de pacote aprovadas; publish-qa ignorado por gate. Artefato interno 15171933946, sem OTA.
+- Corrigida placa compartilhada: deixa de listar apenas quatro espécies, passa a indicar a quantidade derivada do catálogo real e recebe faces nos dois lados, preservando geometria do suporte, interação e posição. Regressão exige as 12 espécies únicas no catálogo. Expansão de setores e placas individuais permanecem pendentes: o terreno jogável atual não abrange vários polígonos do layout, e a suíte exige os 72 IDs originais e oito canteiros. Preservar IDs e geometria existente na expansão; não confundir esta correção de placa com expansão implementada. Gate RC e saves intactos. Nova CI pendente.
