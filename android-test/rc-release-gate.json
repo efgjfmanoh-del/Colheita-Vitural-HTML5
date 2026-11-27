@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "target": "0.2.0",
+  "versionCode": 200,
+  "publish": false,
+  "workstreams": {
+    "inventory": "partial",
+    "economy": "partial",
+    "construction": "pending",
+    "residence": "pending",
+    "agriculture": "pending",
+    "nature": "pending",
+    "animals": "pending",
+    "character": "pending",
+    "progression": "pending",
+    "audio": "pending",
+    "integrity": "pending"
+  },
+  "physicalValidation": false
+}

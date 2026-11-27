@@ -21,3 +21,7 @@
 
 ## Critério de equivalência
 Cada função legada deve ser rastreável ao código original e ao teste na nova implementação. Ausências, parciais e diferenças são registradas; nunca declarar paridade só porque a build compilou. Preservar direção visual, câmera e UI contextual aprovadas. Não criar repositório público com conteúdo privado sem verificar direitos e segredos.
+
+
+## Rodada consolidada 0.2.0 RC
+Base qa-v150 aprovada. Desenvolvimento interno em main, pacote e certificado permanentes preservados; distribuição bloqueada por android-test/rc-release-gate.json, incluindo todas as onze frentes e teste físico. Artefatos de CI não são releases OTA. Inventário e economia parcial: comércio agrícola transacional com preços originais compartilhados e arroz provisório. Feira espacial e demais sistemas pendentes.

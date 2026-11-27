@@ -11,6 +11,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   preview:
+    outputs:
+      publish_ready: ${{ steps.release_gate.outputs.ready }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
@@ -34,6 +36,10 @@ jobs:
             echo "::error::Cadastre o segredo CV_QA_SIGNING_BUNDLE nas configurações de Actions do repositório. Nenhum APK temporário será distribuído."
             exit 1
           fi
+      - name: Verificar gate da entrega consolidada
+        id: release_gate
+        working-directory: .
+        run: python3 android-test/rc-release-gate.py >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -112,7 +118,7 @@ jobs:
           if-no-files-found: error
   publish-qa:
     needs: preview
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.preview.outputs.publish_ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
