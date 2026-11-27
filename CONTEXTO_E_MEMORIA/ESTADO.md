@@ -345,3 +345,7 @@
 
 ## Correção de publicação QA 0.1.51
 - Run 45928685317: compilação, regressões, assinatura e SHA256 aprovados; publish-qa job 140276801060 falhou HTTP 403 na criação da release. Workflow divergente da branch padrão aciona restrição de permissão Workflows do GitHub (REST Releases). Unificar conteúdo do workflow e gate nas duas branches, mantendo autorização exata de 0.1.51/151 na manutenção e 0.2.0/200 em main somente após todas as aprovações e validação física. Não usar PAT, não alterar segredo, não publicar RC intermediária. Nova execução necessária; publicação e teste físico ainda pendentes.
+
+
+## CI — falha externa de dependências Chromium
+- Run QA 45929212612 / job 140277914342: APT retornou HTTP 403 exclusivamente no feed packages.microsoft.com/ubuntu/24.04/prod durante instalação do Chromium. Não confundir com 403 anterior de publicação de release. Correção: desabilitar somente o feed Microsoft desnecessário no runner descartável, preservar fontes Ubuntu e validação criptográfica, aplicar testes de regressão para formatos .list/.sources e retentativas limitadas. Não omitir Playwright nem liberar APK sem testes. Workflow idêntico nas branches; publicação depende de nova execução aprovada.
