@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {audioSettings,ambientMix,createFarmAudio,AUDIO_KEY} from './src/audio.js';
+assert.deepEqual(audioSettings(null),{effects:true,ambient:true,volume:35});
+assert.deepEqual(audioSettings({effects:false,ambient:false,volume:150}),{effects:false,ambient:false,volume:100});
+assert.equal(audioSettings({volume:NaN}).volume,35);assert.equal(audioSettings({volume:-3}).volume,0);
+assert.equal(ambientMix({rain:false}).rain,0);assert(ambientMix({rain:true,kind:'storm'}).rain>ambientMix({rain:true}).rain);
+const m=new Map(),storage={getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};
+const a=createFarmAudio({storage});assert.equal(a.state,'idle');assert.equal(await a.unlock(),false);
+a.set({effects:false,volume:20});assert.equal(JSON.parse(m.get(AUDIO_KEY)).volume,20);assert.equal(createFarmAudio({storage}).settings.effects,false);assert.equal(a.click(),false);
+assert.equal(createFarmAudio({storage:{getItem(){throw Error('blocked')},setItem(){throw Error('blocked')}}}).set({volume:0}).volume,0);
+console.log('PASS audio settings, ambient mix, persistence, mute and unavailable audio engine');
