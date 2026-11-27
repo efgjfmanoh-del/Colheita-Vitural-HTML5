@@ -59,3 +59,6 @@ Progressão antecipada antes de construção. Proprietário aprovou nove funcion
 
 ## Revisão aprovada — EFG Lote Integrado
 Lote atual: 1 arquitetura, 2 expansão, 3 zoneamento, 4 construção, 5 pecuária. Commits encadeados e um candidato QA, sem etapas intermediárias publicadas. Não declarar equivalência final; complementar construção avançada e pecuária após teste físico. Próximas frentes: residência, personagem, pomar/cultivo livre, fabricação, refinamento e validação; cavalo pessoal, pastoreio, transporte, ranchos NPC e cidade mantidos no roadmap. Multiplayer exige infraestrutura própria.
+
+## Roadmap Mestre aprovado
+A ordem de 14 lotes em ROADMAP_MESTRE.md substitui os agrupamentos provisórios anteriores sem suprimir requisitos. EFG Lote Integrado ativado. Lote 02 em recortes funcionais verificáveis; 209 inicia cozinha/higiene, detalhes de aparência, pomar livre e fabricação. Continuar requisitos pendentes do próprio lote antes de marcá-lo concluído. Não avançar sobre regressão nem declarar QA como aprovação física/artística.
