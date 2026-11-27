@@ -2,7 +2,6 @@ name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
     branches: ['qa/0.1.51']
-    paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -93,7 +92,7 @@ jobs:
           grep -Fx "Verified using v2 scheme (APK Signature Scheme v2): true" android-test/qa/signature.txt
           grep -Fx "Number of signers: 1" android-test/qa/signature.txt
           "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
-          grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
+          grep -F "package: name='br.com.colheitavitural.html5.qa' versionCode='151' versionName='0.1.51'" android-test/qa/badging.txt
           grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt
           grep -F "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" android-test/qa/badging.txt
           unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
