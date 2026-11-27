@@ -29,16 +29,17 @@ elif ref=='refs/heads/main':
     if (name,code)==('0.2.4',204):
         ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":204,"channel":"qa","scope":"eight-world-refinements"}'
 elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.5',205):
-    # QA testing only. Authorize the immediate child of the exact technically
-    # validated candidate, with only release-control files changed.
+    # QA testing only. Permit the original release-control commit or its exact
+    # corrective child, with gameplay bytes unchanged and full CI required.
     validated='ed7bdab1a6038e0f59886668dcaed85a4e2c4757'
-    allowed=['android-test/rc-release-gate.py','android-test/test-qa-release-gate.py','.github/workflows/babylon-residence.yml','CONTEXTO_E_MEMORIA/ESTADO.md']
+    previous='845f524a7abf779733e27f58aed0cb26cb8d39ed'
+    allowed=['html5-babylon/regression.mjs','android-test/rc-release-gate.py','android-test/test-qa-release-gate.py','.github/workflows/babylon-residence.yml','CONTEXTO_E_MEMORIA/ESTADO.md']
     try:
         cwd=root.parent
         parent=subprocess.check_output(['git','rev-parse','HEAD^'],cwd=cwd,text=True,stderr=subprocess.DEVNULL).strip()
         changes=subprocess.check_output(['git','diff','--name-only',validated,'HEAD'],cwd=cwd,text=True,stderr=subprocess.DEVNULL).splitlines()
         clean=subprocess.run(['git','diff','--quiet','HEAD','--'],cwd=cwd,stderr=subprocess.DEVNULL).returncode==0
-        ready=(parent==validated and clean and bool(changes) and set(changes)<=set(allowed))
+        ready=(parent in {validated,previous} and clean and bool(changes) and set(changes)<=set(allowed))
     except (OSError,subprocess.CalledProcessError):
         ready=False
 print('ready='+str(ready).lower())

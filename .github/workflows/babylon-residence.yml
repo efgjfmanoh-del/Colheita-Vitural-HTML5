@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 2
+          fetch-depth: 3
       - name: Testar leitura independente das senhas QA
         working-directory: .
         run: python3 android-test/test-sign-qa.py

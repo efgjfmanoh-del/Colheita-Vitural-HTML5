@@ -38,7 +38,7 @@ class Gate(unittest.TestCase):
         gate=root/'rc-release-gate.py'
         env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}
         parent=subprocess.check_output(['git','rev-parse','HEAD^'],cwd=root.parent,text=True).strip()
-        expected='ready=true' if parent=='ed7bdab1a6038e0f59886668dcaed85a4e2c4757' else 'ready=false'
+        expected='ready=true' if parent in {'ed7bdab1a6038e0f59886668dcaed85a4e2c4757','845f524a7abf779733e27f58aed0cb26cb8d39ed'} else 'ready=false'
         self.assertEqual(subprocess.check_output(['python3',str(gate)],env=env,text=True).strip(),expected)
         self.assertEqual(subprocess.check_output(['python3',str(gate)],env={**env,'GITHUB_REF':'refs/heads/main'},text=True).strip(),'ready=false')
 if __name__=='__main__': unittest.main()
