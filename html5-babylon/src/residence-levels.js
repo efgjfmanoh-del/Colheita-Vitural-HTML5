@@ -8,9 +8,11 @@ const rect=(p,a,b,c,d)=>between(p.x,a,b)&&between(p.z,c,d);
 export const stairZone=p=>rect(p,L,R,s.lo,s.turn)&&p.z<s.turn-e?'first':rect(p,L,R,s.turn,Z)?'landing':rect(p,R,s.exit,s.turn,Z)&&p.x<s.exit-e?'second':null;
 const lane=p=>rect(p,L+s.radius,R-s.radius,s.lo,s.turn)||rect(p,L+s.radius,R,s.turn,Z-s.radius)||rect(p,R-s.radius,s.exit,s.turn+s.radius,Z-s.radius);
 export function treadHeight(v,flight=1){const start=flight===1?s.lo:R,base=flight===1?s.ground:LANDING_Y;return base+s.rise*Math.max(1,Math.min(s.steps,Math.floor((v-start)/.4)+1));}
-export function stairHeight(p){const z=stairZone(p);return z==='first'?treadHeight(p.z):z==='landing'?LANDING_Y:z==='second'?treadHeight(p.x,2):null;}
+// Smooth step-offset support, independent of frame rate, using the same rise/run as the physical treads.
+export function walkHeight(v,flight=1){const start=flight===1?s.lo:R,base=flight===1?s.ground:LANDING_Y,t=Math.max(0,Math.min(s.steps,(v-start)/.4)),k=Math.floor(t),u=t-k;return base+s.rise*(k+u*u*(3-2*u));}
+export function stairHeight(p){const z=stairZone(p);return z==='first'?walkHeight(p.z):z==='landing'?LANDING_Y:z==='second'?walkHeight(p.x,2):null;}
 export function residenceStep(from,to,y,w,d){
- const inside=p=>Math.abs(p.x)<=w/2-.42&&Math.abs(p.z)<=d/2-.42,zone=stairZone(from),dest=stairZone(to),on=!!zone&&y>s.ground+.10&&y<=UPPER_Y+.08,upper=!on&&inside(from)&&y>=UPPER_Y-.08,deny={blocked:true,height:y};
+ const inside=p=>Math.abs(p.x)<=w/2-.42&&Math.abs(p.z)<=d/2-.42,zone=stairZone(from),dest=stairZone(to),on=!!zone&&Math.abs(y-stairHeight(from))<=.04,upper=!on&&inside(from)&&y>=UPPER_Y-.08,deny={blocked:true,height:y};
  const groundGate=p=>p.z<=s.lo+e&&Math.abs(p.x-s.x)<=s.half-s.radius+e;
  const upperGate=p=>p.x>=s.exit-e&&Math.abs(p.z-s.mid)<=s.half-s.radius+e;
  if(on){

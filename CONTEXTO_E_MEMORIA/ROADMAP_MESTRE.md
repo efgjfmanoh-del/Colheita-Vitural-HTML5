@@ -94,3 +94,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210: run 46042261467 aprovou fabricação temporizada; 02.01 avançou para escada de 12 degraus e piso superior com vão, limites e oclusão. Regressão remota e avaliação física/visual pendentes; residência completa continua aberta.
 
 - QA 210: run 46043824105 aprovou base reta. Escada em L aprovada, substituída por dois lances, patamar e alvo de mão no corrimão. Planta: sala/cozinha separadas no térreo; quarto/banheiro e varanda de flores no superior. Animação dedicada, divisão e varanda permanecem abertas.
+
+- 02.01: proprietário optou por circulação manual contínua sem animação guiada. Escada em L preservada; suporte suavizado entre degraus, limite local de velocidade, sem inércia na escada, abertura física e pórtico superior. Testes direcionados e nova regressão obrigatória. Porta e divisão dos cômodos, varanda cultivável e aprovação visual/física pendentes.
