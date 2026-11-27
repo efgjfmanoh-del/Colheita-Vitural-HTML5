@@ -380,3 +380,5 @@ Base visual/funcional qa-v153 (e3ee63d), conciliação seletiva do código RC an
 
 ## RC — correção minimapa fixo (feedback em vídeo 0.1.53)
 Mapa de terreno fixo em norte para cima, enquadramento geográfico estável; marcador do jogador desloca-se conforme posição. Apenas anel graduado, cardeais e leitura angular respondem à orientação. Mantida posição superior direita, vento e sem segunda câmera. Regressão verifica pixels internos invariantes em quatro orientações, centro fixo durante movimento e marcador atualizado. Incluída no lote 1 em main, sem nova release OTA isolada. Testes remotos e físicos pendentes.
+
+- Regressão run 45934215030 falhou em invariância do mapa interno (erro agregado sem diagnóstico individual). Correção: canvas independente para bússola, mapa redesenhado somente por movimento do marcador ou alteração real das cercas/portões. Teste mede contagem de desenhos, pixels internos com tolerância de leitura subpixel, posição/ângulo e mudança efetiva da camada de bússola. Causa exata do comparador anterior não isolada; separação estrutural elimina acoplamento. CI pendente.

@@ -2207,20 +2207,22 @@ function layoutMinimap(){
  el.dataset.fit=String(Math.min(innerHeight,control.top)-top>=el.getBoundingClientRect().height+6);
 }
 const mapLayoutObserver=new ResizeObserver(layoutMinimap);for(const id of ['hud','minimap','run-action'])mapLayoutObserver.observe($(id));window.addEventListener('resize',layoutMinimap);layoutMinimap();
-let mapClock=0;const mapQA={heading:0,frames:0,north:'+Z',east:'+X'};
+let mapClock=0,lastMapKey='';const compassCanvas=$('compass-canvas'),compassCtx=compassCanvas.getContext('2d');const mapQA={heading:0,frames:0,terrainFrames:0,north:'+Z',east:'+X'};
 function drawMinimap(dt,force=false){
  mapClock+=dt;if(!force&&mapClock<.10)return;mapClock=0;
- const c=mapCtx,W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17;
+ let c=mapCtx;const W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17;
  const centerX=(minX+maxX)/2,centerZ=(minZ+maxZ)/2,[mx,my]=mapXY(centerX,centerZ),fixedScale=(rad-5)/Math.hypot((maxX-minX)/2,(maxZ-minZ)/2);
- c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
+ const screen=p=>[mid+(p.x-centerX)*fixedScale,mid-(p.z-centerZ)*fixedScale],marker=screen(avatar.position);
+ const mapKey=JSON.stringify([marker,fenceColliders.map(([a,b])=>[a.x,a.z,b.x,b.z]),gates.map(g=>[g.center.x,g.center.z,g.open>.9])]);
+ if(mapKey!==lastMapKey){lastMapKey=mapKey;mapQA.terrainFrames++;c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
  // drawImage clips source bounds correctly; padded base is drawn through a transform.
  c.drawImage(mapBase,mid-mx*fixedScale/mapScale,mid-my*fixedScale/mapScale,512*fixedScale/mapScale,512*fixedScale/mapScale);
- const screen=p=>[mid+(p.x-centerX)*fixedScale,mid-(p.z-centerZ)*fixedScale];
  c.lineWidth=1.6;c.strokeStyle='#d6c095';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
  for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
  // Recognizable house icon, anchored to the actual footprint.
  const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
- const marker=screen(avatar.position);c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
+ c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();}
+ c=compassCtx;c.clearRect(0,0,W,H);
  c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
  // Independent compass ring; terrain stays fixed north-up.
  for(let i=0;i<72;i++){const a=i*Math.PI/36-avatar.rotation.y,major=i%9===0,outer=rad+5,inner=rad+(major?0:3);c.beginPath();c.moveTo(mid+Math.sin(a)*inner,mid-Math.cos(a)*inner);c.lineTo(mid+Math.sin(a)*outer,mid-Math.cos(a)*outer);c.strokeStyle=major?'#e7ddb0':'#a2ae8a';c.lineWidth=major?1.3:.7;c.stroke();}
