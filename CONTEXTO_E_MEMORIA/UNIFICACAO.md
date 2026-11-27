@@ -56,3 +56,6 @@ Progressão antecipada antes de construção. Proprietário aprovou nove funcion
 
 ## Refinamento estrutural aprovado
 0.2.3 aprovada em teste físico pelo proprietário. Oito commits encadeados para QA 0.2.4; sem releases intermediárias. Território, hidrografia, topografia, circulação, ambientação, expansão, cartografia, validação. Natureza e pecuária permanecem fases próprias, sem simulação de funções ausentes.
+
+## Revisão aprovada — EFG Lote Integrado
+Lote atual: 1 arquitetura, 2 expansão, 3 zoneamento, 4 construção, 5 pecuária. Commits encadeados e um candidato QA, sem etapas intermediárias publicadas. Não declarar equivalência final; complementar construção avançada e pecuária após teste físico. Próximas frentes: residência, personagem, pomar/cultivo livre, fabricação, refinamento e validação; cavalo pessoal, pastoreio, transporte, ranchos NPC e cidade mantidos no roadmap. Multiplayer exige infraestrutura própria.

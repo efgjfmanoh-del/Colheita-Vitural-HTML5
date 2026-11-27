@@ -56,4 +56,10 @@ elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.7',207):
                (root/'qa-207-authorization.json').read_text().strip()=='{"version":207,"channel":"qa","scope":"species-seedlings-free-ground"}')
     except (OSError,subprocess.CalledProcessError):
         ready=False
+elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.8',208):
+    try:
+        ready=(subprocess.run(['git','merge-base','--is-ancestor','4cad4aa3898f9676f762c7df25d34a5f9c009249','HEAD'],cwd=root.parent,stderr=subprocess.DEVNULL).returncode==0 and
+               (root/'qa-208-authorization.json').read_text().strip()=='{"version":208,"channel":"qa","scope":"integrated-five-rural-foundations"}')
+    except (OSError,subprocess.CalledProcessError):
+        ready=False
 print('ready='+str(ready).lower())
