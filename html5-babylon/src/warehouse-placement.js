@@ -1,0 +1,6 @@
+export const WAREHOUSE_SIZE=Object.freeze({hx:1.66,hz:1.28});
+export function validWarehousePlacement(p,bounds){return !!p&&Number.isFinite(p.x)&&Number.isFinite(p.z)&&Number.isFinite(p.yaw)&&p.yaw>=0&&p.yaw<Math.PI*2&&p.x>=bounds.minX+1&&p.x<=bounds.maxX-1&&p.z>=bounds.minZ+1&&p.z<=bounds.maxZ-1;}
+export function worldOffset(x,z,yaw,u,v){const c=Math.cos(yaw),s=Math.sin(yaw);return {x:x+u*c+v*s,z:z-u*s+v*c};}
+export function localOffset(x,z,yaw,px,pz){const c=Math.cos(yaw),s=Math.sin(yaw),dx=px-x,dz=pz-z;return {x:dx*c-dz*s,z:dx*s+dz*c};}
+export function warehouseFootprint(p,margin=0){const {hx,hz}=WAREHOUSE_SIZE;return [[-hx-margin,-hz-margin],[hx+margin,-hz-margin],[hx+margin,hz+margin],[-hx-margin,hz+margin]].map(([u,v])=>worldOffset(p.x,p.z,p.yaw,u,v));}
+export function placementClear(p,bounds,clear,ground){if(!validWarehousePlacement(p,bounds))return false;const {hx,hz}=WAREHOUSE_SIZE,y=ground(p.x,p.z);if(!Number.isFinite(y))return false;const nx=Math.ceil(2*(hx+.12)/.19),nz=Math.ceil(2*(hz+.12)/.19);for(let i=0;i<=nx;i++)for(let j=0;j<=nz;j++){const q=worldOffset(p.x,p.z,p.yaw,-hx-.12+i*2*(hx+.12)/nx,-hz-.12+j*2*(hz+.12)/nz);if(q.x<bounds.minX+1||q.x>bounds.maxX-1||q.z<bounds.minZ+1||q.z>bounds.maxZ-1||!clear(q.x,q.z)||Math.abs(ground(q.x,q.z)-y)>.30)return false;}return true;}
