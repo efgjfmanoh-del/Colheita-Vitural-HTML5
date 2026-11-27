@@ -1,7 +1,7 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer,Frustum} from '@babylonjs/core';
 import layout from '../layout.json';
 import {SKILLS,ACTIVE_SKILLS,EVENTS,LAND,PERKS,freshProgress,validProgress,rank,threshold,title,points,reputationTitle,hasPerk,offers,accept,record,claim,unlock,buyLand,achievements} from './progression.js';
-import {freshNature,validNature,natureStage,natureAction} from './nature.js';
+import {freshNature,validNature,natureStage,natureAction,RESOURCE_LABELS,RESOURCE_PRICES,resourceTrade,transferResources} from './nature.js';
 import {DEFAULT_APPEARANCE,PALETTES,validAppearance,withAppearance} from './appearance.js';
 import {archiveAvailable,scheduleWorldRestart,applyWorldRestart} from './world-restart.js';
 // Complete a confirmed restart before any subsystem loads or writes its save.
@@ -2552,8 +2552,21 @@ function applyTrade(id,action,quantity){
  if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);farmAudio.action('trade');progressNotice(oldRank);}
  return q;
 }
+function renderResourceStock(grid,category){
+ const station=category==='market'?marketStation:warehouseStation,near=stationNearby(station),card=document.createElement('article');card.className='market-card';card.dataset.resources=category;
+ const title=document.createElement('strong');title.textContent='Recursos naturais';card.append(title);
+ for(const [id,name] of Object.entries(RESOURCE_LABELS)){const held=wheatState.warehouse?.resources?.[id]??0,count=wheatState.nature[id],label=document.createElement('small');label.textContent=name+' · Mochila '+count+(category==='warehouse'?' · Armazém '+held:'');card.append(label);
+ const buttons=document.createElement('div');buttons.className='market-buttons';
+ for(const [dir,caption] of category==='market'?[['sell','Vender · '+RESOURCE_PRICES[id]*tradeQuantity+' 🪙']]:[['deposit','Guardar '+tradeQuantity],['withdraw','Retirar '+tradeQuantity]]){
+ const b=document.createElement('button');b.type='button';b.textContent=caption;b.dataset.resource=id+':'+dir;b.disabled=!near||wheatSaveLocked||(dir==='withdraw'?held:count)<tradeQuantity;
+ b.onclick=()=>{if(!inventoryDialog.open||inventoryCategory!==category||!stationNearby(station)||wheatSaveLocked)return;const write=json=>localStorage.setItem(WHEAT_SAVE,json),q=category==='market'?resourceTrade(wheatState,id,tradeQuantity,write):transferResources(wheatState,id,dir,tradeQuantity,write);
+ if(q.ok){wheatState=q.next;farmAudio.action('trade');}
+ $('inventory-message').textContent=q.ok?(category==='market'?'Venda salva.':'Transferência salva.'):q.error;renderInventory(true);};buttons.append(b);
+ }card.append(buttons);
+ }grid.append(card);
+}
 function renderMarket(){
- const grid=$('inventory-items');grid.replaceChildren();
+ const grid=$('inventory-items');grid.replaceChildren();renderResourceStock(grid,'market');
  for(const [id,supply] of Object.entries(SUPPLIES)){const card=document.createElement('article');card.className='market-card';card.dataset.supply=id;const name=document.createElement('strong');name.textContent=supply.name;const balance=document.createElement('small');balance.textContent=wheatSaveLocked?'Estoque indisponível':'Mochila: '+wheatState[id];const b=document.createElement('button');b.type='button';b.dataset.trade='buy';b.textContent='Comprar · '+supply.buy*tradeQuantity+' 🪙';b.disabled=wheatSaveLocked||!quoteSupply(wheatState,id,tradeQuantity).ok;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='market')return;const res=commitSupply(wheatState,id,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(res.ok){wheatState=res.next;farmCache.clear();updateWheat(Date.now(),true);farmAudio.action('trade');}$('inventory-message').textContent=res.ok?'Compra realizada: '+supply.name:res.error;renderInventory(true);};card.append(name,balance,b);grid.append(card);}
  for(const [id,price] of Object.entries(PRICES)){
   const stock=stockFor(wheatState,id),card=document.createElement('article');card.className='market-card';card.dataset.market=id;
@@ -2567,7 +2580,7 @@ function renderMarket(){
  }
 }
 function renderWarehouse(){
- const grid=$('inventory-items');grid.replaceChildren();const canTransfer=stationNearby(warehouseStation);
+ const grid=$('inventory-items');grid.replaceChildren();const canTransfer=stationNearby(warehouseStation);renderResourceStock(grid,'warehouse');
  if(!canTransfer){const notice=document.createElement('p');notice.className='market-card';notice.textContent=warehouseStation?'Consulta de estoque. Vá ao armazém do rancho para guardar ou retirar itens.':'Armazém ainda não construído. Estoque preservado; as transferências serão liberadas quando você construir o armazém.';grid.append(notice);}
  const supplies=document.createElement('article');supplies.className='market-card';supplies.dataset.warehouse='supplies';const heading=document.createElement('strong');heading.textContent='Insumos agrícolas';supplies.append(heading);for(const [kind,info] of Object.entries(SUPPLIES)){const held=wheatState.warehouse?.supplies?.[kind]??0,label=document.createElement('small');label.textContent=info.name+' · Mochila '+wheatState[kind]+' · Armazém '+held;supplies.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';for(const [dir,name] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+dir;b.textContent=name+' '+tradeQuantity;b.disabled=!canTransfer||wheatSaveLocked||(dir==='deposit'?wheatState[kind]:held)<tradeQuantity;b.onclick=()=>{if(!stationNearby(warehouseStation)||wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const q=transferWarehouse(wheatState,'supplies',kind,dir,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(q.ok){wheatState=q.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=q.ok?'Transferência salva.':q.error;renderInventory(true);};buttons.append(b);}supplies.append(buttons);}grid.append(supplies);
  for(const [id,crop] of Object.entries(CROP_CALENDAR)){const stock=stockFor(wheatState,id),stored=wheatState.warehouse?.[id]??{seeds:0,grain:0},card=document.createElement('article');card.className='market-card';card.dataset.warehouse=id;
@@ -2730,7 +2743,7 @@ function interactNature(f,action){
  if(action==='strike'&&f.stage!==3)return false;
  if(action==='strike'&&!selectTool(f.kind==='tree'?'axe':'pickaxe'))return false;
  const q=natureAction(wheatState.nature,f.id,f.kind,action,Math.floor(worldElapsed()));if(!q)return false;
- if(!progressCommit(next=>{next.nature=q.next;if(q.event&&!record(next.progress,q.event,{key:f.id}))return false;return true;}))return false;
+ if(!progressCommit(next=>{next.nature=q.next;if(q.event&&!record(next.progress,q.event))return false;return true;}))return false;
  farmAudio.action(action==='plant'?'plant':f.kind==='tree'?'chop':'mine');syncNature(true);return true;
 }
 function renderNature(f,root){
