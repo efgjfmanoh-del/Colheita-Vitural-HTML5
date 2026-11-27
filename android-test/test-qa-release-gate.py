@@ -14,8 +14,7 @@ class Gate(unittest.TestCase):
             actual=grad.read_text()
             js=p/'android-test/qa-progression-authorization.json'
             original=js.read_bytes()
-            # Candidate branch itself is never publishable, even if a future
-            # main release authorization is present.
+            # A detached fixture without the validated Git ancestry is never publishable.
             self.assertEqual(run('refs/heads/qa/lote-final-025'),'ready=false')
             if "versionCode 205" in actual:
                 self.assertEqual(run('refs/heads/main'),'ready=false')
@@ -32,4 +31,14 @@ class Gate(unittest.TestCase):
             self.assertEqual(run('refs/heads/main'),'ready=false')
             grad.write_text(actual)
             js.write_bytes(original)
+    def test_exact_205_qa_ancestry(self):
+        grad=(root/'app/build.gradle').read_text()
+        if "versionCode 205" not in grad:
+            self.skipTest('Not candidate 205')
+        gate=root/'rc-release-gate.py'
+        env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}
+        parent=subprocess.check_output(['git','rev-parse','HEAD^'],cwd=root.parent,text=True).strip()
+        expected='ready=true' if parent=='ed7bdab1a6038e0f59886668dcaed85a4e2c4757' else 'ready=false'
+        self.assertEqual(subprocess.check_output(['python3',str(gate)],env=env,text=True).strip(),expected)
+        self.assertEqual(subprocess.check_output(['python3',str(gate)],env={**env,'GITHUB_REF':'refs/heads/main'},text=True).strip(),'ready=false')
 if __name__=='__main__': unittest.main()
