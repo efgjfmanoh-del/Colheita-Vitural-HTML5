@@ -92,11 +92,14 @@ const light=new HemisphericLight('sky',V(.2,1,-.15),scene);light.intensity=.85;l
 const sun=new DirectionalLight('sun',V(-.6,-1,.45),scene);sun.position=V(40,65,-40);sun.intensity=.90;sun.diffuse=new Color3(1,.91,.78);sun.autoCalcShadowZBounds=true;sun.shadowOrthoScale=.2;
 const shadow=new ShadowGenerator(1536,sun);shadow.usePercentageCloserFiltering=true;shadow.filteringQuality=ShadowGenerator.QUALITY_LOW;shadow.bias=.00035;shadow.normalBias=.015;shadow.darkness=.32;
 // A lower, still orthographic view exposes walls, entrances and river elevations.
-const CAMERA_BETA=48*Math.PI/180;
-const camera=new ArcRotateCamera('camera',-Math.PI/2,CAMERA_BETA,100,V(0,2.8,0),scene);
+const CAMERA_PROFILES={rural:{span:36,beta:56,alpha:-70},ampla:{span:54,beta:48,alpha:-90}};
+let cameraProfile='rural';
+try{const p=localStorage.getItem('cv.cameraProfile.v1');if(Object.hasOwn(CAMERA_PROFILES,p))cameraProfile=p;}catch{}
+const cameraBase=()=>CAMERA_PROFILES[cameraProfile],CAMERA_BETA=cameraBase().beta*Math.PI/180;
+const camera=new ArcRotateCamera('camera',cameraBase().alpha*Math.PI/180,CAMERA_BETA,100,V(0,2.8,0),scene);
 camera.mode=1;camera.lowerBetaLimit=.3;camera.upperBetaLimit=1.25;camera.lowerRadiusLimit=35;camera.upperRadiusLimit=180;camera.panningSensibility=0;camera.inputs.clear();scene.activeCamera=camera;
 // setTarget recalculates spherical orbit parameters in Babylon. Preserve the approved view.
-function retarget(p,beta=CAMERA_BETA){const alpha=camera.alpha,radius=camera.radius;camera.setTarget(p);camera.alpha=alpha;camera.beta=beta;camera.radius=radius;}
+function retarget(p,beta=cameraBase().beta*Math.PI/180){const alpha=camera.alpha,radius=camera.radius;camera.setTarget(p);camera.alpha=alpha;camera.beta=beta;camera.radius=radius;}
 let span=60,orbit=0;function fit(){const a=engine.getRenderWidth()/Math.max(1,engine.getRenderHeight());const h=Math.max(span/a,14);camera.orthoLeft=-h*a/2;camera.orthoRight=h*a/2;camera.orthoTop=h/2;camera.orthoBottom=-h/2}fit();
 window.addEventListener('resize',()=>{resizeRender();fit();resetPerf()});
 function updateQualityUI(){for(const key of Object.keys(qualityProfiles))$('quality-'+key).setAttribute('aria-pressed',String(key===quality));$('quality-label').textContent=qualityNames[quality];}
@@ -747,7 +750,7 @@ function updateWorldClock(now=Date.now(),force=false){
  const pad=n=>String(n).padStart(2,'0'),label=pad(c.hour)+':'+pad(c.minute)+' · '+daylight.phase+' | '+c.weekday+', '+pad(c.day)+'/'+pad(c.month)+' · Ano '+c.year+' · '+c.season;
  if(label!==lastCalendarLabel){
   $('world-clock').textContent=pad(c.hour)+':'+pad(c.minute);$('world-date').textContent=pad(c.day)+'/'+pad(c.month);
-  $('world-date-detail').textContent=c.weekday+' · Ano '+c.year+' · '+c.season;
+  $('world-date-detail').textContent=c.weekday+', '+pad(c.day)+'/'+pad(c.month)+' · Ano '+c.year+' · '+c.season;$('world-full-time').textContent=pad(c.hour)+':'+pad(c.minute);
   $('world-phase').textContent=daylight.phase;
   const icon=({'Noite':'🌙','Amanhecer':'🌅','Dia':c.hour>=12?'🌤️':'☀️','Entardecer':'🌇'})[daylight.phase]||'☀️';
   $('world-phase-icon').textContent=icon;$('world-phase-icon').setAttribute('aria-label',daylight.phase);
@@ -756,7 +759,7 @@ function updateWorldClock(now=Date.now(),force=false){
  if($('world-clock-error').textContent!==clockError)$('world-clock-error').textContent=clockError;
  const minute=c.hour*60+c.minute,w=weatherAt(elapsed);
  if(minute!==lastLightMinute||w.slot!==lastWeatherSlot){
-  lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherVisual.label;$('weather-icon').textContent=weatherVisual.icon;$('world-temp').textContent=w.temperature.toFixed(1)+' °C';document.body.dataset.weather=w.kind;
+  lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherVisual.label;$('weather-icon').textContent=weatherVisual.icon;$('world-temp').textContent=w.temperature.toFixed(1)+' °C';$('world-full-temp').textContent=w.temperature.toFixed(1)+' °C';document.body.dataset.weather=w.kind;
   lastLightMinute=minute;const k=daylight.daylight;
   // Maintain the existing daytime art. At night keep paths and controls readable.
   const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;const shadowsOn=k>.18;if(sun.shadowEnabled!==shadowsOn){sun.shadowEnabled=shadowsOn;shadow.getShadowMap().resetRefreshCounter();}
@@ -1617,9 +1620,9 @@ function updateEntry(dt){
   const turn=angleDelta(camera.alpha,desiredAlpha)*factor,maxTurn=1.15*dt;
   const applied=Math.max(-maxTurn,Math.min(maxTurn,turn));camera.alpha+=applied;
   if(dt>0)cameraStability.maxTurnRate=Math.max(cameraStability.maxTurnRate,Math.abs(applied)/dt);
-  const betaTarget=gesture&&!inside?camera.beta:saved.beta+((inside?CAMERA_BETA:(exterior?57:65)*Math.PI/180)-saved.beta)*b;
+  const betaTarget=gesture&&!inside?camera.beta:saved.beta+((inside?48*Math.PI/180:(exterior?57:65)*Math.PI/180)-saved.beta)*b;
   const beta=camera.beta+(betaTarget-camera.beta)*factor;
-  const desiredSpan=saved.span+((inside?24:exterior?(saved.follow?Math.min(saved.span,EXPLORATION_SPAN):37):34)-saved.span)*b;
+  const desiredSpan=saved.span+((inside?24:exterior?(saved.follow?Math.min(saved.span,cameraBase().span):37):34)-saved.span)*b;
   span+=(desiredSpan-span)*factor;
   const trackingAim=saved.follow?avatar.position.add(V(0,inside?1.25:1.10,0)):Vector3.Lerp(baseAim,aim,b);
   retarget(Vector3.Lerp(camera.target,trackingAim,1-Math.exp(-dt*10)),beta);fit();
@@ -1628,17 +1631,27 @@ function updateEntry(dt){
  updateAvatarVisibility(dt,inside);syncHouseShadows();
 }
 // The ordinary gameplay camera follows the actor across the entire map.
-const EXPLORATION_SPAN=54;
+const EXPLORATION_SPAN=cameraBase().span;
 function explorationAim(){return avatar.position.add(V(0,1,0));}
 function setView(newSpan,target,tracking){
  if(entry.previous){Object.assign(entry.previous,{span:newSpan,target,follow:tracking});return;}
  span=newSpan;follow=tracking;retarget(target);fit();
 }
-$('wide').onclick=()=>setView(EXPLORATION_SPAN,explorationAim(),true);
+function selectCameraProfile(key){
+ if(!Object.hasOwn(CAMERA_PROFILES,key))return false;
+ cameraProfile=key;try{localStorage.setItem('cv.cameraProfile.v1',key);}catch{}
+ const p=cameraBase(),alpha=p.alpha*Math.PI/180,beta=p.beta*Math.PI/180;
+ if(entry.previous){Object.assign(entry.previous,{alpha,beta,span:p.span,target:explorationAim(),follow:true});}
+ else{camera.alpha=alpha;span=p.span;follow=true;retarget(explorationAim(),beta);fit();}
+ for(const id of Object.keys(CAMERA_PROFILES))$('camera-'+id).setAttribute('aria-pressed',String(id===key));
+ return true;
+}
+for(const id of Object.keys(CAMERA_PROFILES)){$('camera-'+id).onclick=()=>selectCameraProfile(id);$('camera-'+id).setAttribute('aria-pressed',String(id===cameraProfile));}
+$('wide').onclick=()=>setView(cameraBase().span,explorationAim(),true);
 $('close').onclick=()=>setView(66,V(0,3.5,0),false);
 $('follow').onclick=()=>setView(27,avatar.position.add(V(0,1,0)),true);
 $('field-view').onclick=()=>setView(45,V(wheatGate.x,3.5,wheatGate.z+5),false);
-$('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=-Math.PI/2+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
+$('rotate').onclick=()=>{orbit=(orbit+1)%4;const alpha=cameraBase().alpha*Math.PI/180+orbit*Math.PI/2;if(entry.previous)entry.previous.alpha=alpha;else camera.alpha=alpha;};
 // Use the rendered triangulated terrain for contact, and distinguish a smooth
 // walkable grade from an abrupt drop or wall. Built stairs keep their step limit.
 const terrainContactStats={steps:0,rejectedSlope:0,maxFootError:0};
@@ -2095,7 +2108,12 @@ function positionWorldContext(el){
  const ax=Number.isFinite(feet.x)?feet.x:innerWidth/2,ay=Number.isFinite(feet.y)?feet.y:innerHeight/2,hy=Number.isFinite(head.y)?head.y:ay-42;
  const playerRect={left:Math.min(ax,head.x)-19,right:Math.max(ax,head.x)+19,top:Math.min(ay,hy)-10,bottom:Math.max(ay,hy)+8};
  const obstacles=[playerRect,...contextRects()],fits=(x,y)=>x>=margin&&y>=margin&&x+w<=innerWidth-margin&&y+h<=innerHeight-margin&&!obstacles.some(r=>x<r.right+4&&x+w>r.left-4&&y<r.bottom+4&&y+h>r.top-4);
- const candidates=[[ax-w/2,ay+14],[ax+29,hy+8],[ax-w-29,hy+8],[ax-w/2,hy-h-16],[innerWidth/2-w/2,innerHeight-h-12],[innerWidth/2-w/2,innerHeight*.66]];
+ let candidates;
+ if(el.id==='fence-context'&&nearFence){
+  const a=nearFence.a,b=nearFence.b,dx=b.x-a.x,dz=b.z-a.z,u=Math.max(0,Math.min(1,((avatar.position.x-a.x)*dx+(avatar.position.z-a.z)*dz)/Math.max(.001,dx*dx+dz*dz)));
+  const f=projectWorld(Vector3.Lerp(a,b,u).add(V(0,1.35,0))),cx=Number.isFinite(f.x)?f.x:ax,cy=Number.isFinite(f.y)?f.y:hy;
+  candidates=[[cx-w/2,Math.min(cy,hy)-h-7],[cx-w/2-38,Math.min(cy,hy)-h-7],[cx-w/2+38,Math.min(cy,hy)-h-7],[ax+28,hy-h],[ax-w-28,hy-h],[ax-w/2,ay+14]];
+ }else candidates=[[ax-w/2,hy-h-15],[ax+29,hy+8],[ax-w-29,hy+8],[ax-w/2,ay+14],[innerWidth/2-w/2,innerHeight-h-12],[innerWidth/2-w/2,innerHeight*.66]];
  const p=candidates.map(([x,y])=>[Math.max(margin,Math.min(innerWidth-w-margin,x)),Math.max(margin,Math.min(innerHeight-h-margin,y))]).find(([x,y])=>fits(x,y));
  if(!p){el.style.visibility='hidden';return;}el.style.visibility='visible';el.style.left=Math.round(p[0])+'px';el.style.top=Math.round(p[1])+'px';
 }
@@ -2117,7 +2135,7 @@ for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z
 mapLine(pathRows.map(row=>row[1]),'#c6b38a',2.3);mapLine(approachRows.map(row=>row[1]),'#b89664',2.6);mapLine([bridgeEntry,bridgeExit],'#c6a273',3.0);
 mapPoly([home.C(-home.w/2,0,-home.d/2),home.C(home.w/2,0,-home.d/2),home.C(home.w/2,0,home.d/2),home.C(-home.w/2,0,home.d/2)],'#a96342');
 mapPoly(wheatPolygon,'#73824d');for(const b of wheatBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
-for(const tree of treePositions){const x=tree.x??tree[0],z=tree.z??tree[2];if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
+for(const tree of treePositions){const x=X(tree[0]),z=Z(tree[1]);if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
 let mapClock=0;const mapQA={heading:0,frames:0,north:'+Z',east:'+X'};
 function drawMinimap(dt,force=false){
  mapClock+=dt;if(!force&&mapClock<.10)return;mapClock=0;
@@ -2129,6 +2147,8 @@ function drawMinimap(dt,force=false){
  const screen=p=>[mid+(p.x-avatar.position.x)*scale,mid-(p.z-avatar.position.z)*scale];
  c.lineWidth=1.6;c.strokeStyle='#d6c095';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
  for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
+ // Recognizable house icon, anchored to the actual footprint.
+ const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
  c.translate(mid,mid);c.rotate(avatar.rotation.y);c.beginPath();c.moveTo(0,-12);c.lineTo(7,7);c.lineTo(0,3);c.lineTo(-7,7);c.closePath();c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
  c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
  c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';c.fillText('N',mid,9);c.fillText('S',mid,H-8);c.fillText('L',W-8,mid);c.fillText('O',9,mid);
@@ -2147,7 +2167,7 @@ const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windo
 scene.onAfterRenderObservable.add(()=>{const now=performance.now();if(perf.last!==null)perf.samples.push(now-perf.last);perf.last=now;if(perf.windowStart===null)perf.windowStart=now;const elapsed=now-perf.windowStart;if(elapsed>=4000&&perf.samples.length>=2){const a=perf.samples.slice().sort((x,y)=>x-y);perf.frames=perf.samples.length;perf.fps=1000*perf.frames/Math.max(1,a.reduce((x,y)=>x+y,0));perf.p95Ms=a[Math.min(a.length-1,Math.ceil(a.length*.95)-1)];perf.maxMs=a.at(-1);perf.slowFrames=a.filter(ms=>ms>33.33).length;$('fps').textContent=perf.fps.toFixed(1)+' FPS';$('metrics').textContent='P95 '+perf.p95Ms.toFixed(1)+' ms · '+engine.getRenderWidth()+'×'+engine.getRenderHeight()+' · '+perf.frames+' quadros · pico '+perf.maxMs.toFixed(1)+' ms · lentos '+perf.slowFrames;perf.samples=[];perf.windowStart=now;}});
 function resetPerf(){perf.samples=[];perf.last=null;perf.windowStart=null;perf.fps=null;perf.p95Ms=null;perf.maxMs=null;perf.slowFrames=0;perf.frames=0;$('fps').textContent='Medindo…';$('metrics').textContent='Nova janela de medição';}
 document.addEventListener('visibilitychange',resetPerf);
-span=EXPLORATION_SPAN;follow=true;fit();retarget(explorationAim());
+span=cameraBase().span;follow=true;fit();retarget(explorationAim());
 // Keep entity boundaries and material boundaries. Only static pieces are batched.
 // Logical component counts remain available for regression checks.
 const componentCounts=Object.fromEntries(Object.entries(groups).map(([id,parts])=>[id,parts.length]));componentCounts.house+=['house-roof','house-front','house-porch-roof','house-door'].reduce((n,id)=>n+(componentCounts[id]||0),0);
@@ -2189,4 +2209,4 @@ const residenceCasters=new Set(shadow.getShadowMap().renderList||[]);for(const i
 // Assign interior emitters to interior surfaces, not the outside façade/roof.
 for(const {id,light:l} of nightLights){if(id==='warm interior'||id==='warm loft')l.includedOnlyMeshes=[...(groups.house||[]),...(groups['farm visitor']||[]),...(groups.dog||[]),...(groups.cat||[])];}
 
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
