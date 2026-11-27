@@ -92,3 +92,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210: run 46041144746 aprovou 3 gates técnicos; publicação pulada. 04.01 avançou para fila FIFO temporizada persistente da oficina, reserva e recolhimento presencial, ainda não toda a fabricação universal. Novos testes pendentes de execução remota.
 
 - QA 210: run 46042261467 aprovou fabricação temporizada; 02.01 avançou para escada de 12 degraus e piso superior com vão, limites e oclusão. Regressão remota e avaliação física/visual pendentes; residência completa continua aberta.
+
+- QA 210: run 46043824105 aprovou base reta. Escada em L aprovada, substituída por dois lances, patamar e alvo de mão no corrimão. Planta: sala/cozinha separadas no térreo; quarto/banheiro e varanda de flores no superior. Animação dedicada, divisão e varanda permanecem abertas.
