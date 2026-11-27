@@ -2,7 +2,7 @@ import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,Stan
 import layout from '../layout.json';
 import {SKILLS,ACTIVE_SKILLS,EVENTS,LAND,PERKS,freshProgress,validProgress,rank,threshold,title,points,reputationTitle,hasPerk,offers,accept,record,claim,unlock,buyLand,achievements} from './progression.js';
 import {freshHusbandry,validHusbandry,settleHusbandry,husbandryAction,SPECIES,PRODUCTS,MAX_ANIMALS,MAX_SUPPLY,FEED_PRICE} from './husbandry.js';
-import {freshFishery,validFishery,fishingReady,landFish,sellFish,FISH_PRICE,fishingWindow} from './fishing.js';
+import {freshFishery,validFishery,fishingReady,landFish,sellFish,FISH_PRICE,createFishingTiming} from './fishing.js';
 import {freshNature,validNature,natureStage,natureAction,RESOURCE_LABELS,RESOURCE_PRICES,resourceTrade,transferResources} from './nature.js';
 import {DEFAULT_APPEARANCE,PALETTES,validAppearance,withAppearance} from './appearance.js';
 import {archiveAvailable,scheduleWorldRestart,applyWorldRestart} from './world-restart.js';
@@ -2787,32 +2787,38 @@ function initFishing(){
  }if(fishingSpots.at(-1)?.id==='river-fish-'+i)break;}
  }
 }
-function stopFishing(){if(!fishingSession)return;for(const mesh of fishingSession.meshes)mesh.dispose(false,false);fishingSession=null;}
+function stopFishing(){if(!fishingSession)return;const a=fishingSession;fishingSession=null;a.timing.stop();for(const mesh of a.meshes)mesh.dispose(false,false);}
 function castFishing(f){
  if(!fishingSpots.includes(f)||!ruralDialog.open||ruralNearby()!==f||wheatSaveLocked||!fishingReady(wheatState.fishery,f.id,Math.floor(worldElapsed()))||fishingSession||!selectTool('rod'))return false;
  const bob=MeshBuilder.CreateSphere('fishing float',{diameter:.16,segments:6},scene);bob.position.copyFrom(f.water);bob.material=M.white;bob.isPickable=false;
  const line=MeshBuilder.CreateLines('fishing line',{points:[avatar.position.add(V(0,1.05,0)),f.water]},scene);line.color=Color3.FromHexString('#e7d9b6');line.isPickable=false;
- fishingSession={f,start:performance.now(),phase:'waiting',meshes:[bob,line]};farmAudio.action('water');return true;
+ const a={f,meshes:[bob,line],timing:null};a.timing=createFishingTiming({onPhase:phase=>{
+ if(fishingSession!==a)return;
+ if(document.hidden||!ruralDialog.open||ruralNearby()!==f){stopFishing();return;}
+ if(phase==='missed'){stopFishing();renderRural(f);$('rural-status').textContent='O peixe escapou. Lance novamente.';}
+ else{bob.position.y=f.water.y-.05;renderRural(f);$('rural-status').textContent='Fisgada! Recolha a linha.';}
+ }});fishingSession=a;a.timing.start();farmAudio.action('water');return true;
 }
 function reelFishing(f){
- const a=fishingSession;if(!a||a.f!==f||!ruralDialog.open||ruralNearby()!==f||wheatSaveLocked||fishingWindow(a.start,performance.now())!=='bite')return false;
+ const a=fishingSession;if(!a||a.f!==f||!ruralDialog.open||ruralNearby()!==f||wheatSaveLocked||document.hidden||a.timing.phase!=='bite')return false;
  const next=landFish(wheatState.fishery,f.id,Math.floor(worldElapsed()));if(!next)return false;
  if(!progressCommit(s=>{s.fishery=next;return record(s.progress,'fish');}))return false;
  stopFishing();farmAudio.action('harvest');return true;
 }
 function renderFishing(f,root){
- const live=fishingSession?.f===f,phase=live?fishingWindow(fishingSession.start,performance.now()):null,ready=fishingReady(wheatState.fishery,f.id,Math.floor(worldElapsed()));
+ const live=fishingSession?.f===f,phase=live?fishingSession.timing.phase:null,ready=fishingReady(wheatState.fishery,f.id,Math.floor(worldElapsed()));
  root.append(progressEl('p','Pesque na margem. Lance a linha e recolha quando houver uma fisgada.'));
  root.append(progressEl('small','Peixes na mochila: '+wheatState.fishery.fish));
  const status=progressEl('p',phase==='waiting'?'Aguardando a fisgada…':phase==='bite'?'Fisgou! Recolha agora.':ready?'Ponto disponível.':'O ponto está se recuperando. Aguarde uma hora rural.');status.id='fishing-status';root.append(status);
  const b=progressButton(live?'Recolher linha':'Lançar linha',()=>{const ok=live?reelFishing(f):castFishing(f);renderRural(f);$('rural-status').textContent=ok?(live?'Peixe capturado e salvo.':'Linha lançada.'):'Ação indisponível.';},wheatSaveLocked||(live?phase!=='bite':!ready));b.id='fishing-action';root.append(b);
 }
 function tickFishing(){
- if(!fishingSession)return;const a=fishingSession;
- if(!ruralDialog.open||ruralNearby()!==a.f){stopFishing();return;}
- const phase=fishingWindow(a.start,performance.now());if(phase===a.phase)return;a.phase=phase;
- if(phase==='missed'){stopFishing();renderRural(a.f);$('rural-status').textContent='O peixe escapou. Lance novamente.';}else{a.meshes[0].position.y=a.f.water.y-.05;renderRural(a.f);}
+ const a=fishingSession;if(a&&(!ruralDialog.open||ruralNearby()!==a.f))stopFishing();
 }
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden||!fishingSession)return;
+ const f=fishingSession.f;stopFishing();if(ruralDialog.open&&ruralNearby()===f){renderRural(f);$('rural-status').textContent='Pesca cancelada ao sair do jogo.';}
+});
 initFishing();
 function livestockReserved(x,z){return !!livestockPen&&Math.abs(x-livestockPen.x)<livestockPen.h+1.5&&Math.abs(z-livestockPen.z)<livestockPen.h+2;}
 function initLivestock(){
