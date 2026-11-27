@@ -847,6 +847,7 @@ function applyWheatAction(action,id,now=Date.now()){
  else if(action==='irrigate'&&!legacy){p.soil.irrigated=!p.soil.irrigated;if(p.soil.irrigated){p.soil.moisture=Math.max(p.soil.moisture,CROP_CALENDAR[crop].moisture+.1);if(p.state==='sown'){p.state='watered';p.wateredAt=now;}}}
  else if(action==='fertilize'&&!legacy&&next.compost>0&&p.soil.fertility<.99){next.compost--;p.soil.fertility=Math.min(1,p.soil.fertility+.24);}
  else if(action==='treat'&&!legacy&&next.treatments>0&&p.soil.pest>.01){next.treatments--;p.soil.pest=Math.max(0,p.soil.pest-.65);}
+ else if(action==='weed'&&!legacy&&status!=='raw'&&(p.soil.weeds??0)>.01){p.soil.weeds=0;}
  else if(action==='harvest'&&status==='ripe'){
   const result=legacy?{units:CROP_CALENDAR[crop].yield,quality:'Boa'}:harvestInfo(p);
   if(!Number.isSafeInteger(stock.grain+result.units)||!Number.isSafeInteger(stock.seeds+1))return false;
@@ -859,7 +860,7 @@ function applyWheatAction(action,id,now=Date.now()){
  if(p.soil&&p.state==='watered'&&!Number.isFinite(p.wateredAt))p.wateredAt=now;
  next.plots[id]=p;
  try{localStorage.setItem(WHEAT_SAVE,JSON.stringify(next));}catch{wheatSaveError='Falha ao salvar. Nenhuma alteração aplicada.';return false;}
- wheatState=next;farmCache.clear();wheatSaveError='';wheatVisualKey='';updateWheat(now,true);return true;
+ wheatState=next;farmCache.clear();wheatSaveError='';wheatVisualKey='';updateWheat(now,true);farmAudio.action(action);return true;
 }
 // Rebuild only on a visual stage transition; one mesh for furrows and one for wheat.
 entity('wheat dynamic cultivation');
@@ -903,7 +904,7 @@ function tickMounds(dt){
 }
 function wheatStage(p,now){const state=wheatStatus(p.id,now);return state==='watered'?(wheatProgress(p.id,now)<.35?'sprout':'green'):state;}
 function rebuildWheat(now){
- const key=wheatPlots.map(p=>{const v=evaluatedPlot(p.id,now);return [wheatStage(p,now),v?.crop,v?.soil?.irrigated,v?.soil?Math.floor(v.soil.moisture*4):0].join(':');}).join('|');if(key===wheatVisualKey)return;wheatVisualKey=key;
+ const key=wheatPlots.map(p=>{const v=evaluatedPlot(p.id,now);return [wheatStage(p,now),v?.crop,v?.soil?.irrigated,v?.soil?Math.floor(v.soil.moisture*4):0,Math.floor((v?.soil?.weeds??0)*5)].join(':');}).join('|');if(key===wheatVisualKey)return;wheatVisualKey=key;
  const soil={p:[],i:[],c:[],uv:[]},plants={p:[],i:[],c:[]};moundVertices=[];
  const plotLook=new Map();
  function tri(buf,a,b,c,col){const i=buf.p.length/3;buf.p.push(...a,...b,...c);buf.i.push(i,i+1,i+2);for(let k=0;k<3;k++)buf.c.push(col.r,col.g,col.b,1);}
@@ -931,6 +932,7 @@ function rebuildWheat(now){
  for(const p of wheatPlots){
   const {stage,data,target}=plotLook.get(p.id),crop=data?.crop||'wheat',bed=wheatBeds.find(b=>b.id===p.bedId);
   const y=(x,z,rise)=>Math.max(height(x,z),renderedTerrainY(x,z))+bedHeightAt(x,z,bed)+rise;
+  const weeds=Math.floor((data?.soil?.weeds??0)*5);for(let n=0;n<weeds;n++){const x=p.x1+(p.x2-p.x1)*(.14+n*.17),z=p.z1+.1+(n%3)*.45,b=y(x,z,target+.015);for(const side of [-1,1])tri(plants,[x,b,z],[x+side*.08,b+.12,z+.02],[x,b+.19,z],Color3.FromHexString('#577744'));}
   if(!['sprout','green','ripe'].includes(stage))continue;
   for(let row=0;row<3;row++)for(let k=0;k<4;k++){
    const x=p.x1+(p.x2-p.x1)*(.12+k*.25),z=p.z1+.21+row*.41,b=y(x,z,target+.015),ripe=stage==='ripe',hh=(stage==='sprout'?.16:stage==='green'?.48:.76)*(crop==='corn'?1.65:crop==='strawberry'?.40:crop==='rice'?.88:1)*(1+.07*Math.sin(k*4+row));
@@ -983,8 +985,8 @@ function updateWheat(now=Date.now(),force=false){
  const text=wheatSaveError||CROP_CALENDAR[crop].name+' · '+wheatNames[status]+' · Sementes '+stock.seeds+' · Colhido '+stock.grain;
  const schedule=wheatSchedule(now,crop),duration=data?.durationMs??schedule.realMs;
  const hint=status==='watered'?'Estimativa base: '+Math.ceil(Math.max(0,duration*(1-wheatProgress(p.id,now)))/60000)+' min reais · condições podem alterar':status==='ripe'?'Qualidade: '+harvestInfo(data).quality:(schedule.preferred?'Época favorável':'Fora de época · cresce mais devagar')+' · '+(duration/60000)+' min base';
- const soilText='Umidade '+Math.round(soil.moisture*100)+'% · Fertilidade '+Math.round(soil.fertility*100)+'% · Pragas '+Math.round(soil.pest*100)+'%';if($('soil-status').textContent!==soilText)$('soil-status').textContent=soilText;
- $('farm-water').disabled=wheatSaveLocked||legacy||status!=='watered';$('farm-irrigate').disabled=wheatSaveLocked||legacy;$('farm-irrigate').textContent=soil.irrigated?'Desligar irrigação':'Irrigar automaticamente';$('farm-fertilize').disabled=wheatSaveLocked||legacy||!wheatState.compost||soil.fertility>=.99;$('farm-treat').disabled=wheatSaveLocked||legacy||!wheatState.treatments||soil.pest<=.01;
+ const soilText='Umidade '+Math.round(soil.moisture*100)+'% · Fertilidade '+Math.round(soil.fertility*100)+'% · Pragas '+Math.round(soil.pest*100)+'% · Ervas '+Math.round((soil.weeds??0)*100)+'%';if($('soil-status').textContent!==soilText)$('soil-status').textContent=soilText;
+ $('farm-water').disabled=wheatSaveLocked||legacy||status!=='watered';$('farm-irrigate').disabled=wheatSaveLocked||legacy;$('farm-irrigate').textContent=soil.irrigated?'Desligar irrigação':'Irrigar automaticamente';$('farm-fertilize').disabled=wheatSaveLocked||legacy||!wheatState.compost||soil.fertility>=.99;$('farm-treat').disabled=wheatSaveLocked||legacy||!wheatState.treatments||soil.pest<=.01;$('farm-weed').disabled=wheatSaveLocked||legacy||status==='raw'||(soil.weeds??0)<=.01;
  if($('wheat-season').textContent!==hint)$('wheat-season').textContent=hint;
  if($('wheat-status').textContent!==text)$('wheat-status').textContent=text;
 }
@@ -992,7 +994,7 @@ wheatAction.addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheat
 wheatUndo.addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction('undo',p.id);});
 $('crop-select').addEventListener('change',()=>updateWheat(Date.now(),true));
 for(const button of $('crop-options').querySelectorAll('button'))button.onclick=()=>{$('crop-select').value=button.dataset.crop;updateWheat(Date.now(),true);};
-for(const [id,action] of [['farm-water','water'],['farm-irrigate','irrigate'],['farm-fertilize','fertilize'],['farm-treat','treat']])$(id).addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction(action,p.id);});
+for(const [id,action] of [['farm-water','water'],['farm-irrigate','irrigate'],['farm-fertilize','fertilize'],['farm-treat','treat'],['farm-weed','weed']])$(id).addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction(action,p.id);});
 const farmCenter=$('farm-center');let guideCrop='wheat';const guideIcons=cropIcons;
 let lastFarmCenter=-Infinity;
 function farmCard(parent,icon,title,detail){
@@ -1334,9 +1336,10 @@ function worldInput(x,z,alpha=camera.alpha){
 }
 const controlsMenu=$('controls-menu'),playerMenu=$('player-menu');
 const farmAudio=createFarmAudio({storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},AudioContext:window.AudioContext||window.webkitAudioContext,hidden:()=>document.hidden});
-function syncAudio(){const s=farmAudio.settings;$('audio-effects').setAttribute('aria-pressed',String(s.effects));$('audio-ambient').setAttribute('aria-pressed',String(s.ambient));$('audio-volume').value=s.volume;$('audio-volume-value').textContent=s.volume+'%';}
+function syncAudio(){const s=farmAudio.settings;$('audio-effects').setAttribute('aria-pressed',String(s.effects));$('audio-ambient').setAttribute('aria-pressed',String(s.ambient));$('audio-music').setAttribute('aria-pressed',String(s.music));$('audio-volume').value=s.volume;$('audio-volume-value').textContent=s.volume+'%';}
 $('audio-effects').onclick=()=>{farmAudio.set({effects:!farmAudio.settings.effects});syncAudio();};
 $('audio-ambient').onclick=()=>{farmAudio.set({ambient:!farmAudio.settings.ambient});syncAudio();};
+$('audio-music').onclick=()=>{farmAudio.set({music:!farmAudio.settings.music});syncAudio();};
 $('audio-volume').oninput=e=>{farmAudio.set({volume:Number(e.target.value)});syncAudio();};
 document.addEventListener('pointerdown',()=>{void farmAudio.unlock();},{passive:true});
 document.addEventListener('click',e=>{if(e.isTrusted&&e.target.closest('button:not(:disabled)'))farmAudio.click();});
@@ -1883,7 +1886,7 @@ const HOE_LENGTH=1.24;
 const hoeHandle=box('hoe wooden shaft',0,-HOE_LENGTH/2,0,.055,HOE_LENGTH,.055,M.woodLight,0,false);hoeHandle.parent=hoeRoot;
 const hoeHead=box('hoe iron blade',0,-HOE_LENGTH,0,.30,.055,.24,M.black,0,false);hoeHead.parent=hoeRoot;hoeRoot.setEnabled(false);
 entity('hoe soil effects');const hoeDust=Array.from({length:8},(_,i)=>{const m=sphere('hoe loose soil '+i,0,0,0,.04,.032,.04,M.woodDark,false);m.setEnabled(false);return {m,age:1,x:0,y:0,z:0,dx:0,dz:0};});
-function hoeImpact(p){for(let i=0;i<hoeDust.length;i++){const d=hoeDust[i],a=i*2.399;Object.assign(d,{age:0,x:p.x,y:p.y,z:p.z,dx:Math.cos(a)*.36,dz:Math.sin(a)*.36});d.m.setEnabled(true);}}
+function hoeImpact(p){farmAudio.action('hoe');for(let i=0;i<hoeDust.length;i++){const d=hoeDust[i],a=i*2.399;Object.assign(d,{age:0,x:p.x,y:p.y,z:p.z,dx:Math.cos(a)*.36,dz:Math.sin(a)*.36});d.m.setEnabled(true);}}
 function tickHoeDust(dt){for(const d of hoeDust){if(!d.m.isEnabled())continue;d.age+=dt;if(d.age>.33){d.m.setEnabled(false);continue;}d.m.position.set(d.x+d.dx*d.age,d.y+.055+Math.sin(d.age/.33*Math.PI)*.16,d.z+d.dz*d.age);}}
 function aimHoe(blade,dt){
  avatar.computeWorldMatrix(true);const inv=Matrix.Invert(avatar.getWorldMatrix()),localBlade=Vector3.TransformCoordinates(blade,inv),localShoulder=V(.23,1.13,.13);
@@ -2001,7 +2004,7 @@ function confirmBuild(){if(build.mode==='place')return placeBuild();const p=sele
 function tickBuild(dt,moving=false){
  if(!build.open&&!build.work)return;
  if(build.work){const p=editableFences.get(build.work.id);if(moving||!p||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8){build.work=null;hammerRoot.setEnabled(false);releaseHand();}
- else{const w=build.work;w.elapsed+=dt;const target=p.a.add(p.b).scale(.5),dx=target.x-avatar.position.x,dz=target.z-avatar.position.z;avatar.rotation.y=Math.atan2(dx,dz);hammerRoot.position.set(.29,.98,.26);hammerRoot.rotation.x=-.7+Math.sin(w.elapsed*19)*.55;avatar.computeWorldMatrix(true);handPose(Vector3.TransformCoordinates(hammerRoot.position,avatar.getWorldMatrix()),1);const stroke=Math.floor(w.elapsed*3);if(stroke!==w.stroke){w.stroke=stroke;buildStats.hammerStrokes++;}if(w.elapsed>=1.05){if(w.action==='repair'||w.action==='paint')maintainFence(w.id,w.action);else removeBuild(w.id);build.work=null;hammerRoot.setEnabled(false);releaseHand();}}
+ else{const w=build.work;w.elapsed+=dt;const target=p.a.add(p.b).scale(.5),dx=target.x-avatar.position.x,dz=target.z-avatar.position.z;avatar.rotation.y=Math.atan2(dx,dz);hammerRoot.position.set(.29,.98,.26);hammerRoot.rotation.x=-.7+Math.sin(w.elapsed*19)*.55;avatar.computeWorldMatrix(true);handPose(Vector3.TransformCoordinates(hammerRoot.position,avatar.getWorldMatrix()),1);const stroke=Math.floor(w.elapsed*3);if(stroke!==w.stroke){w.stroke=stroke;buildStats.hammerStrokes++;farmAudio.action('hammer');}if(w.elapsed>=1.05){if(w.action==='repair'||w.action==='paint')maintainFence(w.id,w.action);else removeBuild(w.id);build.work=null;hammerRoot.setEnabled(false);releaseHand();}}
  }
  refreshBuild();
 }
@@ -2231,7 +2234,7 @@ function drawMinimap(dt,force=false){
 }
 drawMinimap(0,true);
 
-const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,layoutActions:layoutContextActions,project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
+const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,layoutActions:layoutContextActions,onCareSound:id=>farmAudio.action(id),project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
 petBodyBlocked=petSystem.bodyBlocked;
 // Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
 for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=8;
@@ -2291,7 +2294,7 @@ const inventoryItems=()=>inventorySnapshot(wheatState,buildData,{farmLocked:whea
 function applyTrade(id,action,quantity){
  if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='market')return {ok:false,error:'Comércio indisponível.'};
  const q=commitTrade(wheatState,id,action,quantity,json=>localStorage.setItem(WHEAT_SAVE,json));
- if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);}
+ if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);farmAudio.action('trade');}
  return q;
 }
 function renderMarket(){
