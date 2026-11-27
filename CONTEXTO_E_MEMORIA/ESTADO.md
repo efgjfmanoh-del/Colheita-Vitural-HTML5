@@ -461,3 +461,7 @@ Menu inicial real sobre cena, opções e retorno, modo fotografia sem HUD com bo
 
 ## 27/11/2026 — correção exclusiva de cores do minimapa
 - Proprietário rejeitou a paleta bege (captura RC 0.2.0) e solicitou retornar às cores verdes originais, preservando integralmente o comportamento novo. Restauradas as cores anteriores a 7dec7b36 (base a487e9d), fundo verde, água azul, estradas terra, campos verdes, cercas e marcador claros; moldura CSS verde original. Nenhuma alteração de zoom, posição, orientação, atualização, bússola, terreno, gameplay, saves, versão/pacote ou assinatura. Regressão acrescenta verificação da paleta e mantém invariantes de acompanhamento e rotação. Sem publicação até teste; pedido explícito de alterar somente cor.
+
+
+## 27/11/2026 — esclarecimento do proprietário: somente a bússola muda de cor
+- O mapa interno verde, culturas, água e estradas estavam corretos; a rejeição original se referia exclusivamente ao anel giratório. Base 666f04b já restaura a paleta interna. Alterada apenas a camada compassCtx: faixa grafite neutra na área externa ao mapa, traços cinza e letras claras. Sem alterar a camada cartográfica, geometria, zoom, marcador, seguimento, orientação ou qualquer outra funcionalidade. Grafite escolhido como solução neutra, sujeito à avaliação visual. Teste acrescentado para pixel do anel; invariantes de mapa e rotação mantidas. Publicação ainda condicionada à validação.
