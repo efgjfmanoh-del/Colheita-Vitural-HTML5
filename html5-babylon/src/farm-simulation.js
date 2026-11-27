@@ -47,3 +47,20 @@ export function prepareSpecies(plot,id,elapsed){
  const schedule=cropSchedule(id,calendarAt(elapsed).month);
  return {...p,crop:id,state:'sown',durationMs:schedule.realMs,soil};
 }
+
+// Advisory only: estimates use the same temperature penalty and calendar as cultivation.
+// No fictional lunar/day bonuses or additional fertilizer recipes.
+export function cropAdvice(id,elapsed){
+ const crop=CROP_CALENDAR[id],c=calendarAt(elapsed),schedule=cropSchedule(id,c.month);
+ const days=Array.from({length:7},(_,i)=>{
+  const at=elapsed+i*gameHoursToRealMs(24),date=calendarAt(at),sc=cropSchedule(id,date.month);
+  const forecast=Array.from({length:4},(_,j)=>weatherAt(at+j*WEATHER_INTERVAL));
+  const temperature=Math.round(forecast.reduce((n,w)=>n+w.temperature,0)/4);
+  const storm=forecast.some(w=>w.kind==='storm'),rain=forecast.filter(w=>w.rain).length;
+  const rate=forecast.reduce((n,w)=>n+clamp(1-Math.max(0,Math.abs(w.temperature-crop.temperature)-5)*.035,.65,1),0)/4;
+  const score=rate/(sc.preferred?1:crop.offSeasonMultiplier);
+  const label=!sc.preferred?'Fora de época':storm?'Atenção à chuva forte':rate<.95?'Temperatura menos favorável':'Favorável';
+  return {date,temperature,storm,rain,score,label,preferred:sc.preferred};
+ });
+ return {id,crop,schedule,days,best:days.slice().sort((a,b)=>b.score-a.score||a.date.absoluteDay-b.date.absoluteDay)[0]};
+}
