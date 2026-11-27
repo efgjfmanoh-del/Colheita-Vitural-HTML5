@@ -26,4 +26,6 @@ elif ref=='refs/heads/main':
         ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":202,"channel":"qa","scope":"progression-missions"}'
     if (name,code)==('0.2.3',203):
         ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":203,"channel":"qa","scope":"progression-ui-regional"}'
+    if (name,code)==('0.2.4',204):
+        ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":204,"channel":"qa","scope":"eight-world-refinements"}'
 print('ready='+str(ready).lower())

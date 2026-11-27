@@ -241,7 +241,7 @@ jobs:
           version=$(jq -er '.versionName' update.json)
           case "$GITHUB_REF" in
             refs/heads/qa/0.1.52) [[ "$code" == 152 && "$version" == "0.1.52" ]] ;;
-            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" || "$code" == 202 && "$version" == "0.2.2" || "$code" == 203 && "$version" == "0.2.3" ]] ;;
+            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" || "$code" == 202 && "$version" == "0.2.2" || "$code" == 203 && "$version" == "0.2.3" || "$code" == 204 && "$version" == "0.2.4" ]] ;;
             *) exit 1 ;;
           esac
           tag="qa-v$code"

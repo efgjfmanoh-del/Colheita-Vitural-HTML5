@@ -52,3 +52,7 @@ Concluir apenas o lote atual de quatro frentes (inventário, economia, agricultu
 
 ## Alteração de ordem aprovada — 27/11/2026
 Progressão antecipada antes de construção. Proprietário aprovou nove funcionalidades e décima frente interna de missões básicas recorrentes, sem conteúdo indisponível, exclusivamente mural perto da casa, HUD translúcido e calendário real. QA 0.2.2, demais frentes inalteradas. Validar progressão antes de avançar.
+
+
+## Refinamento estrutural aprovado
+0.2.3 aprovada em teste físico pelo proprietário. Oito commits encadeados para QA 0.2.4; sem releases intermediárias. Território, hidrografia, topografia, circulação, ambientação, expansão, cartografia, validação. Natureza e pecuária permanecem fases próprias, sem simulação de funções ausentes.

@@ -18,6 +18,6 @@ class Gate(unittest.TestCase):
             self.assertEqual(run('refs/heads/main'),'ready=false')
             js.write_bytes(original)
             grad=p/'android-test/app/build.gradle'
-            grad.write_text(grad.read_text().replace('versionCode 203','versionCode 204').replace("versionName '0.2.3'","versionName '0.2.4'"))
+            grad.write_text(grad.read_text().replace('versionCode 204','versionCode 205').replace("versionName '0.2.4'","versionName '0.2.5'"))
             self.assertEqual(run('refs/heads/main'),'ready=false')
 if __name__=='__main__': unittest.main()
