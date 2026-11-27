@@ -21,3 +21,6 @@
 
 ## Critério de equivalência
 Cada função legada deve ser rastreável ao código original e ao teste na nova implementação. Ausências, parciais e diferenças são registradas; nunca declarar paridade só porque a build compilou. Preservar direção visual, câmera e UI contextual aprovadas. Não criar repositório público com conteúdo privado sem verificar direitos e segredos.
+
+## RC 0.2.0 — execução consolidada
+- Branch rc/0.2.0; main mantém qa-v150. Pipeline compila/testa branch sem publicar no canal de atualização. Release final somente após cobertura, regressão e autorização aplicável; mesmo pacote/certificado. Primeira integração: 12 culturas + comércio agrícola básico, inventário vinculado ao saldo; pendências explícitas em ESTADO.md.

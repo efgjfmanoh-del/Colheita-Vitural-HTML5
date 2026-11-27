@@ -1,7 +1,7 @@
 name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
-    branches: [main]
+    branches: [main, 'rc/0.2.0']
     paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
