@@ -100,3 +100,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210: run 46049762646 aprovou escada manual e assinatura. 02.01: divisória física sala/cozinha, passagem aberta e corredor para escada implementados; testes integrados pendentes. Porta móvel, cômodos superiores e varanda/jardim permanecem abertos.
 
 - QA 210: divisória térrea aprovada no build/regressão 46054934705, assinatura ainda em andamento na consulta. 02.01/02.02: quarto e banheiro com paredes no superior, cama, guarda-roupa e pia deslocados ao piso correto, três portas internas deslizantes funcionais em código. Nova regressão pendente; varanda/jardim, equipamentos de banheiro e acabamento continuam abertos.
+
+- QA 210: run 46055514193 aprovou quartos/portas/assinatura. 02.01/02.02: varanda superior frontal recuada com abertura, guarda-corpo, vasos e rega inicial, mantendo cultivos inferiores. Nova CI e inspeção física/visual pendentes; não equivale a jardim avançado ou residência completa.

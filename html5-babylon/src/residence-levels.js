@@ -50,3 +50,9 @@ export function upperWallBlocked(p,r=.2){return UPPER_WALLS.some(w=>wallSegmentB
 export function doorLeaf(d,open){const shift=(d.to-d.from)*Math.max(0,Math.min(1,open));const direction=d.id==='kitchen-door'||d.id==='bed-door'?-1:1;return {...d,from:d.from+direction*shift,to:d.to+direction*shift,fixed:d.fixed+.13};}
 export function doorLeafBlocked(p,d,open,r=.2){return wallSegmentBlocked(p,doorLeaf(d,open),r);}
 export function fixtureBlocked(p,f,r=.18){return Math.abs(p.x-f.x)<f.hx+r&&Math.abs(p.z-f.z)<f.hz+r;}
+
+// Recessed upper veranda: inside the original roof footprint, with a real façade opening.
+export const BALCONY=Object.freeze({half:2.8,front:-4.39,back:-2.25,railZ:-4.12,railHeight:1.05,openingHeight:2.35,planters:[{id:'upper-ceramic',type:'ceramic',x:-1.95,z:-3.75,floor:2},{id:'upper-wooden',type:'wooden',x:1.85,z:-3.75,floor:2}]});
+export function balconyRailBlocked(p,r=.2){return Math.abs(p.z-BALCONY.railZ)<.065+r&&Math.abs(p.x)<BALCONY.half+r;}
+export function gardenGrowth(crop,now,needsWater=false,duration=90000){if(!crop||!Number.isFinite(now)||!Number.isFinite(duration)||duration<=0)return 0;const start=needsWater?crop.wateredAt:crop.plantedAt;if(!Number.isFinite(start)||start<0||start<crop.plantedAt)return 0;return Math.max(0,Math.min(1,(now-start)/duration));}
+export function waterGardenCrop(crop,now){if(!crop||!Number.isFinite(now)||now<crop.plantedAt||Number.isFinite(crop.wateredAt))return null;return {...crop,wateredAt:now};}
