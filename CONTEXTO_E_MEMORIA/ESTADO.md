@@ -341,3 +341,7 @@
 
 ## 0.1.51 — manutenção QA separada
 - Autorizada distribuição independente das correções de interações enquanto 0.2.0 RC continua em main. Base publicada qa-v150 (b504db5), transporte seletivo dos commits 91d50b6 e ddab16b, sem economia/culturas RC. Mesmo pacote, certificado, saves e canal QA; versionCode 151. Workflow permite publicação apenas desta versão após testes e assinatura. Validação física pendente. Não mesclar esta branch sobre main.
+
+
+## Correção de publicação QA 0.1.51
+- Run 45928685317: compilação, regressões, assinatura e SHA256 aprovados; publish-qa job 140276801060 falhou HTTP 403 na criação da release. Workflow divergente da branch padrão aciona restrição de permissão Workflows do GitHub (REST Releases). Unificar conteúdo do workflow e gate nas duas branches, mantendo autorização exata de 0.1.51/151 na manutenção e 0.2.0/200 em main somente após todas as aprovações e validação física. Não usar PAT, não alterar segredo, não publicar RC intermediária. Nova execução necessária; publicação e teste físico ainda pendentes.
