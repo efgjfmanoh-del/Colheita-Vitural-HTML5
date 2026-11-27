@@ -52,12 +52,17 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-node22-npm-
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - name: Recuperar marca original aprovada e preparar imagens offline
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cv-brand-venv"
+          "$RUNNER_TEMP/cv-brand-venv/bin/pip" install --disable-pip-version-check Pillow==11.3.0
+          "$RUNNER_TEMP/cv-brand-venv/bin/python" prepare-brand.py
       - name: Registrar checkpoint imutável por commit
         run: |
           set -euo pipefail
           printf '%s\n' "$GITHUB_SHA" > efg-commit.txt
           printf '%s\n' "$GITHUB_RUN_ID" > efg-run.txt
-          sha256sum dist/index.html dist/game.js package-lock.json efg-commit.txt efg-run.txt > efg-sha256.txt
+          sha256sum dist/index.html dist/game.js dist/brand-launcher.png package-lock.json efg-commit.txt efg-run.txt > efg-sha256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: efg-web-checkpoint
@@ -169,6 +174,8 @@ jobs:
         run: |
           mkdir -p android-test/app/src/main/assets
           cp html5-babylon/dist/index.html html5-babylon/dist/game.js android-test/app/src/main/assets/
+          mkdir -p android-test/app/src/main/res/drawable-nodpi
+          cp html5-babylon/dist/brand-launcher.png android-test/app/src/main/res/drawable-nodpi/ic_colheita.png
           gradle -p android-test --no-daemon :app:assembleDebug
       - name: Assinar APK QA com certificado permanente
         working-directory: .
@@ -188,6 +195,7 @@ jobs:
           grep -Fx "Number of signers: 1" android-test/qa/signature.txt
           "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
           grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
+          grep -E "application-icon-[0-9]+:.*ic_colheita" android-test/qa/badging.txt
           grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt
           grep -F "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" android-test/qa/badging.txt
           unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
