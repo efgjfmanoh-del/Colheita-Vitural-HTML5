@@ -372,5 +372,5 @@ export function createPets(api){
   positionActions();
  }
  window.addEventListener('pagehide',save);
- return {pets,stats,toys,bodyBlocked,bodyClearance,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
+ return {pets,stats,toys,save,bodyBlocked,bodyClearance,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,animalNear,mood,get data(){return data}};
 }
