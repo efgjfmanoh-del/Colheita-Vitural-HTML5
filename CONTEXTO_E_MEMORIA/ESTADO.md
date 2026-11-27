@@ -353,3 +353,7 @@
 
 ## Manutenção 0.1.52 — feedback físico 0.1.51
 Barra recolhível global, arco de construção (cercas ativas; celeiros, currais, casas marcados indisponíveis), sementes e enxada; construção em áreas livres inclusive agrícolas e caminhos, sem raio de 5,5m; encaixe encadeado com pivô, soltura manual; pintura separada das estacas/tábuas com material opaco e nomes; ajustes de solo, bússola orientada, vento, portão na entrada da placa, cordas e afinidade com corações. Testes adicionados; visual físico ainda pendente. RC pausada quanto a funcionalidades até QA. Após QA: consolidar inventário/economia/agricultura/áudio e entregar juntos, depois construção/residência/natureza, animais/personagem/progressão, e integridade final (4+3+3+1). Nenhuma frente parcial é considerada aprovada.
+
+
+## QA 0.1.53 — minimapa e painel de construção
+Minimapa superior direito ancorado abaixo do HUD, com tamanho reduzido, sem sobreposição do HUD/corrida; ocultação somente se faltar espaço. Painel de construção reduzido e rebaixado, mantendo comandos. Testes mobile de geometria e captura. Versão incremental devido à execução em curso da 0.1.52, sem sobrescrever artefatos. RC continua pausada. CI e teste físico pendentes.
