@@ -298,9 +298,9 @@ function fencePiece(id,p,q,kind='original'){
  for(const y of [.40,.89])beam('fence rail',p.add(V(0,y,0)),q.add(V(0,y,0)),.13,M.woodLight,.13);
  // Merge within a single editable piece, never across pieces.
  const raw=groups['residence fence'].splice(before),meshes=[];
- for(const m of [M.woodDark,M.woodLight]){const list=raw.filter(v=>v.material===m);if(!list.length)continue;for(const v of list)v.computeWorldMatrix(true);
-  const merged=Mesh.MergeMeshes(list,false,true);if(!merged){meshes.push(...list);continue;}
-  merged.name='editable fence '+id;merged.material=m;merged.receiveShadows=true;merged.isPickable=false;for(const v of list){shadow.removeShadowCaster(v,false);v.dispose(false,false);}shadow.addShadowCaster(merged,false);merged.freezeWorldMatrix();meshes.push(merged);
+ for(const part of ['post','cap','rail']){const role=part==='rail'?'rail':'post',list=raw.filter(v=>(v.name==='fence rail'?'rail':v.name==='post cap'?'cap':'post')===part),m=part==='post'?M.woodDark:M.woodLight;if(!list.length)continue;for(const v of list)v.computeWorldMatrix(true);
+  const merged=Mesh.MergeMeshes(list,false,true);if(!merged){for(const v of list)v.metadata={fenceRole:role};meshes.push(...list);continue;}
+  merged.name='editable fence '+id+' '+part;merged.metadata={fenceRole:role};merged.material=m;merged.receiveShadows=true;merged.isPickable=false;for(const v of list){shadow.removeShadowCaster(v,false);v.dispose(false,false);}shadow.addShadowCaster(merged,false);merged.freezeWorldMatrix();meshes.push(merged);
  }
  groups['residence fence'].push(...meshes);fenceColliders.push(collider);
  if(kind==='original')residenceRails.push(collider);else if(kind==='bridge')bridgeFenceLinks.push(collider);else if(kind==='field')fieldRails.push(collider);
@@ -362,7 +362,7 @@ for(let i=0;i<wheatPolygon.length;i++){
 entity('wheat prepared soil');
 const bedSurfaceStats={continuousBeds:0,vertices:0,plotGaps:0,minWidth:Infinity,maxWidth:0,maxBoundaryGap:0};
 const bedPlots=new Map();
-function bedHeightAt(x,z,bed){return .028;}
+function bedHeightAt(x,z,bed){return .065;}
 for(const side of [-1,1]){
  const x1=side<0?wheatBounds.minX+1.15:wheatGate.x+1.65,x2=side<0?wheatGate.x-1.65:wheatBounds.maxX-1.15;
  for(let z=wheatBounds.minZ+1.65;z+1.35<wheatBounds.maxZ-1.1;z+=2.25){
@@ -884,7 +884,7 @@ function ridgeProfile(bed,x,z){
 }
 function blendedMound(a,b,t){return moundHeight(a)*(1-t)+moundHeight(b)*t;}
 function soilTone(stage,moisture){
- const dry=Color3.FromHexString(stage==='raw'?'#39291f':'#c5aa83'),wet=Color3.FromHexString(stage==='raw'?'#211810':'#806247');
+ const dry=Color3.FromHexString(stage==='raw'?'#795336':'#936741'),wet=Color3.FromHexString(stage==='raw'?'#63442d':'#785035');
  const m=Math.max(0,Math.min(1,(moisture-.20)/.72));
  return Color3.Lerp(dry,wet,m);
 }
@@ -1931,7 +1931,7 @@ const groundPoint=(x,z)=>V(x,height(x,z),z);
 for(const id of buildData.removed)eraseFence(id);
 for(const p of buildData.placed)fencePiece(p.id,groundPoint(...p.a),groundPoint(...p.b),'custom');
 function saveBuild(next){if(buildError)return false;try{localStorage.setItem(BUILD_SAVE,JSON.stringify(next));buildData=next;return true;}catch{buildError='Falha ao salvar construção.';return false;}}
-const build={open:false,mode:'place',x:0,z:0,angle:0,selected:null,work:null,pointer:null};
+const build={open:false,mode:'place',x:0,z:0,angle:0,anchor:null,selected:null,work:null,pointer:null};
 const buildStats={placed:0,removed:0,hammerStrokes:0};
 entity('construction preview');const ghostMat=mat('construction valid','#b89a63'),badMat=mat('construction invalid','#ce6a58');for(const m of [ghostMat,badMat]){m.alpha=.58;m.disableLighting=true;m.emissiveColor=m.diffuseColor.scale(.45);}
 const ghost=Array.from({length:4},(_,i)=>box('fence placement preview '+i,0,0,0,i<2?.20:1.8,i<2?1.22:.13,.13,ghostMat,0,false));for(const m of ghost){m.receiveShadows=false;m.setEnabled(false);}
@@ -1940,6 +1940,7 @@ const hammerShaft=box('hammer shaft',0,.22,0,.045,.44,.045,M.woodLight,0,false);
 const hammerHead=box('hammer head',0,.46,0,.23,.10,.10,M.black,0,false);hammerHead.parent=hammerRoot;hammerRoot.setEnabled(false);
 function buildEnds(){
  const dx=Math.cos(build.angle)*.90,dz=Math.sin(build.angle)*.90;
+ if(build.mode==='place'&&build.anchor){const a=build.anchor.clone();return [a,groundPoint(a.x+2*dx,a.z+2*dz)];}
  let a=groundPoint(build.x-dx,build.z-dz),b=groundPoint(build.x+dx,build.z+dz);
  // Snap one endpoint to existing posts; retain exact length and angle.
  let best=null,dd=.45;for(const p of editableFences.values())for(const e of [p.a,p.b])for(const [i,v] of [[0,a],[1,b]]){const d=Math.hypot(e.x-v.x,e.z-v.z);if(d<dd){best={e,i};dd=d;}}
@@ -1947,10 +1948,9 @@ function buildEnds(){
  return [a,b];
 }
 function canBuild(a,b){
- if(Math.hypot(avatar.position.x-(a.x+b.x)/2,avatar.position.z-(a.z+b.z)/2)>5.5)return false;
  if(Math.abs(a.y-b.y)>.70)return false;
  for(let i=0;i<=18;i++){
-  const p=Vector3.Lerp(a,b,i/18);if(blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||inWheat(p.x,p.z)||roadClearance(pathRows,p.x,p.z)<.32||roadClearance(approachRows,p.x,p.z)<.32||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
+  const p=Vector3.Lerp(a,b,i/18);if(blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||petBodyBlocked(p.x,p.z)||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
   for(const [u,v] of fenceColliders){if(segDist(p.x,p.z,u,v)<.22){const endpoint=[a,b].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30)&&[u,v].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30);if(!endpoint)return false;}}
  }
  return true;
@@ -1961,18 +1961,18 @@ function refreshBuild(){
  let [a,b]=buildEnds();const target=build.mode==='remove'?selectFence():null;build.selected=target?.id??null;
  if(target){a=target.a;b=target.b;}
  const ok=build.mode==='place'?buildData.stock>0&&canBuild(a,b):!!target&&segDist(avatar.position.x,avatar.position.z,a,b)<1.8;
- const m=ok?ghostMat:badMat,center=a.add(b).scale(.5),yaw=Math.atan2(b.z-a.z,b.x-a.x),length=Math.hypot(b.x-a.x,b.z-a.z);
+ const m=ok?ghostMat:badMat,center=a.add(b).scale(.5);if(build.mode==='place'&&build.anchor){build.x=center.x;build.z=center.z;}$('build-detach').hidden=!build.anchor||build.mode!=='place';const yaw=Math.atan2(b.z-a.z,b.x-a.x),length=Math.hypot(b.x-a.x,b.z-a.z);
  for(let i=0;i<4;i++){const g=ghost[i];g.material=m;if(i<2){const p=i===0?a:b;g.position.set(p.x,p.y+.61,p.z);g.scaling.set(1,1,1);}else{g.position.set(center.x,center.y+(i===2?.40:.89),center.z);g.rotation.y=-yaw;g.scaling.x=length/1.8;}}
  $('build-stock').textContent='Cercas no inventário: '+buildData.stock;
- $('build-hint').textContent=buildError||(build.work?'Retirando os pregos…':build.mode==='place'?(ok?'Posição livre · encaixe automático':'Posição bloqueada, distante ou sem peças'):(ok?'Peça selecionada · retirar com martelo':'Aproxime-se e selecione a cerca'));
+ $('build-hint').textContent=buildError||(build.work?'Retirando os pregos…':build.mode==='place'?(ok?'Posição livre · encaixe automático':'Obstáculo físico, desnível ou sem peças'):(ok?'Peça selecionada · retirar com martelo':'Aproxime-se e selecione a cerca'));
  $('build-confirm').textContent=build.mode==='place'?'Colocar':'Retirar';
  $('build-confirm').disabled=!ok||!!buildError||!!build.work;
  $('build-place').setAttribute('aria-pressed',String(build.mode==='place'));$('build-remove').setAttribute('aria-pressed',String(build.mode==='remove'));
 }
-function openBuild(){if(tillWork||entry.action||seating.phase!=='idle')return false;cancelInput();playerMenu.hidden=true;build.open=true;buildModeActive=true;build.mode='place';build.x=avatar.position.x+Math.cos(camera.alpha)*1.6;build.z=avatar.position.z+Math.sin(camera.alpha)*1.6;build.angle=0;$('build-angle').value='0';refreshBuild();return true;}
-function closeBuild(){if(build.pointer!==null){const id=build.pointer;build.pointer=null;try{canvas.releasePointerCapture(id);}catch{}}build.open=false;buildModeActive=false;build.work=null;hammerRoot.setEnabled(false);releaseHand();refreshBuild();}
-function nudgeBuild(x,z){const a=camera.alpha+Math.PI/2;build.x+=(x*Math.cos(a)-z*Math.sin(a))*.35;build.z+=(x*Math.sin(a)+z*Math.cos(a))*.35;refreshBuild();}
-function placeBuild(){const [a,b]=buildEnds();if(!build.open||build.mode!=='place'||buildData.stock<=0||buildData.placed.length>=250||!canBuild(a,b))return false;const next=JSON.parse(JSON.stringify(buildData)),id='custom-'+next.next++;next.stock--;next.placed.push({id,a:[a.x,a.z],b:[b.x,b.z]});if(!saveBuild(next))return false;fencePiece(id,a,b,'custom');buildStats.placed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
+function openBuild(){if(tillWork||entry.action||seating.phase!=='idle')return false;cancelInput();playerMenu.hidden=true;build.open=true;buildModeActive=true;build.mode='place';build.anchor=null;closeToolArc();build.x=avatar.position.x+Math.cos(camera.alpha)*1.6;build.z=avatar.position.z+Math.sin(camera.alpha)*1.6;build.angle=0;$('build-angle').value='0';refreshBuild();return true;}
+function closeBuild(){if(build.pointer!==null){const id=build.pointer;build.pointer=null;try{canvas.releasePointerCapture(id);}catch{}}build.open=false;buildModeActive=false;build.anchor=null;build.work=null;hammerRoot.setEnabled(false);releaseHand();refreshBuild();}
+function nudgeBuild(x,z){build.anchor=null;const a=camera.alpha+Math.PI/2;build.x+=(x*Math.cos(a)-z*Math.sin(a))*.35;build.z+=(x*Math.sin(a)+z*Math.cos(a))*.35;refreshBuild();}
+function placeBuild(){const [a,b]=buildEnds();if(!build.open||build.mode!=='place'||buildData.stock<=0||buildData.placed.length>=250||!canBuild(a,b))return false;const next=JSON.parse(JSON.stringify(buildData)),id='custom-'+next.next++;next.stock--;next.placed.push({id,a:[a.x,a.z],b:[b.x,b.z]});if(!saveBuild(next))return false;fencePiece(id,a,b,'custom');build.anchor=b.clone();build.x=b.x+Math.cos(build.angle)*.9;build.z=b.z+Math.sin(build.angle)*.9;buildStats.placed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
 function removeBuild(id){const p=editableFences.get(id);if(!p||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8||buildData.stock>=10000)return false;
  const next=JSON.parse(JSON.stringify(buildData));if(p.kind==='custom')next.placed=next.placed.filter(v=>v.id!==id);else next.removed.push(id);next.stock++;if(!saveBuild(next))return false;eraseFence(id);buildStats.removed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
 function confirmBuild(){if(build.mode==='place')return placeBuild();const p=selectFence();if(!p||build.work||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8)return false;build.work={id:p.id,elapsed:0,stroke:-1};hammerRoot.setEnabled(true);refreshBuild();return true;}
@@ -1984,7 +1984,20 @@ function tickBuild(dt,moving=false){
  refreshBuild();
 }
 $('build-open').onclick=openBuild;$('build-close').onclick=closeBuild;
-$('build-place').onclick=()=>{build.mode='place';refreshBuild();};$('build-remove').onclick=()=>{build.mode='remove';refreshBuild();};
+const toolBar=$('tool-bar'),toolArc=$('tool-arc');
+let toolsCollapsed=false,toolHintTimer;
+try{toolsCollapsed=localStorage.getItem('cv.toolBar.v1')==='collapsed';}catch{}
+function closeToolArc(){toolArc.hidden=true;$('tool-build').setAttribute('aria-expanded','false');}
+function syncToolBar(){$('tool-items').hidden=toolsCollapsed;$('tool-toggle').textContent=toolsCollapsed?'•':'⌄';$('tool-toggle').setAttribute('aria-expanded',String(!toolsCollapsed));if(toolsCollapsed)closeToolArc();}
+$('tool-toggle').onclick=()=>{toolsCollapsed=!toolsCollapsed;try{localStorage.setItem('cv.toolBar.v1',toolsCollapsed?'collapsed':'expanded');}catch{}syncToolBar();};
+$('tool-build').onclick=()=>{toolArc.hidden=!toolArc.hidden;$('tool-build').setAttribute('aria-expanded',String(!toolArc.hidden));layoutContextActions();};
+$('tool-fence').onclick=openBuild;
+$('tool-seeds').onclick=()=>{closeToolArc();openInventory();};
+$('tool-hoe').onclick=()=>{closeToolArc();if(nearestWheat()){$('wheat-expand').click();}else{$('tool-hint').textContent='Aproxime-se de um canteiro para arar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);}};
+syncToolBar();
+function syncToolVisibility(){const hide=build.open||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||inventoryDialog.open||!wheatPanel.hidden;toolBar.hidden=hide;if(hide)closeToolArc();}
+
+$('build-place').onclick=()=>{build.mode='place';build.anchor=null;refreshBuild();};$('build-remove').onclick=()=>{build.mode='remove';build.anchor=null;refreshBuild();};$('build-detach').onclick=()=>{build.anchor=null;refreshBuild();};
 $('build-rotate').onclick=()=>{build.angle=(build.angle+Math.PI/12)%(2*Math.PI);$('build-angle').value=String(Math.round(build.angle*180/Math.PI)%360);refreshBuild();};$('build-angle').oninput=e=>{build.angle=Number(e.target.value)*Math.PI/180;refreshBuild();};
 $('build-confirm').onclick=confirmBuild;
 for(const [id,x,z] of [['build-up',0,1],['build-down',0,-1],['build-left',-1,0],['build-right',1,0]])$(id).onclick=()=>nudgeBuild(x,z);
@@ -1996,12 +2009,12 @@ function buildPoint(clientX,clientY){
  let level=2.65,pos=null;for(let i=0;i<5;i++){pos=a.add(d.scale((level-a.y)/d.y));level=height(pos.x,pos.z);}
  return pos&&Number.isFinite(pos.x)&&Number.isFinite(pos.z)?pos:null;
 }
-function moveBuildTouch(e){if(!build.open||build.pointer!==e.pointerId)return;const v=buildPoint(e.clientX,e.clientY);if(v){build.x=v.x;build.z=v.z;refreshBuild();}e.preventDefault();}
+function moveBuildTouch(e){if(!build.open||build.pointer!==e.pointerId)return;const v=buildPoint(e.clientX,e.clientY);if(v){build.anchor=null;build.x=v.x;build.z=v.z;refreshBuild();}e.preventDefault();}
 canvas.addEventListener('pointerdown',e=>{if(!build.open||build.work||build.pointer!==null||e.button!==0||e.clientX<innerWidth*.48)return;build.pointer=e.pointerId;canvas.setPointerCapture(e.pointerId);moveBuildTouch(e);});
 canvas.addEventListener('pointermove',moveBuildTouch);for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,e=>{if(e.pointerId===build.pointer)build.pointer=null;});
 const FENCE_CARE='cv.fenceCare.v1',careDefault=()=>({version:1,items:{},exposure:0,last:worldElapsed()});
 let fenceCare=careDefault(),fenceCareError='',lastCareRefresh=-Infinity;
-try{const raw=JSON.parse(localStorage.getItem(FENCE_CARE)||'null');if(raw){if(raw.version!==1||!Number.isFinite(raw.exposure)||raw.exposure<0||!Number.isFinite(raw.last)||raw.last<0||!raw.items||typeof raw.items!=='object'||Object.values(raw.items).some(v=>!v||!Number.isFinite(v.at)||v.at<0||v.at>raw.exposure||!Number.isInteger(v.paint)||v.paint<0||v.paint>3))throw Error('invalid');fenceCare=raw;}}catch{fenceCareError='Manutenção indisponível: dados protegidos.';}
+try{const raw=JSON.parse(localStorage.getItem(FENCE_CARE)||'null');if(raw){if(raw.version!==1||!Number.isFinite(raw.exposure)||raw.exposure<0||!Number.isFinite(raw.last)||raw.last<0||!raw.items||typeof raw.items!=='object'||Object.values(raw.items).some(v=>!v||!Number.isFinite(v.at)||v.at<0||v.at>raw.exposure||!Number.isInteger(v.paint)||v.paint<0||v.paint>3||['post','rail'].some(k=>v[k]!==undefined&&(!Number.isInteger(v[k])||v[k]<0||v[k]>3))))throw Error('invalid');fenceCare=raw;}}catch{fenceCareError='Manutenção indisponível: dados protegidos.';}
 const woodColors=['#a6814e','#e0d6bc','#738b5d','#925a42'],woodNames=['Natural','Branco','Verde','Terracota'],fenceMaterials=new Map();
 const fenceYear=REAL_MS_PER_GAME_MINUTE*60*24*DAYS_PER_MONTH*12;
 function accrueFence(now=worldElapsed()){
@@ -2010,30 +2023,36 @@ function accrueFence(now=worldElapsed()){
 }
 function fenceCondition(id){const a=fenceCare.items[id];return Math.max(.15,1-(fenceCare.exposure-(a?.at??0))/(fenceYear*3));}
 function fenceLook(piece){
- const item=fenceCare.items[piece.id],paint=item?.paint??0,step=Math.min(3,Math.floor((1-fenceCondition(piece.id))*4)),key=paint+':'+step;if(piece.look===key)return;piece.look=key;
+ const item=fenceCare.items[piece.id],post=item?.post??item?.paint??0,rail=item?.rail??item?.paint??0,step=Math.min(3,Math.floor((1-fenceCondition(piece.id))*4)),key=post+':'+rail+':'+step;if(piece.look===key)return;piece.look=key;
  if(!piece.originalMaterials)piece.originalMaterials=piece.meshes.map(m=>m.material);
- if(!paint&&!step){piece.meshes.forEach((m,i)=>m.material=piece.originalMaterials[i]);return;}
- for(let i=0;i<piece.meshes.length;i++){const source=piece.originalMaterials[i],k=key+':'+source.name;let material=fenceMaterials.get(k);if(!material){material=source.clone('fence finish '+k);const color=Color3.FromHexString(woodColors[paint]);if(source===M.woodDark)color.scaleInPlace(.75);material.diffuseColor=color.scale(1-step*.13);fenceMaterials.set(k,material);}piece.meshes[i].material=material;}
+ for(let i=0;i<piece.meshes.length;i++){const mesh=piece.meshes[i],source=piece.originalMaterials[i],role=mesh.metadata?.fenceRole||'post',paint=role==='rail'?rail:post;if(!paint&&!step){mesh.material=source;continue;}const k=paint+':'+step+':'+role;let material=fenceMaterials.get(k);if(!material){material=mat('fence finish '+k,woodColors[paint]);material.alpha=1;material.backFaceCulling=false;material.diffuseColor.scaleInPlace((role==='post'?.80:1)*(1-step*.13));material.maxSimultaneousLights=8;fenceMaterials.set(k,material);}mesh.material=material;}
 }
 function saveFenceCare(){if(fenceCareError)return false;try{localStorage.setItem(FENCE_CARE,JSON.stringify(fenceCare));return true;}catch{fenceCareError='Falha ao salvar manutenção.';return false;}}
 function maintainFence(id,action){
  const piece=editableFences.get(id);if(!piece||fenceCareError||segDist(avatar.position.x,avatar.position.z,piece.a,piece.b)>=1.8)return false;
  accrueFence();const previous=fenceCare.items[id],old=previous||{at:0,paint:0},next={...old};
- if(action==='repair')next.at=fenceCare.exposure;else if(action==='paint')next.paint=(old.paint+1)%woodColors.length;else return false;
+ if(action==='repair')next.at=fenceCare.exposure;else if(action==='paint'){next.paint=(old.paint+1)%woodColors.length;delete next.post;delete next.rail;}else return false;
  fenceCare.items[id]=next;if(!saveFenceCare()){if(previous)fenceCare.items[id]=previous;else delete fenceCare.items[id];return false;}fenceLook(piece);return true;
 }
 function nearbyFence(){let piece=null,d=1.8;for(const p of editableFences.values()){const n=segDist(avatar.position.x,avatar.position.z,p.a,p.b);if(n<d){piece=p;d=n;}}return piece;}
 let nearFence=null,contextClock=0;
 function startFenceCare(action){const piece=nearbyFence();if(!piece||build.work||build.open||tillWork||entry.action||seating.phase!=='idle')return false;cancelInput();build.work={id:piece.id,action,elapsed:0,stroke:-1};hammerRoot.setEnabled(true);return true;}
-for(const [id,action] of [['fence-repair','repair'],['fence-paint','paint'],['fence-take','remove']])$(id).onclick=()=>startFenceCare(action);
+for(const [id,action] of [['fence-repair','repair'],['fence-take','remove']])$(id).onclick=()=>startFenceCare(action);
+let paintTarget=null,paintRole='both';
+function closePaint(){paintTarget=null;$('fence-colors').hidden=true;}
+function paintFence(id,role,color){const piece=editableFences.get(id);if(!piece||!['both','post','rail'].includes(role)||!Number.isInteger(color)||color<0||color>3||fenceCareError||segDist(avatar.position.x,avatar.position.z,piece.a,piece.b)>=1.8)return false;accrueFence();const prev=fenceCare.items[id],old=prev||{at:0,paint:0},next={...old};if(role==='both'){next.paint=color;delete next.post;delete next.rail;}else next[role]=color;fenceCare.items[id]=next;if(!saveFenceCare()){if(prev)fenceCare.items[id]=prev;else delete fenceCare.items[id];return false;}fenceLook(piece);shadowMap.resetRefreshCounter();return true;}
+$('fence-paint').onclick=()=>{const piece=nearbyFence();if(!piece)return;if(paintTarget===piece.id){closePaint();return;}paintTarget=piece.id;paintRole='both';$('fence-colors').hidden=false;for(const b of $('fence-colors').querySelectorAll('[data-role]'))b.setAttribute('aria-pressed',String(b.dataset.role===paintRole));layoutContextActions();};
+for(const b of $('fence-colors').querySelectorAll('[data-role]'))b.onclick=()=>{paintRole=b.dataset.role;for(const x of $('fence-colors').querySelectorAll('[data-role]'))x.setAttribute('aria-pressed',String(x===b));};
+for(const b of $('fence-colors').querySelectorAll('[data-paint]'))b.onclick=()=>{if(paintTarget&&paintFence(paintTarget,paintRole,Number(b.dataset.paint))){$('fence-paint-status').textContent='Cor aplicada';}};
+$('fence-paint-close').onclick=closePaint;
 const gates=[];entity('bridge gates');
-for(const [index,center] of [bridgeEntry,bridgeExit].entries()){
+for(const [index,center] of [bridgeExit.add(bridgeAxis.scale(1.25))].entries()){
  const gate={id:'gate-'+index,center:center.clone(),open:1,target:1,leaves:[]};
- for(const side of [-1,1]){const hinge=center.add(bridgeSide.scale(side*1.48));hinge.y=2.945;const root=new Mesh('gate hinge '+index+' '+side,scene);root.position.copyFrom(hinge);
+ for(const side of [-1,1]){const hinge=center.add(bridgeSide.scale(side*1.48));hinge.y=height(hinge.x,hinge.z);const root=new Mesh('gate hinge '+index+' '+side,scene);root.position.copyFrom(hinge);
  const closed=Math.atan2(side*bridgeSide.z,-side*bridgeSide.x);
  for(const y of [.35,.80]){const m=box('gate horizontal rail',.72,y,0,1.44,.13,.12,M.woodLight);m.parent=root;}
  for(const x of [.09,1.35]){const m=box('gate vertical stile',x,.57,0,.14,1.14,.14,M.woodDark);m.parent=root;}
- const diagonal=box('gate diagonal brace',.72,.57,0,1.57,.10,.11,M.woodLight);diagonal.rotation.z=.63;diagonal.parent=root;gate.leaves.push({root,hinge,closed,side});}gates.push(gate);
+ const diagonal=box('gate diagonal brace',.72,.57,0,1.57,.10,.11,M.woodLight);diagonal.rotation.z=.63;diagonal.parent=root;const inward=Vector3.Dot(V(Math.cos(closed+Math.PI/2),0,-Math.sin(closed+Math.PI/2)),bridgeAxis)>0?1:-1;gate.leaves.push({root,hinge,closed,side:inward});}gates.push(gate);
 }
 function gatePose(g){for(const leaf of g.leaves){leaf.root.rotation.y=leaf.closed+leaf.side*g.open*Math.PI/2;leaf.root.computeWorldMatrix(true);}}
 for(const g of gates)gatePose(g);
@@ -2055,7 +2074,7 @@ for(const k of [-1,1]){const v=arch.add(bridgeSide.scale(k*1.95));box('ranch arc
 box('ranch fixed crossbeam',arch.x,arch.y+3.31,arch.z,4.10,.16,.22,M.woodDark,archAngle);
 entity('ranch sign moving');const signSupport=new Mesh('ranch sign support',scene);signSupport.position=V(arch.x,arch.y+3.14,arch.z);signSupport.rotation.y=archAngle;
 const signPivot=new Mesh('ranch sign hanging hinge',scene);signPivot.parent=signSupport;
-for(const x of [-1.36,1.36]){const hook=cyl('sign hanging iron link',x,-.10,0,.034,.30,M.black);hook.parent=signPivot;}
+for(const x of [-1.36,1.36]){const hook=cyl('sign hanging rope',x,-.12,0,.045,.34,M.woodLight);hook.parent=signPivot;}
 const nameBoard=box('ranch hanging name board',0,-.49,0,3.48,.64,.15,M.woodLight);nameBoard.parent=signPivot;
 entity('ranch arch');
 for(const k of [-1,1]){const v=arch.add(bridgeAxis.scale(k*.38)),roof=box('ranch arch roof',v.x,arch.y+3.58,v.z,4.42,.14,.89,M.roof,archAngle);roof.rotation.x=k*.29;}
@@ -2109,7 +2128,7 @@ function layoutContextActions(){
  if(!contextActionIds.some(id=>!$(id).hidden))return;
  const avatarHead=projectWorld(avatar.position.add(V(0,1.95,0))),feet=projectWorld(avatar.position);
  const visibleRect=e=>{if(!e||e.hidden)return null;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display==='none'||s.visibility==='hidden'||!r.width||!r.height?null:r;};
- const obstacles=['inventory-open','world-calendar','hud','joy','run-action','minimap','wheat-panel','pet-panel','garden-panel','farm-center','ranch-panel','player-menu','pet-notice'].map(id=>visibleRect($(id))).filter(Boolean);
+ const obstacles=['inventory-open','world-calendar','hud','joy','run-action','minimap','wheat-panel','pet-panel','garden-panel','farm-center','ranch-panel','player-menu','pet-notice','tool-bar','tool-arc'].map(id=>visibleRect($(id))).filter(Boolean);
  if([avatarHead.x,avatarHead.y,feet.x,feet.y].every(Number.isFinite))obstacles.push({left:Math.min(avatarHead.x,feet.x)-19,right:Math.max(avatarHead.x,feet.x)+19,top:Math.min(avatarHead.y,feet.y)-10,bottom:Math.max(avatarHead.y,feet.y)+8});
  const modal=!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||build.open||inventoryDialog.open;
  const nearest=(list,point)=>list.slice().sort((a,b)=>Vector3.Distance(avatar.position,point(a))-Vector3.Distance(avatar.position,point(b)))[0];
@@ -2142,9 +2161,9 @@ function layoutContextActions(){
 }
 function positionWorldContext(){layoutContextActions();}
 function updateWorldActions(dt,place=true){if(!farmCenter.hidden&&!boardNearby())farmCenter.hidden=true;contextClock+=dt;if(contextClock<.15){if(place)layoutContextActions();return;}contextClock=0;const now=worldElapsed();if(now-lastCareRefresh>REAL_MS_PER_GAME_MINUTE*10){lastCareRefresh=now;accrueFence(now);for(const piece of editableFences.values())fenceLook(piece);saveFenceCare();}
- nearFence=nearbyFence();const free=!inventoryDialog.open&&!build.open&&!build.work&&!entry.action&&seating.phase==='idle'&&!tillWork&&playerMenu.hidden&&controlsMenu.hidden&&farmCenter.hidden&&gardenPanel.hidden&&$('pet-panel').hidden&&$('ranch-panel').hidden;
+ nearFence=nearbyFence();syncToolVisibility();if(paintTarget&&nearFence?.id!==paintTarget)closePaint();const free=!inventoryDialog.open&&!build.open&&!build.work&&!entry.action&&seating.phase==='idle'&&!tillWork&&playerMenu.hidden&&controlsMenu.hidden&&farmCenter.hidden&&gardenPanel.hidden&&$('pet-panel').hidden&&$('ranch-panel').hidden;
  const gate=nearGate(),board=boardNearby(),ranch=ranchNearby(),other=board||ranch||!!gate,petNear=petSystem.pets.some(p=>petSystem.homeNear(p)||petSystem.animalNear(p));
- $('fence-context').hidden=!free||!nearFence||other||petNear||!wheatPanel.hidden||!$('wheat-expand').hidden;if(nearFence){$('fence-condition').textContent='Madeira '+Math.round(fenceCondition(nearFence.id)*100)+'% · '+woodNames[fenceCare.items[nearFence.id]?.paint??0];$('fence-repair').disabled=!!fenceCareError||fenceCondition(nearFence.id)>.995;$('fence-paint').disabled=!!fenceCareError;}
+ $('fence-context').hidden=!free||!nearFence||other||petNear||!wheatPanel.hidden||!$('wheat-expand').hidden;if($('fence-context').hidden)closePaint();if(nearFence){$('fence-condition').textContent='Madeira '+Math.round(fenceCondition(nearFence.id)*100)+'% · '+woodNames[fenceCare.items[nearFence.id]?.paint??0];$('fence-repair').disabled=!!fenceCareError||fenceCondition(nearFence.id)>.995;$('fence-paint').disabled=!!fenceCareError;}
  $('gate-action').hidden=!free||!gate;$('gate-action').disabled=!!gateWork;if(gate){$('gate-action').title=gate.target>.5?'Fechar portão':'Abrir portão';$('gate-action').setAttribute('aria-label',$('gate-action').title);$('gate-action').querySelector('.context-icon').textContent=gate.target>.5?'⇥':'⇤';}$('ranch-open').hidden=!free||!ranch;$('farm-open').hidden=!free||!board;$('world-quick').hidden=!free||!other;if(place)layoutContextActions();if(!ranch)$('ranch-panel').hidden=true;
 }
 accrueFence();for(const piece of editableFences.values())fenceLook(piece);window.addEventListener('pagehide',()=>{accrueFence();saveFenceCare();});
@@ -2165,7 +2184,7 @@ function drawMinimap(dt,force=false){
  mapClock+=dt;if(!force&&mapClock<.10)return;mapClock=0;
  const c=mapCtx,W=mapCanvas.width,H=mapCanvas.height,mid=W/2,rad=mid-17,scale=rad/27;
  const [mx,my]=mapXY(avatar.position.x,avatar.position.z),view=54*mapScale;
- c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
+ c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);c.translate(mid,mid);c.rotate(-avatar.rotation.y);c.translate(-mid,-mid);
  // drawImage clips source bounds correctly; padded base is drawn through a transform.
  c.drawImage(mapBase,mid-mx*scale/mapScale,mid-my*scale/mapScale,512*scale/mapScale,512*scale/mapScale);
  const screen=p=>[mid+(p.x-avatar.position.x)*scale,mid-(p.z-avatar.position.z)*scale];
@@ -2173,10 +2192,10 @@ function drawMinimap(dt,force=false){
  for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
  // Recognizable house icon, anchored to the actual footprint.
  const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
- c.translate(mid,mid);c.rotate(avatar.rotation.y);c.beginPath();c.moveTo(0,-12);c.lineTo(7,7);c.lineTo(0,3);c.lineTo(-7,7);c.closePath();c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
+ c.restore();c.save();c.translate(mid,mid);c.beginPath();c.moveTo(0,-12);c.lineTo(7,7);c.lineTo(0,3);c.lineTo(-7,7);c.closePath();c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();
  c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
- c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';c.fillText('N',mid,9);c.fillText('S',mid,H-8);c.fillText('L',W-8,mid);c.fillText('O',9,mid);
- mapQA.heading=avatar.rotation.y;mapQA.frames++;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='↝ '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
+ c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';for(const [label,angle] of [['N',0],['L',Math.PI/2],['S',Math.PI],['O',-Math.PI/2]]){const a=angle-avatar.rotation.y;c.fillText(label,mid+Math.sin(a)*(mid-9),mid-Math.cos(a)*(mid-9));}const degrees=Math.round(((avatar.rotation.y*180/Math.PI)%360+360)%360)%360;$('map-heading').textContent=degrees+'° '+['N','NE','L','SE','S','SO','O','NO'][Math.round(degrees/45)%8];
+ mapQA.heading=avatar.rotation.y;mapQA.frames++;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='Vento de '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
 }
 drawMinimap(0,true);
 
@@ -2263,4 +2282,4 @@ function openInventory(){
 $('inventory-open').onclick=openInventory;$('inventory-close').onclick=()=>inventoryDialog.close();
 inventoryDialog.addEventListener('close',()=>{cancelInput();updateWheat(Date.now(),true);});
 for(const b of inventoryDialog.querySelectorAll('[data-inventory-category]'))b.onclick=()=>{inventoryCategory=b.dataset.inventoryCategory;renderInventory(true);};
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

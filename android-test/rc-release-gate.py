@@ -8,8 +8,8 @@ code=int(re.search(r"versionCode\s+(\d+)",gradle).group(1))
 ref=os.environ.get('GITHUB_REF','')
 required={'inventory','economy','construction','residence','agriculture','nature','animals','character','progression','audio','integrity'}
 ready=False
-if ref=='refs/heads/qa/0.1.51':
-    ready=(name=='0.1.51' and code==151 and not (root/'rc-release-gate.json').exists())
+if ref=='refs/heads/qa/0.1.52':
+    ready=(name=='0.1.52' and code==152 and not (root/'rc-release-gate.json').exists())
 elif ref=='refs/heads/main':
     data=json.loads((root/'rc-release-gate.json').read_text())
     ready=(data.get('schema')==1 and name=='0.2.0' and code==200 and name==data.get('target') and code==data.get('versionCode') and

@@ -270,7 +270,7 @@ export function createPets(api){
  function completeInteraction(a){
   const p=a.p,d=data[p.id],before=d.affinity;
   d.affinity=clamp01(before+(a.action==='pet'?.025:.04));
-  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;message('♥ Afinidade aumentou',p);}
+  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;if(d.affinity>before)showAffinity(p,Math.round((d.affinity-before)*100));}
   toys[p.id].root.setEnabled(false);p.interaction=null;state(p,'idle',2);interaction=null;api.playerFinish();
  }
  function updateInteraction(dt){
@@ -300,6 +300,9 @@ export function createPets(api){
    if(t>=3.4)completeInteraction(a);
   }
  }
+ const affinityFx=[];
+ function showAffinity(p,gain){const e=document.createElement('div');e.className='affinity-fx';e.setAttribute('aria-label','Afinidade +'+gain);e.innerHTML='<span>♥ +'+gain+'</span><span>♥</span><span>♥</span>';document.body.append(e);affinityFx.push({p,e,time:0});while(affinityFx.length>6)affinityFx.shift().e.remove();}
+ function updateAffinity(dt){for(let i=affinityFx.length-1;i>=0;i--){const f=affinityFx[i];f.time+=dt;if(f.time>1.65){f.e.remove();affinityFx.splice(i,1);continue;}const v=api.project(f.p.rig.root.position.add(V(0,.75,0)));f.e.style.left=v.x+'px';f.e.style.top=v.y+'px';f.e.hidden=v.z<0||v.z>1;for(const [n,c] of [...f.e.children].entries()){const u=Math.max(0,Math.min(1,(f.time-n*.13)/1.2));c.style.transform='translate('+((n-1)*10+Math.sin(u*7+n)*7)+'px,'+(-u*48)+'px)';c.style.opacity=String(Math.max(0,Math.min(1,u*10,(1-u)*4)));}}}
  function message(s,p){notice=s;noticeUntil=p.brain.time+2.8;}
  function care(id,action,value){const p=pets.find(p=>p.id===id);if(!p||error)return false;const d=data[id],before={...d};
   if(action==='food'&&homeNear(p))d.food=1;
@@ -359,7 +362,7 @@ export function createPets(api){
   }
   if(!allowUI||!pets.some(uiHomeNear))button.hidden=true;
   if(!allowUI||!activePet||!animalNear(activePet))actions.hidden=true;
-  api.layoutActions?.();
+  updateAffinity(dt);api.layoutActions?.();
  }
  window.addEventListener('pagehide',save);
  return {pets,stats,toys,save,bodyBlocked,bodyClearance,interactionActive,cancelInteraction,route,pumpRoutes,valid,plan,mealPlan,reconsiderCare,visitHouse,exitHouse,houseOut,houseIn,catHome,leave,care,pose,update,homeNear,uiHomeNear,animalNear,mood,get data(){return data}};

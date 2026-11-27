@@ -349,3 +349,7 @@
 
 ## CI — falha externa de dependências Chromium
 - Run QA 45929212612 / job 140277914342: APT retornou HTTP 403 exclusivamente no feed packages.microsoft.com/ubuntu/24.04/prod durante instalação do Chromium. Não confundir com 403 anterior de publicação de release. Correção: desabilitar somente o feed Microsoft desnecessário no runner descartável, preservar fontes Ubuntu e validação criptográfica, aplicar testes de regressão para formatos .list/.sources e retentativas limitadas. Não omitir Playwright nem liberar APK sem testes. Workflow idêntico nas branches; publicação depende de nova execução aprovada.
+
+
+## Manutenção 0.1.52 — feedback físico 0.1.51
+Barra recolhível global, arco de construção (cercas ativas; celeiros, currais, casas marcados indisponíveis), sementes e enxada; construção em áreas livres inclusive agrícolas e caminhos, sem raio de 5,5m; encaixe encadeado com pivô, soltura manual; pintura separada das estacas/tábuas com material opaco e nomes; ajustes de solo, bússola orientada, vento, portão na entrada da placa, cordas e afinidade com corações. Testes adicionados; visual físico ainda pendente. RC pausada quanto a funcionalidades até QA. Após QA: consolidar inventário/economia/agricultura/áudio e entregar juntos, depois construção/residência/natureza, animais/personagem/progressão, e integridade final (4+3+3+1). Nenhuma frente parcial é considerada aprovada.
