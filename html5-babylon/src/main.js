@@ -1258,9 +1258,9 @@ let placementSeed=91823;const placeRnd=()=>((placementSeed=Math.imul(1664525,pla
 const treePositions=[[607,102],[99,79],[104,202],[245,117]];
 const segDist=(x,z,a,b)=>{const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1)));return Math.hypot(x-a.x-t*dx,z-a.z-t*dz)};
 const roadSegments=layout.roads.flatMap(r=>r.points.slice(1).map((p,i)=>[P(...r.points[i]),P(...p),r.width/16]));
-const treeZones=[[35,0,195,235],[210,0,740,70],[40,270,160,325],[655,70,737,195]];
-let planted=0;for(let i=0;i<450&&planted<29;i++){const a=treeZones[i%treeZones.length],u=a[0]+placeRnd()*(a[2]-a[0]),v=a[1]+placeRnd()*(a[3]-a[1]),x=X(u),z=Z(v),nr=nearRiver(x,z);
- if(nr.dist<nr.w*.54+1.5||treePositions.some(p=>Math.hypot((u-p[0])/8,(v-p[1])/6.553)<3.5)||roadSegments.some(([a,b,w])=>segDist(x,z,a,b)<w+1.5))continue;
+const treeZones=[[35,0,195,235],[210,0,740,70],[40,270,160,325],[655,70,737,195],[35,470,95,880],[45,970,95,1320],[590,960,665,1300],[1400,1050,1490,1290]];
+let planted=0;for(let i=0;i<650&&planted<41;i++){const a=treeZones[i%treeZones.length],u=a[0]+placeRnd()*(a[2]-a[0]),v=a[1]+placeRnd()*(a[3]-a[1]),x=X(u),z=Z(v),nr=nearRiver(x,z);
+ if(nr.dist<nr.w*.54+1.5||eastWaterAt(x,z).edge<2||sectorAt(x,z)||treePositions.some(p=>Math.hypot((u-p[0])/8,(v-p[1])/6.553)<3.5)||roadSegments.some(([a,b,w])=>segDist(x,z,a,b)<w+1.5))continue;
  treePositions.push([u,v]);tree('forest '+planted,u,v,planted%11===0,.90+placeRnd()*.54);planted++;
 }
 // Low-growing woodland vegetation, grouped into one real vertex-colored mesh.
@@ -1268,9 +1268,9 @@ let planted=0;for(let i=0;i<450&&planted<29;i++){const a=treeZones[i%treeZones.l
 entity('woodland understory');{
  const p=[],ind=[],cols=[],norm=[];let seed=4179;const rand=()=>((seed=Math.imul(1664525,seed)+1013904223|0)>>>0)/4294967296;
  const palette=['#315b27','#537f2e','#76973b','#a4bd50','#d0cf64'].map(c=>Color3.FromHexString(c));
- for(let i=0;i<600&&bankStats.understory<180;i++){
+ for(let i=0;i<600&&bankStats.understory<230;i++){
   const zone=treeZones[i%treeZones.length],u=zone[0]+rand()*(zone[2]-zone[0]),v=zone[1]+rand()*(zone[3]-zone[1]),x=X(u),z=Z(v),nr=nearRiver(x,z);
-  if(nr.dist<nr.w*.54+.75||roadSegments.some(([a,b,w])=>segDist(x,z,a,b)<w+1.1)||treePositions.some(q=>Math.hypot((u-q[0])/8,(v-q[1])/6.553)<.65))continue;
+  if(nr.dist<nr.w*.54+.75||eastWaterAt(x,z).edge<1||sectorAt(x,z)||roadSegments.some(([a,b,w])=>segDist(x,z,a,b)<w+1.1)||treePositions.some(q=>Math.hypot((u-q[0])/8,(v-q[1])/6.553)<.65))continue;
   const y=height(x,z),size=.45+rand()*.78,offset=rand()*Math.PI*2;
   for(let j=0;j<12;j++){
    const a=offset+j*2.399,dx=Math.cos(a),dz=Math.sin(a),len=size*(.36+rand()*.55),w=len*.28,h=size*(.28+rand()*.45),r=size*(rand()*.27),px=x+dx*r,pz=z+dz*r,k=p.length/3,c=palette[Math.floor(rand()*palette.length)];
