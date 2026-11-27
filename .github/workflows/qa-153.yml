@@ -1,0 +1,171 @@
+name: Colheita QA - Manutenção 0.1.53
+on:
+  push:
+    branches: ['qa/0.1.53']
+    paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: colheita-babylon-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  preview:
+    outputs:
+      publish_ready: ${{ steps.release_gate.outputs.ready }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: html5-babylon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Testar leitura independente das senhas QA
+        working-directory: .
+        run: python3 android-test/test-sign-qa.py
+      - name: Testar manifesto de atualização QA
+        working-directory: .
+        run: python3 android-test/test-qa-manifest.py
+      - name: Conferir configuração de assinatura QA
+        env:
+          CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
+        run: |
+          if [[ -z "$CV_QA_SIGNING_BUNDLE" ]]; then
+            echo "::error::Cadastre o segredo CV_QA_SIGNING_BUNDLE nas configurações de Actions do repositório. Nenhum APK temporário será distribuído."
+            exit 1
+          fi
+      - name: Verificar autorização de publicação por canal
+        id: release_gate
+        working-directory: .
+        run: python3 android-test/rc-release-gate.py >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: Preparar dependências Chromium sem feed externo desnecessário
+        working-directory: .
+        run: |
+          python3 android-test/test-browser-apt.py
+          sudo python3 android-test/prepare-browser-apt.py --apply
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+      - name: Instalar Chromium e dependências verificadas
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then exit 0; fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Testar o motor e registrar capturas
+        run: |
+          python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/cv-babylon.log 2>&1 &
+          for i in {1..20}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Colheita-Babylon-Etapa1-QA
+          path: html5-babylon/qa/
+          retention-days: 3
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Colheita-Babylon-Etapa1-Web
+          path: html5-babylon/dist/
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Preparar SDK Android
+        working-directory: .
+        run: |
+          bash -n android-test/prepare-sdk.sh
+          bash android-test/prepare-sdk.sh
+      - name: Compilar APK experimental offline
+        working-directory: .
+        run: |
+          mkdir -p android-test/app/src/main/assets
+          cp html5-babylon/dist/index.html html5-babylon/dist/game.js android-test/app/src/main/assets/
+          gradle -p android-test --no-daemon :app:assembleDebug
+      - name: Assinar APK QA com certificado permanente
+        working-directory: .
+        env:
+          CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
+        run: bash android-test/sign-qa.sh
+      - name: Validar pacote, assinatura e conteúdo
+        working-directory: .
+        run: |
+          set -euo pipefail
+          mkdir -p android-test/qa
+          APK=android-test/qa-signed.apk
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee android-test/qa/signature.txt
+          grep -Fx "Signer #1 certificate SHA-256 digest: fdefa3921fb2e0010e5f4a677589a7f8f8a450738626caab4c97dc7ad25f6f21" android-test/qa/signature.txt
+          grep -Fx "Verified using v2 scheme (APK Signature Scheme v2): true" android-test/qa/signature.txt
+          grep -Fx "Number of signers: 1" android-test/qa/signature.txt
+          "$TOOLS/aapt" dump badging "$APK" | tee android-test/qa/badging.txt
+          grep -F "package: name='br.com.colheitavitural.html5.qa'" android-test/qa/badging.txt
+          grep -F "uses-permission: name='android.permission.INTERNET'" android-test/qa/badging.txt
+          grep -F "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" android-test/qa/badging.txt
+          unzip -p "$APK" assets/index.html | cmp - html5-babylon/dist/index.html
+          unzip -p "$APK" assets/game.js | cmp - html5-babylon/dist/game.js
+          cp "$APK" android-test/qa/ColheitaVitural-QA.apk
+          cd android-test/qa
+          sha256sum ColheitaVitural-QA.apk > SHA256SUMS.txt
+          ls -lh ColheitaVitural-QA.apk
+          cd ../..
+          python3 android-test/qa-manifest.py android-test/qa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Colheita-Vitural-APK-QA
+          path: android-test/qa/
+          retention-days: 3
+          if-no-files-found: error
+  publish-qa:
+    needs: preview
+    if: github.ref == 'refs/heads/qa/0.1.53' && needs.preview.outputs.publish_ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Colheita-Vitural-APK-QA
+          path: qa
+      - name: Publicar exclusivamente no canal experimental
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd qa
+          sha256sum -c SHA256SUMS.txt
+          code=$(jq -er '.versionCode | numbers' update.json)
+          version=$(jq -er '.versionName' update.json)
+          case "$GITHUB_REF" in
+            refs/heads/qa/0.1.53) [[ "$code" == 153 && "$version" == "0.1.53" ]] ;;
+            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" ]] ;;
+            *) exit 1 ;;
+          esac
+          tag="qa-v$code"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            mkdir existing
+            gh release download "$tag" --pattern update.json --pattern ColheitaVitural-QA.apk --dir existing
+            cmp update.json existing/update.json
+            cmp ColheitaVitural-QA.apk existing/ColheitaVitural-QA.apk
+            echo "Versão QA já publicada com conteúdo idêntico."
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --prerelease --draft --title "Colheita Vitural QA $version" --notes "Canal experimental. Não substitui a versão oficial." update.json ColheitaVitural-QA.apk SHA256SUMS.txt
+            gh release edit "$tag" --draft=false --prerelease
+          fi
+          gh release view "$tag" --json url,isDraft,isPrerelease,assets
+          [[ "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" == "$GITHUB_SHA" ]]
