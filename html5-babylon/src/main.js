@@ -2426,12 +2426,12 @@ function drawMinimap(dt,force=false){
  const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
  c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();}
  c=compassCtx;c.clearRect(0,0,W,H);
- // Neutral graphite band belongs only to the independent compass overlay.
- c.beginPath();c.arc(mid,mid,mid-1,0,Math.PI*2);c.arc(mid,mid,rad+1,0,Math.PI*2,true);c.fillStyle='#30343a';c.fill('evenodd');
- c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d0d2d5';c.lineWidth=1.5;c.stroke();
+ // Approved aged olive band belongs only to the independent compass overlay.
+ c.beginPath();c.arc(mid,mid,mid-1,0,Math.PI*2);c.arc(mid,mid,rad+1,0,Math.PI*2,true);c.fillStyle='#5f6e4e';c.fill('evenodd');
+ c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#c5c59d';c.lineWidth=1.5;c.stroke();
  // Independent compass ring; terrain stays fixed north-up.
- for(let i=0;i<72;i++){const a=i*Math.PI/36-avatar.rotation.y,major=i%9===0,outer=rad+5,inner=rad+(major?0:3);c.beginPath();c.moveTo(mid+Math.sin(a)*inner,mid-Math.cos(a)*inner);c.lineTo(mid+Math.sin(a)*outer,mid-Math.cos(a)*outer);c.strokeStyle=major?'#f3f1eb':'#a9adb4';c.lineWidth=major?1.3:.7;c.stroke();}
- c.fillStyle='#f8f7f2';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';for(const [label,angle] of [['N',0],['L',Math.PI/2],['S',Math.PI],['O',-Math.PI/2]]){const a=angle-avatar.rotation.y;c.fillText(label,mid+Math.sin(a)*(mid-9),mid-Math.cos(a)*(mid-9));}const degrees=Math.round(((avatar.rotation.y*180/Math.PI)%360+360)%360)%360;$('map-heading').textContent=degrees+'° '+['N','NE','L','SE','S','SO','O','NO'][Math.round(degrees/45)%8];
+ for(let i=0;i<72;i++){const a=i*Math.PI/36-avatar.rotation.y,major=i%9===0,outer=rad+5,inner=rad+(major?0:3);c.beginPath();c.moveTo(mid+Math.sin(a)*inner,mid-Math.cos(a)*inner);c.lineTo(mid+Math.sin(a)*outer,mid-Math.cos(a)*outer);c.strokeStyle=major?'#e7ddb0':'#a9b28a';c.lineWidth=major?1.3:.7;c.stroke();}
+ c.fillStyle='#f4e8c4';c.font='bold 13px system-ui';c.textAlign='center';c.textBaseline='middle';for(const [label,angle] of [['N',0],['L',Math.PI/2],['S',Math.PI],['O',-Math.PI/2]]){const a=angle-avatar.rotation.y;c.fillText(label,mid+Math.sin(a)*(mid-9),mid-Math.cos(a)*(mid-9));}const degrees=Math.round(((avatar.rotation.y*180/Math.PI)%360+360)%360)%360;$('map-heading').textContent=degrees+'° '+['N','NE','L','SE','S','SO','O','NO'][Math.round(degrees/45)%8];
  mapQA.heading=avatar.rotation.y;mapQA.frames++;mapQA.center=[centerX,centerZ];mapQA.scale=fixedScale;mapQA.marker=marker;mapQA.mapRotation=0;mapQA.compassRotation=-avatar.rotation.y;const windLabel=['N','NE','L','SE','S','SO','O','NO'][Math.round(((Math.atan2(-worldWind.x,-worldWind.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/4))%8];$('map-wind').textContent='Vento de '+windLabel+' · '+worldWind.speed.toFixed(1)+' m/s';
 }
 drawMinimap(0,true);

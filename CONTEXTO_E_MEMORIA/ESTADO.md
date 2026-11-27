@@ -465,3 +465,7 @@ Menu inicial real sobre cena, opções e retorno, modo fotografia sem HUD com bo
 
 ## 27/11/2026 — esclarecimento do proprietário: somente a bússola muda de cor
 - O mapa interno verde, culturas, água e estradas estavam corretos; a rejeição original se referia exclusivamente ao anel giratório. Base 666f04b já restaura a paleta interna. Alterada apenas a camada compassCtx: faixa grafite neutra na área externa ao mapa, traços cinza e letras claras. Sem alterar a camada cartográfica, geometria, zoom, marcador, seguimento, orientação ou qualquer outra funcionalidade. Grafite escolhido como solução neutra, sujeito à avaliação visual. Teste acrescentado para pixel do anel; invariantes de mapa e rotação mantidas. Publicação ainda condicionada à validação.
+
+
+## 27/11/2026 — paleta da bússola aprovada pelo proprietário
+- Proprietário aprovou a prévia ilustrativa de anel verde-oliva envelhecido #5F6E4E com letras bege/palha. Substituído exclusivamente o grafite da camada compassCtx; cores de acabamento #C5C59D, #E7DDB0, #A9B28A e #F4E8C4. Mapa verde, culturas, água, estrada, posição, zoom de 24m, marcador central e rotação independente permanecem intactos. Regressão de pixel atualizado para RGB 95/110/78, mantendo demais invariantes. Sintaxe verificada; CI e validação visual física pendentes. Não modificar outros sistemas, saves, pacote, assinatura ou gate de publicação.
