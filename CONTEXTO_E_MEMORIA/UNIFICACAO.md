@@ -29,3 +29,6 @@ Base qa-v150 aprovada. Desenvolvimento interno em main, pacote e certificado per
 - Conciliação: branch experimental rc/0.2.0 não será mesclada integralmente. main mantém economia transacional coins/commitTrade e gate; expansão agrícola incorporada isoladamente, sem duplicar saldos. Não instalar artefatos experimentais.
 
 - Áudio retomado: legado scripts/main.gd (opções e ambiente) e scripts/menu.gd (efeitos e música) comparados. Implementação parcial original Web Audio: clique, vento, chuva e sinais sonoros diurnos/noturnos, volume e opções persistentes, desbloqueio por gesto e suspensão quando oculto. Música, sons de ferramentas/animais, espacialização, menu inicial e audição física pendentes. Sem copiar assets privados. Gate continua fechado.
+
+## Entregas em lotes autorizadas
+Após QA 0.1.52, consolidar e entregar 4 frentes iniciais; depois 3+3+1. Manter gate final e não declarar paridade sem teste. Versões intermediárias QA exigirão autorização de lote específica, não habilitar publicação RC parcial automaticamente.

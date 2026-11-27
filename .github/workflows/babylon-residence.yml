@@ -1,7 +1,7 @@
 name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
-    branches: [main, 'qa/0.1.51']
+    branches: [main, 'qa/0.1.52']
     paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
@@ -131,7 +131,7 @@ jobs:
           if-no-files-found: error
   publish-qa:
     needs: preview
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/qa/0.1.51') && needs.preview.outputs.publish_ready == 'true'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/qa/0.1.52') && needs.preview.outputs.publish_ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -152,7 +152,7 @@ jobs:
           code=$(jq -er '.versionCode | numbers' update.json)
           version=$(jq -er '.versionName' update.json)
           case "$GITHUB_REF" in
-            refs/heads/qa/0.1.51) [[ "$code" == 151 && "$version" == "0.1.51" ]] ;;
+            refs/heads/qa/0.1.52) [[ "$code" == 152 && "$version" == "0.1.52" ]] ;;
             refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" ]] ;;
             *) exit 1 ;;
           esac
