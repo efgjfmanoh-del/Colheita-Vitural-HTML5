@@ -386,3 +386,5 @@ Mapa de terreno fixo em norte para cima, enquadramento geográfico estável; mar
 
 ## RC lote 1 — áudio e agricultura
 Música procedural original, controle separado persistente, efeitos acionados por enxada/martelo/plantio/rega/colheita/capina/compra e venda. Ervas daninhas simuladas offline e visíveis no canteiro em lote, com ação de capina e penalidade moderada no crescimento; saves antigos aceitam campo ausente. Testes de áudio com contexto simulado e compatibilidade agrícola. Ainda faltam feira espacial, equipamento e armazenamento físico, expansão de canteiros, revisão artística de áudio/menu inicial. Não declarar frentes concluídas. Gate permanece fechado.
+
+- Ferramentas: categoria da mochila com martelo, enxada e regador, seleção persistente independente de estoques e ação real via barra. Sons de cuidado dos pets ligados à conclusão salva da interação. Testes de equipamento e persistência adicionados. Escopo de inventário ainda não inclui materiais/equipamentos inexistentes ou baú físico; não foram simulados como completos.

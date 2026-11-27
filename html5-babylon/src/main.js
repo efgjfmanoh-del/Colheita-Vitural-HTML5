@@ -3,7 +3,7 @@ import layout from '../layout.json';
 import {createPets} from './pets.js';
 import {createFarmAudio} from './audio.js';
 import {validWarehouse,transferWarehouse} from './warehouse.js';
-import {inventorySnapshot,cropIcons} from './inventory.js';
+import {inventorySnapshot,cropIcons,TOOL_CATALOG,equippedTool,equipTool} from './inventory.js';
 import {PRICES,INITIAL_COINS,validBalance,commitTrade,quoteTrade} from './economy.js';
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
@@ -2010,15 +2010,18 @@ function tickBuild(dt,moving=false){
 }
 $('build-open').onclick=openBuild;$('build-close').onclick=closeBuild;
 const toolBar=$('tool-bar'),toolArc=$('tool-arc');
+const equipmentStorage={getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)};let activeTool=equippedTool(equipmentStorage);
+function selectTool(id){if(!equipTool(equipmentStorage,id))return false;activeTool=id;syncToolBar();return true;}
 let toolsCollapsed=false,toolHintTimer;
 try{toolsCollapsed=localStorage.getItem('cv.toolBar.v1')==='collapsed';}catch{}
 function closeToolArc(){toolArc.hidden=true;$('tool-build').setAttribute('aria-expanded','false');}
-function syncToolBar(){$('tool-items').hidden=toolsCollapsed;$('tool-toggle').textContent=toolsCollapsed?'•':'⌄';$('tool-toggle').setAttribute('aria-expanded',String(!toolsCollapsed));if(toolsCollapsed)closeToolArc();}
+function syncToolBar(){$('tool-items').hidden=toolsCollapsed;$('tool-toggle').textContent=toolsCollapsed?'•':'⌄';$('tool-toggle').setAttribute('aria-expanded',String(!toolsCollapsed));if(toolsCollapsed)closeToolArc();for(const [id,button] of [['hammer','tool-build'],['hoe','tool-hoe'],['water','tool-water']])$(button).setAttribute('aria-pressed',String(activeTool===id));}
 $('tool-toggle').onclick=()=>{toolsCollapsed=!toolsCollapsed;try{localStorage.setItem('cv.toolBar.v1',toolsCollapsed?'collapsed':'expanded');}catch{}syncToolBar();};
-$('tool-build').onclick=()=>{toolArc.hidden=!toolArc.hidden;$('tool-build').setAttribute('aria-expanded',String(!toolArc.hidden));layoutContextActions();};
+$('tool-build').onclick=()=>{selectTool('hammer');toolArc.hidden=!toolArc.hidden;$('tool-build').setAttribute('aria-expanded',String(!toolArc.hidden));layoutContextActions();};
 $('tool-fence').onclick=openBuild;
 $('tool-seeds').onclick=()=>{closeToolArc();openInventory();};
-$('tool-hoe').onclick=()=>{closeToolArc();if(nearestWheat()){$('wheat-expand').click();}else{$('tool-hint').textContent='Aproxime-se de um canteiro para arar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);}};
+$('tool-hoe').onclick=()=>{selectTool('hoe');closeToolArc();if(nearestWheat()){$('wheat-expand').click();}else{$('tool-hint').textContent='Aproxime-se de um canteiro para arar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);}};
+$('tool-water').onclick=()=>{selectTool('water');closeToolArc();const p=nearestWheat();if(p){$('wheat-expand').click();if(!applyWheatAction('water',p.id))$('tool-hint').textContent='Canteiro não precisa de rega agora.';}else $('tool-hint').textContent='Aproxime-se de um canteiro para regar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);};
 syncToolBar();
 function syncToolVisibility(){const hide=build.open||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||inventoryDialog.open||!wheatPanel.hidden;toolBar.hidden=hide;if(hide)closeToolArc();}
 
@@ -2320,12 +2323,12 @@ function renderWarehouse(){
 }
 function renderInventory(force=false){
  if(!inventoryDialog.open)return;
- const items=inventoryItems(),selected=selectedSpecies(),key=JSON.stringify([inventoryCategory,selected,items,wheatState.coins,wheatState.warehouse,tradeQuantity]);
+ const items=inventoryItems(),selected=selectedSpecies(),key=JSON.stringify([inventoryCategory,selected,items,wheatState.coins,wheatState.warehouse,tradeQuantity,activeTool]);
  if(!force&&key===inventoryKey)return;inventoryKey=key;
  const grid=$('inventory-items');grid.replaceChildren();
  for(const button of inventoryDialog.querySelectorAll('[data-inventory-category]'))button.setAttribute('aria-pressed',String(button.dataset.inventoryCategory===inventoryCategory));
  $('inventory-coins').textContent=wheatSaveLocked?'Saldo indisponível':wheatState.coins+' moedas';$('inventory-market-qty').hidden=!['market','warehouse'].includes(inventoryCategory);grid.classList.toggle('market-grid',['market','warehouse'].includes(inventoryCategory));
- if(inventoryCategory==='market'){renderMarket();return;}if(inventoryCategory==='warehouse'){renderWarehouse();return;}
+ if(inventoryCategory==='market'){renderMarket();return;}if(inventoryCategory==='warehouse'){renderWarehouse();return;}if(inventoryCategory==='tools'){for(const [id,tool] of Object.entries(TOOL_CATALOG)){const card=document.createElement('button');card.type='button';card.className='inventory-item';card.dataset.tool=id;card.setAttribute('aria-pressed',String(activeTool===id));const icon=document.createElement('span');icon.className='inventory-icon';icon.textContent=tool.icon;const title=document.createElement('strong');title.textContent=tool.name;const note=document.createElement('small');note.textContent=activeTool===id?'Equipado':tool.use;card.append(icon,title,note);card.onclick=()=>{$('inventory-message').textContent=selectTool(id)?tool.name+' equipado. Use a barra de ferramentas.':'Não foi possível salvar o equipamento.';renderInventory(true);};grid.append(card);}return;}
  for(const item of items.filter(i=>inventoryCategory==='all'||i.category===inventoryCategory)){
   const card=document.createElement(item.crop?'button':'article');card.className='inventory-item';card.dataset.item=item.id;
   const icon=document.createElement('span');icon.className='inventory-icon';icon.textContent=item.icon;icon.setAttribute('aria-hidden','true');

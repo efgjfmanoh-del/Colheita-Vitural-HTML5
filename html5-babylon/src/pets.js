@@ -270,7 +270,7 @@ export function createPets(api){
  function completeInteraction(a){
   const p=a.p,d=data[p.id],before=d.affinity;
   d.affinity=clamp01(before+(a.action==='pet'?.025:.04));
-  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;if(d.affinity>before)showAffinity(p,Math.round((d.affinity-before)*100));}
+  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;api.onCareSound?.(p.id);if(d.affinity>before)showAffinity(p,Math.round((d.affinity-before)*100));}
   toys[p.id].root.setEnabled(false);p.interaction=null;state(p,'idle',2);interaction=null;api.playerFinish();
  }
  function updateInteraction(dt){
