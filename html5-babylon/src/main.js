@@ -745,17 +745,36 @@ function updateWorldClock(now=Date.now(),force=false){
  if(now-clockLastSave>=30000)saveWorldClock(now);
  const daylight=daylightAt(c.hour,c.minute);
  const pad=n=>String(n).padStart(2,'0'),label=pad(c.hour)+':'+pad(c.minute)+' · '+daylight.phase+' | '+c.weekday+', '+pad(c.day)+'/'+pad(c.month)+' · Ano '+c.year+' · '+c.season;
- if(label!==lastCalendarLabel){$('world-clock').textContent=label;lastCalendarLabel=label;}
+ if(label!==lastCalendarLabel){
+  $('world-clock').textContent=pad(c.hour)+':'+pad(c.minute);$('world-date').textContent=pad(c.day)+'/'+pad(c.month);
+  $('world-date-detail').textContent=c.weekday+' · Ano '+c.year+' · '+c.season;
+  $('world-phase').textContent=daylight.phase;
+  const icon=({'Noite':'🌙','Amanhecer':'🌅','Dia':c.hour>=12?'🌤️':'☀️','Entardecer':'🌇'})[daylight.phase]||'☀️';
+  $('world-phase-icon').textContent=icon;$('world-phase-icon').setAttribute('aria-label',daylight.phase);
+  lastCalendarLabel=label;
+ }
  if($('world-clock-error').textContent!==clockError)$('world-clock-error').textContent=clockError;
  const minute=c.hour*60+c.minute,w=weatherAt(elapsed);
  if(minute!==lastLightMinute||w.slot!==lastWeatherSlot){
-  lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherLabel;$('weather-icon').textContent=weatherVisual.icon;document.body.dataset.weather=w.kind;
+  lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherVisual.label;$('weather-icon').textContent=weatherVisual.icon;$('world-temp').textContent=w.temperature.toFixed(1)+' °C';document.body.dataset.weather=w.kind;
   lastLightMinute=minute;const k=daylight.daylight;
   // Maintain the existing daytime art. At night keep paths and controls readable.
   const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;const shadowsOn=k>.18;if(sun.shadowEnabled!==shadowsOn){sun.shadowEnabled=shadowsOn;shadow.getShadowMap().resetRefreshCounter();}
   scene.clearColor=new Color4(.08+.28*k,.13+.43*k,.19+.10*k,1);updateNightLighting(k);
  }
 }
+// HUD preference is independent from world and farm saves.
+const CALENDAR_HUD_KEY='cv.calendarHUD.v1',calendarHUD=$('world-calendar'),calendarToggle=$('calendar-toggle');
+let calendarCompact=false;
+try{calendarCompact=localStorage.getItem(CALENDAR_HUD_KEY)==='compact';}catch{}
+function setCalendarCompact(value,persist=true){
+ calendarCompact=!!value;calendarHUD.classList.toggle('compact',calendarCompact);
+ calendarToggle.setAttribute('aria-expanded',String(!calendarCompact));
+ calendarToggle.setAttribute('aria-label',calendarCompact?'Expandir informações da fazenda':'Recolher informações da fazenda');
+ for(const detail of calendarHUD.querySelectorAll('.calendar-extra'))detail.setAttribute('aria-hidden',String(calendarCompact));
+ if(persist)try{localStorage.setItem(CALENDAR_HUD_KEY,calendarCompact?'compact':'expanded');}catch{}
+}
+calendarToggle.addEventListener('click',()=>setCalendarCompact(!calendarCompact));setCalendarCompact(calendarCompact,false);
 window.addEventListener('pagehide',()=>saveWorldClock());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveWorldClock();else updateWorldClock(Date.now(),true);});
 const WHEAT_SAVE='cv.wheat.v1',LEGACY_WHEAT_GROW=90000;
