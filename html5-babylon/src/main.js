@@ -276,17 +276,36 @@ const pathMesh=makeStoneRoad('residential individual stone paving',pathRows,path
 function roadClearance(rows,x,z){
  let best=Infinity;for(let i=1;i<rows.length;i++){const a=rows[i-1][1],b=rows[i][1],dx=b.x-a.x,dz=b.z-a.z,u=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1))),widthA=Math.hypot(rows[i-1][0].x-a.x,rows[i-1][0].z-a.z),widthB=Math.hypot(rows[i][0].x-b.x,rows[i][0].z-b.z);best=Math.min(best,Math.hypot(x-a.x-u*dx,z-a.z-u*dz)-widthA-(widthB-widthA)*u);}return best;
 }
-const residenceRails=[];
+const residenceRails=[],bridgeFenceLinks=[],editableFences=new Map();
+function fencePiece(id,p,q,kind='original'){
+ entity('residence fence');const before=groups['residence fence'].length,collider=[p.clone(),q.clone()];
+ for(const v of [p,q]){box('fence post',v.x,v.y+.61,v.z,.20,1.22,.20,M.woodDark);box('post cap',v.x,v.y+1.25,v.z,.28,.12,.28,M.woodLight);}
+ for(const y of [.40,.89])beam('fence rail',p.add(V(0,y,0)),q.add(V(0,y,0)),.13,M.woodLight,.13);
+ // Merge within a single editable piece, never across pieces.
+ const raw=groups['residence fence'].splice(before),meshes=[];
+ for(const m of [M.woodDark,M.woodLight]){const list=raw.filter(v=>v.material===m);if(!list.length)continue;for(const v of list)v.computeWorldMatrix(true);
+  const merged=Mesh.MergeMeshes(list,false,true);if(!merged){meshes.push(...list);continue;}
+  merged.name='editable fence '+id;merged.material=m;merged.receiveShadows=true;merged.isPickable=false;for(const v of list){shadow.removeShadowCaster(v,false);v.dispose(false,false);}shadow.addShadowCaster(merged,false);merged.freezeWorldMatrix();meshes.push(merged);
+ }
+ groups['residence fence'].push(...meshes);fenceColliders.push(collider);
+ if(kind==='original')residenceRails.push(collider);else if(kind==='bridge')bridgeFenceLinks.push(collider);
+ const piece={id,kind,a:p.clone(),b:q.clone(),meshes,collider};editableFences.set(id,piece);return piece;
+}
 entity('residence fence');
 for(let i=0;i<fencePoints.length;i++){
  const a=fencePoints[i],b=fencePoints[(i+1)%fencePoints.length],n=Math.ceil(Vector3.Distance(a,b)/1.9);
  for(let j=0;j<n;j++){const p=Vector3.Lerp(a,b,j/n),q=Vector3.Lerp(a,b,(j+1)/n);
   const clear=Array.from({length:13},(_,k)=>Vector3.Lerp(p,q,k/12)).every(v=>roadClearance(pathRows,v.x,v.z)>.38&&Math.hypot(v.x-bridgeEntry.x,v.z-bridgeEntry.z)>1.85);
   if(!clear)continue;
-  p.y=height(p.x,p.z);q.y=height(q.x,q.z);residenceRails.push([p.clone(),q.clone()]);fenceColliders.push([p.clone(),q.clone()]);
-  box('fence post',p.x,p.y+.61,p.z,.20,1.22,.20,M.woodDark);box('post cap',p.x,p.y+1.25,p.z,.28,.12,.28,M.woodLight);
-  for(const y of [.40,.89])beam('fence rail',p.add(V(0,y,0)),q.add(V(0,y,0)),.13,M.woodLight,.13);
+  p.y=height(p.x,p.z);q.y=height(q.x,q.z);fencePiece('base-'+i+'-'+j,p,q);
  }
+}
+// Join the existing fence ends to the actual bridge railing without closing the walkway.
+for(const side of [-1,1]){
+ const end=bridgeEntry.add(bridgeSide.scale(side*1.48));end.y=bridgeEntry.y;
+ const candidates=residenceRails.flat().filter(p=>side*Vector3.Dot(p.subtract(bridgeEntry),bridgeSide)>1.30).sort((a,b)=>Math.hypot(a.x-end.x,a.z-end.z)-Math.hypot(b.x-end.x,b.z-end.z));
+ const start=candidates.find(p=>Math.hypot(p.x-end.x,p.z-end.z)<7&&Array.from({length:20},(_,i)=>Vector3.Lerp(p,end,i/20)).every(v=>side*Vector3.Dot(v.subtract(bridgeEntry),bridgeSide)>1.30));
+ if(start&&Math.hypot(start.x-end.x,start.z-end.z)>.12){const n=Math.ceil(Math.hypot(start.x-end.x,start.z-end.z)/1.9);for(let i=0;i<n;i++){const p=Vector3.Lerp(start,end,i/n),q=Vector3.Lerp(start,end,(i+1)/n);fencePiece('bridge-'+side+'-'+i,p,q,'bridge');}}
 }
 // Exterior approach is a physical ground-following ribbon, not a painted road.
 entity('bridge approach');const approach=[[575,248],[596,258],[615,275],[624,293],[630,310],[645,326],[667,326],[699,321],[731,318],[744,316],[752.5,310],[752.5,302],[752.5,296]].map(p=>P(...p));
@@ -759,7 +778,7 @@ function migrateWholeBeds(){
  if(changed)try{localStorage.setItem(WHEAT_SAVE,JSON.stringify(next));wheatState=next;}catch{wheatSaveLocked=true;wheatSaveError='Falha na migração; dados originais preservados.';}
 }
 migrateWholeBeds();
-let tillWork=null;
+let tillWork=null,buildModeActive=false;
 let farmCache=new Map(),farmCacheTime=-1;
 function evaluatedPlot(id,now=Date.now()){
  const elapsed=worldElapsed(now),bucket=Math.floor(elapsed/1000);
@@ -772,7 +791,7 @@ function wheatProgress(id,now=Date.now()){const p=evaluatedPlot(id,now);return p
 const selectedSpecies=()=>$('crop-select').value||'wheat';
 const stockFor=(state,id)=>id==='wheat'?{seeds:state.seeds,grain:state.grain}:state.stocks[id];
 function nearestWheat(){
- if(entry.action||seating.phase!=='idle'||entry.inside||!gardenPanel.hidden||!inWheat(avatar.position.x,avatar.position.z))return null;
+ if(entry.action||seating.phase!=='idle'||entry.inside||!gardenPanel.hidden||buildModeActive||!inWheat(avatar.position.x,avatar.position.z))return null;
  let best=null,dist=1.20;for(const p of wheatPlots){const n=Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z);if(n<dist){best=p;dist=n;}}return best;
 }
 function applyWheatAction(action,id,now=Date.now()){
@@ -899,7 +918,7 @@ const wheatActions={raw:'till',tilled:'plant',sown:'water',ripe:'harvest'};
 const wheatLabels={till:'Arar',plant:'Plantar trigo',water:'Regar',harvest:'Colher'};
 let wheatSelected=null;
 function updateWheat(now=Date.now(),force=false){
- const p=nearestWheat();if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
+ const p=tillWork?wheatPlots.find(p=>p.bedId===tillWork.bed.id):nearestWheat();if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
  if(wheatPanel.hidden===!!p)wheatPanel.hidden=!p;
  // Keep the runner reachable when the farm panel is displayed.
  if(document.body.classList.contains('wheat-near')!==!!p)document.body.classList.toggle('wheat-near',!!p);
@@ -1241,7 +1260,7 @@ function worldInput(x,z,alpha=camera.alpha){
  const a=movementBasis,k=1/Math.max(1,n);return {x:(x*Math.cos(a)-z*Math.sin(a))*k,z:(x*Math.sin(a)+z*Math.cos(a))*k};
 }
 const controlsMenu=$('controls-menu'),playerMenu=$('player-menu');
-$('menu-open').onclick=()=>{cancelInput();playerMenu.hidden=false;};
+$('menu-open').onclick=()=>{if(buildModeActive)closeBuild();cancelInput();playerMenu.hidden=false;};
 $('menu-close').onclick=()=>{cancelInput();playerMenu.hidden=true;};
 $('menu-resume').onclick=()=>{cancelInput();playerMenu.hidden=true;};
 
@@ -1313,14 +1332,14 @@ function rockBlocked(x,z,from=null){
 // A previously overlapping actor may move out, never farther into the same collider.
 function obstacleEntered(next,prev=null){return next<0&&!(prev!==null&&prev<0&&next>prev+1e-6);}
 function onBridge(x,z){const a=ba,b=bb,dx=b.x-a.x,dz=b.z-a.z,t=((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz);return t>=0&&t<=1&&Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<1.28}
-function blocked(x,z,interacting=false,from=null){
+function blocked(x,z,interacting=false,from=null,ignoreFences=false){
  const check=fn=>obstacleEntered(fn(x,z),from?fn(from.x,from.z):null);
  if(check((a,b)=>Math.min(a-minX-1,maxX-1-a,b-minZ-1,maxZ-1-b)))return true;
  const bridge=onBridge(x,z);
  if(!bridge&&check((a,b)=>{const n=nearRiver(a,b);return n.dist-n.w*.54-.12;}))return true;
  if(rockBlocked(x,z,from))return true;
  if(trunkColliders.some(t=>check((a,b)=>Math.hypot(a-t.x,b-t.z)-t.r-.18)))return true;
- if(!bridge&&fenceColliders.some(([a,b])=>check((u,v)=>segDist(u,v,a,b)-.24)))return true;
+ if(!ignoreFences&&!bridge&&fenceColliders.some(([a,b])=>check((u,v)=>segDist(u,v,a,b)-.24)))return true;
  if(homeBlocked(x,z,interacting))return true;
  const dc=Math.cos(dogHome.angle),ds=Math.sin(dogHome.angle);
  if(check((a,b)=>{const dx=a-dogHome.x,dz=b-dogHome.z;return Math.max(Math.abs(dx*dc-dz*ds)-dogHome.w/2-.18,Math.abs(dx*ds+dz*dc)-dogHome.d/2-.18);}))return true;
@@ -1748,9 +1767,22 @@ function petPlayerPose(target,blend,dt){
 // then works along the row; the tool and arm move together in 3D.
 entity('hoe tool');
 const hoeRoot=new Mesh('hoe grip pivot',scene);hoeRoot.parent=avatar;
-const hoeHandle=box('hoe wooden shaft',0,-.47,0,.055,.99,.055,M.woodLight,0,false);hoeHandle.parent=hoeRoot;
-const hoeHead=box('hoe iron blade',0,-.96,.10,.29,.075,.27,M.black,0,false);hoeHead.parent=hoeRoot;hoeRoot.setEnabled(false);
-const tillStats={completed:0,cancelled:0,strokes:0,travel:0};
+const HOE_LENGTH=1.24;
+const hoeHandle=box('hoe wooden shaft',0,-HOE_LENGTH/2,0,.055,HOE_LENGTH,.055,M.woodLight,0,false);hoeHandle.parent=hoeRoot;
+const hoeHead=box('hoe iron blade',0,-HOE_LENGTH,0,.30,.055,.24,M.black,0,false);hoeHead.parent=hoeRoot;hoeRoot.setEnabled(false);
+entity('hoe soil effects');const hoeDust=Array.from({length:8},(_,i)=>{const m=sphere('hoe loose soil '+i,0,0,0,.04,.032,.04,M.woodDark,false);m.setEnabled(false);return {m,age:1,x:0,y:0,z:0,dx:0,dz:0};});
+function hoeImpact(p){for(let i=0;i<hoeDust.length;i++){const d=hoeDust[i],a=i*2.399;Object.assign(d,{age:0,x:p.x,y:p.y,z:p.z,dx:Math.cos(a)*.36,dz:Math.sin(a)*.36});d.m.setEnabled(true);}}
+function tickHoeDust(dt){for(const d of hoeDust){if(!d.m.isEnabled())continue;d.age+=dt;if(d.age>.33){d.m.setEnabled(false);continue;}d.m.position.set(d.x+d.dx*d.age,d.y+.055+Math.sin(d.age/.33*Math.PI)*.16,d.z+d.dz*d.age);}}
+function aimHoe(blade,dt){
+ avatar.computeWorldMatrix(true);const inv=Matrix.Invert(avatar.getWorldMatrix()),localBlade=Vector3.TransformCoordinates(blade,inv),localShoulder=V(.23,1.13,.13);
+ const axis=localShoulder.subtract(localBlade).normalize();const grip=localBlade.add(axis.scale(HOE_LENGTH));
+ hoeRoot.position.copyFrom(grip);const up=Vector3.Up(),dot=Vector3.Dot(up,axis),cross=Vector3.Cross(up,axis);
+ hoeRoot.rotationQuaternion=dot<-.99999?Quaternion.RotationAxis(Vector3.Right(),Math.PI):new Quaternion(cross.x,cross.y,cross.z,1+dot).normalize();
+ const worldGrip=Vector3.TransformCoordinates(grip,avatar.getWorldMatrix());handPose(worldGrip,1,localShoulder,V(.29,.69,0));
+ hoeRoot.computeWorldMatrix(true);hoeHead.computeWorldMatrix(true);
+ return Vector3.Distance(hoeHead.getAbsolutePosition(),blade);
+}
+const tillStats={completed:0,cancelled:0,strokes:0,travel:0,sideSamples:0,insideSamples:0,maxBladeError:0,impacts:0};
 function commitBed(id,prepared,now=Date.now()){
  const parts=bedPlots.get(id);if(!parts||wheatSaveLocked||parts.some(p=>!['raw','tilled'].includes(wheatStatus(p.id,now))))return false;
  const next=JSON.parse(JSON.stringify(wheatState)),elapsed=worldElapsed(now);
@@ -1761,8 +1793,11 @@ function commitBed(id,prepared,now=Date.now()){
 function beginTill(id){
  const p=wheatPlots.find(p=>p.id===id),bed=wheatBeds.find(b=>b.id===p?.bedId);
  if(!bed||tillWork||wheatSaveLocked||wheatStatus(id)!=='raw'||bedPlots.get(bed.id).some(p=>!['raw','tilled'].includes(wheatStatus(p.id))))return false;
- cancelInput();const dir=avatar.position.x<(bed.x1+bed.x2)/2?1:-1,start=dir===1?bed.x1+.18:bed.x2-.18,end=dir===1?bed.x2-.18:bed.x1+.18,z=(bed.z1+bed.z2)/2;
- tillWork={bed,dir,start,end,z,phase:'approach',elapsed:0,progress:0,lastStroke:-1};hoeRoot.setEnabled(true);updateWheat(Date.now(),true);return true;
+ const dir=avatar.position.x<(bed.x1+bed.x2)/2?1:-1,start=dir===1?bed.x1+.18:bed.x2-.18,end=dir===1?bed.x2-.18:bed.x1+.18;
+ const sides=[bed.z1-.30,bed.z2+.30].sort((a,b)=>Math.abs(a-avatar.position.z)-Math.abs(b-avatar.position.z));
+ const z=sides.find(z=>Array.from({length:30},(_,i)=>start+(end-start)*i/29).every(x=>!blocked(x,z)));
+ if(z===undefined)return false;
+ cancelInput();tillWork={bed,dir,start,end,z,phase:'exit',elapsed:0,progress:0,lastStroke:-1};hoeRoot.setEnabled(true);updateWheat(Date.now(),true);return true;
 }
 function endTill(done){
  const w=tillWork;if(!w)return;tillWork=null;hoeRoot.setEnabled(false);releaseHand();
@@ -1771,31 +1806,103 @@ function endTill(done){
  else{tillStats.cancelled++;wheatVisualKey='';updateWheat(Date.now(),true);}
 }
 function tickTill(dt){
- const w=tillWork;if(!w)return;
+ tickHoeDust(dt);const w=tillWork;if(!w)return;
  dt=Math.min(.05,Math.max(0,dt));w.elapsed+=dt;
- const x=w.phase==='approach'?w.start:w.end,dx=x-avatar.position.x,dz=w.z-avatar.position.z,dd=Math.hypot(dx,dz);
- if(dd>.045){const k=Math.min(1,(w.phase==='approach'?4.0:3.0)*dt/dd),m=moveAvatar(dx*k,dz*k,dt);tillStats.travel+=m;}
+ const x=w.phase==='exit'?avatar.position.x:w.phase==='approach'?w.start:w.end,dx=x-avatar.position.x,dz=w.z-avatar.position.z,dd=Math.hypot(dx,dz);
+ if(dd>.045){const k=Math.min(1,(w.phase==='work'?2.7:4.0)*dt/dd),m=moveAvatar(dx*k,dz*k,dt);tillStats.travel+=m;}
+ else if(w.phase==='exit'){w.phase='approach';w.elapsed=0;}
  else if(w.phase==='approach'){w.phase='work';w.elapsed=0;}
  else{endTill(true);return;}
  if(w.elapsed>12){endTill(false);return;}
- const swing=w.phase==='work'?(1-Math.cos(w.elapsed*2*Math.PI*3))/2:0;
- hoeRoot.position.set(.29,.96-.12*swing,.30);hoeRoot.rotation.x=-1.18+.98*swing;
- avatar.computeWorldMatrix(true);const grip=Vector3.TransformCoordinates(hoeRoot.position,avatar.getWorldMatrix());handPose(grip,1);
- bodyParts[0].rotation.x=.12*swing;
  if(w.phase==='work'){
+  const side=w.z<w.bed.z1?1:-1,face=side>0?0:Math.PI;
+  avatar.rotation.y=face;const swing=(1-Math.cos(w.elapsed*2*Math.PI*3))/2;
+  const bx=Math.max(w.bed.x1+.12,Math.min(w.bed.x2-.12,avatar.position.x+.08*w.dir)),bz=(w.bed.z1+w.bed.z2)/2;
+  const groundY=Math.max(height(bx,bz),renderedTerrainY(bx,bz))+.028;
+  const blade=V(bx,groundY+.065+.48*(1-swing),bz-side*.22*(1-swing));
+  tillStats.maxBladeError=Math.max(tillStats.maxBladeError,aimHoe(blade,dt));bodyParts[0].rotation.x=.18*swing;
+  tillStats.sideSamples++;if(avatar.position.z>w.bed.z1&&avatar.position.z<w.bed.z2)tillStats.insideSamples++;
   w.progress=Math.max(w.progress,Math.min(1,Math.abs(avatar.position.x-w.start)/Math.abs(w.end-w.start)));
-  const stroke=Math.floor(w.elapsed*3);if(stroke!==w.lastStroke){w.lastStroke=stroke;tillStats.strokes++;}
-  for(const p of bedPlots.get(w.bed.id)){
-   const passed=w.dir===1?p.x<=avatar.position.x+.55:p.x>=avatar.position.x-.55;
-   if(passed){const m=moundState.get(p.id);if(m)m.target=.15;}
-  }
- }
+  const stroke=Math.floor(w.elapsed*3);if(swing>.92&&stroke!==w.lastStroke){w.lastStroke=stroke;tillStats.strokes++;hoeImpact(blade);tillStats.impacts++;}
+  for(const p of bedPlots.get(w.bed.id)){const passed=w.dir===1?p.x<=avatar.position.x+.55:p.x>=avatar.position.x-.55;if(passed){const m=moundState.get(p.id);if(m)m.target=.15;}}
+ }else{hoeRoot.rotationQuaternion=null;hoeRoot.position.set(.29,.98,.24);hoeRoot.rotation.x=-.38;avatar.computeWorldMatrix(true);handPose(Vector3.TransformCoordinates(hoeRoot.position,avatar.getWorldMatrix()),1);}
 }
+// Persistent construction inventory and independent item controls.
+const BUILD_SAVE='cv.build.v1',buildDefaults=()=>({version:1,stock:12,next:1,removed:[],placed:[]});
+let buildData=buildDefaults(),buildError='';
+try{const raw=JSON.parse(localStorage.getItem(BUILD_SAVE)||'null');if(raw){
+ if(raw.version!==1||!Number.isSafeInteger(raw.stock)||raw.stock<0||raw.stock>10000||!Number.isSafeInteger(raw.next)||raw.next<1||!Array.isArray(raw.removed)||!Array.isArray(raw.placed)||raw.placed.length>250||raw.removed.some(id=>typeof id!=='string'||!editableFences.has(id))||new Set(raw.removed).size!==raw.removed.length||new Set(raw.placed.map(p=>p.id)).size!==raw.placed.length||raw.placed.some(p=>!/^custom-[0-9]+$/.test(p.id)||!Array.isArray(p.a)||!Array.isArray(p.b)||p.a.length!==2||p.b.length!==2||![...p.a,...p.b].every(Number.isFinite)||[p.a,p.b].some(v=>v[0]<minX+1||v[0]>maxX-1||v[1]<minZ+1||v[1]>maxZ-1)||Math.abs(Math.hypot(p.a[0]-p.b[0],p.a[1]-p.b[1])-1.8)>.65))throw Error('invalid build save');buildData=raw;
+ }}catch{buildError='Inventário de construção indisponível; save protegido.';}
+function eraseFence(id){const p=editableFences.get(id);if(!p)return false;for(const m of p.meshes){shadow.removeShadowCaster(m,false);m.dispose(false,false);}
+ groups['residence fence']=groups['residence fence'].filter(m=>!p.meshes.includes(m));
+ for(const list of [fenceColliders,residenceRails,bridgeFenceLinks]){const i=list.indexOf(p.collider);if(i>=0)list.splice(i,1);}
+ editableFences.delete(id);return true;}
+const groundPoint=(x,z)=>V(x,height(x,z),z);
+for(const id of buildData.removed)eraseFence(id);
+for(const p of buildData.placed)fencePiece(p.id,groundPoint(...p.a),groundPoint(...p.b),'custom');
+function saveBuild(next){if(buildError)return false;try{localStorage.setItem(BUILD_SAVE,JSON.stringify(next));buildData=next;return true;}catch{buildError='Falha ao salvar construção.';return false;}}
+const build={open:false,mode:'place',x:0,z:0,angle:0,selected:null,work:null};
+const buildStats={placed:0,removed:0,hammerStrokes:0};
+entity('construction preview');const ghostMat=mat('construction valid','#98c86f'),badMat=mat('construction invalid','#ce6a58');for(const m of [ghostMat,badMat]){m.alpha=.58;m.disableLighting=true;m.emissiveColor=m.diffuseColor.scale(.45);}
+const ghost=Array.from({length:4},(_,i)=>box('fence placement preview '+i,0,0,0,i<2?.20:1.8,i<2?1.22:.13,.13,ghostMat,0,false));for(const m of ghost){m.receiveShadows=false;m.setEnabled(false);}
+entity('construction tools');const hammerRoot=new Mesh('hammer grip',scene);hammerRoot.parent=avatar;
+const hammerShaft=box('hammer shaft',0,.22,0,.045,.44,.045,M.woodLight,0,false);hammerShaft.parent=hammerRoot;
+const hammerHead=box('hammer head',0,.46,0,.23,.10,.10,M.black,0,false);hammerHead.parent=hammerRoot;hammerRoot.setEnabled(false);
+function buildEnds(){
+ const dx=Math.cos(build.angle)*.90,dz=Math.sin(build.angle)*.90;
+ let a=groundPoint(build.x-dx,build.z-dz),b=groundPoint(build.x+dx,build.z+dz);
+ // Snap one endpoint to existing posts; retain exact length and angle.
+ let best=null,dd=.45;for(const p of editableFences.values())for(const e of [p.a,p.b])for(const [i,v] of [[0,a],[1,b]]){const d=Math.hypot(e.x-v.x,e.z-v.z);if(d<dd){best={e,i};dd=d;}}
+ if(best){if(best.i===0){a=best.e.clone();b=groundPoint(a.x+2*dx,a.z+2*dz);}else{b=best.e.clone();a=groundPoint(b.x-2*dx,b.z-2*dz);}}
+ return [a,b];
+}
+function canBuild(a,b){
+ if(Math.hypot(avatar.position.x-(a.x+b.x)/2,avatar.position.z-(a.z+b.z)/2)>5.5)return false;
+ if(Math.abs(a.y-b.y)>.70)return false;
+ for(let i=0;i<=18;i++){
+  const p=Vector3.Lerp(a,b,i/18);if(blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||inWheat(p.x,p.z)||roadClearance(pathRows,p.x,p.z)<.32||roadClearance(approachRows,p.x,p.z)<.32||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
+  for(const [u,v] of fenceColliders){if(segDist(p.x,p.z,u,v)<.22){const endpoint=[a,b].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30)&&[u,v].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30);if(!endpoint)return false;}}
+ }
+ return true;
+}
+function selectFence(){let best=null,d=.9;for(const p of editableFences.values()){const n=segDist(build.x,build.z,p.a,p.b);if(n<d){d=n;best=p;}}return best;}
+function refreshBuild(){
+ const panel=$('build-panel');panel.hidden=!build.open;for(const m of ghost)m.setEnabled(build.open);if(!build.open)return;
+ let [a,b]=buildEnds();const target=build.mode==='remove'?selectFence():null;build.selected=target?.id??null;
+ if(target){a=target.a;b=target.b;}
+ const ok=build.mode==='place'?buildData.stock>0&&canBuild(a,b):!!target&&segDist(avatar.position.x,avatar.position.z,a,b)<1.8;
+ const m=ok?ghostMat:badMat,center=a.add(b).scale(.5),yaw=Math.atan2(b.z-a.z,b.x-a.x),length=Math.hypot(b.x-a.x,b.z-a.z);
+ for(let i=0;i<4;i++){const g=ghost[i];g.material=m;if(i<2){const p=i===0?a:b;g.position.set(p.x,p.y+.61,p.z);g.scaling.set(1,1,1);}else{g.position.set(center.x,center.y+(i===2?.40:.89),center.z);g.rotation.y=-yaw;g.scaling.x=length/1.8;}}
+ $('build-stock').textContent='Cercas no inventário: '+buildData.stock;
+ $('build-hint').textContent=buildError||(build.work?'Retirando os pregos…':build.mode==='place'?(ok?'Posição livre · encaixe automático':'Posição bloqueada, distante ou sem peças'):(ok?'Peça selecionada · retirar com martelo':'Aproxime-se e selecione a cerca'));
+ $('build-confirm').textContent=build.mode==='place'?'Colocar':'Retirar';
+ $('build-confirm').disabled=!ok||!!buildError||!!build.work;
+ $('build-place').setAttribute('aria-pressed',String(build.mode==='place'));$('build-remove').setAttribute('aria-pressed',String(build.mode==='remove'));
+}
+function openBuild(){if(tillWork||entry.action||seating.phase!=='idle')return false;cancelInput();playerMenu.hidden=true;build.open=true;buildModeActive=true;build.mode='place';build.x=avatar.position.x+Math.cos(camera.alpha)*1.6;build.z=avatar.position.z+Math.sin(camera.alpha)*1.6;build.angle=0;refreshBuild();return true;}
+function closeBuild(){build.open=false;buildModeActive=false;build.work=null;hammerRoot.setEnabled(false);releaseHand();refreshBuild();}
+function nudgeBuild(x,z){const a=camera.alpha+Math.PI/2;build.x+=(x*Math.cos(a)-z*Math.sin(a))*.35;build.z+=(x*Math.sin(a)+z*Math.cos(a))*.35;refreshBuild();}
+function placeBuild(){const [a,b]=buildEnds();if(!build.open||build.mode!=='place'||buildData.stock<=0||buildData.placed.length>=250||!canBuild(a,b))return false;const next=JSON.parse(JSON.stringify(buildData)),id='custom-'+next.next++;next.stock--;next.placed.push({id,a:[a.x,a.z],b:[b.x,b.z]});if(!saveBuild(next))return false;fencePiece(id,a,b,'custom');buildStats.placed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
+function removeBuild(id){const p=editableFences.get(id);if(!p||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8||buildData.stock>=10000)return false;
+ const next=JSON.parse(JSON.stringify(buildData));if(p.kind==='custom')next.placed=next.placed.filter(v=>v.id!==id);else next.removed.push(id);next.stock++;if(!saveBuild(next))return false;eraseFence(id);buildStats.removed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
+function confirmBuild(){if(build.mode==='place')return placeBuild();const p=selectFence();if(!p||build.work||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8)return false;build.work={id:p.id,elapsed:0,stroke:-1};hammerRoot.setEnabled(true);refreshBuild();return true;}
+function tickBuild(dt,moving=false){
+ if(!build.open)return;
+ if(build.work){const p=editableFences.get(build.work.id);if(moving||!p||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8){build.work=null;hammerRoot.setEnabled(false);releaseHand();}
+ else{const w=build.work;w.elapsed+=dt;const target=p.a.add(p.b).scale(.5),dx=target.x-avatar.position.x,dz=target.z-avatar.position.z;avatar.rotation.y=Math.atan2(dx,dz);hammerRoot.position.set(.29,.98,.26);hammerRoot.rotation.x=-.7+Math.sin(w.elapsed*19)*.55;avatar.computeWorldMatrix(true);handPose(Vector3.TransformCoordinates(hammerRoot.position,avatar.getWorldMatrix()),1);const stroke=Math.floor(w.elapsed*3);if(stroke!==w.stroke){w.stroke=stroke;buildStats.hammerStrokes++;}if(w.elapsed>=1.05){removeBuild(w.id);build.work=null;hammerRoot.setEnabled(false);releaseHand();}}
+ }
+ refreshBuild();
+}
+$('build-open').onclick=openBuild;$('build-close').onclick=closeBuild;
+$('build-place').onclick=()=>{build.mode='place';refreshBuild();};$('build-remove').onclick=()=>{build.mode='remove';refreshBuild();};
+$('build-rotate').onclick=()=>{build.angle=(build.angle+Math.PI/12)%(2*Math.PI);refreshBuild();};
+$('build-confirm').onclick=confirmBuild;
+for(const [id,x,z] of [['build-up',0,1],['build-down',0,-1],['build-left',-1,0],['build-right',1,0]])$(id).onclick=()=>nudgeBuild(x,z);
 const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
 petBodyBlocked=petSystem.bodyBlocked;
 // Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
 for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=8;
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork);refreshFarmCenter();
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||build.open))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);tickBuild(dt,Math.hypot(input.x,input.z)>.03);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork&&!build.open);refreshFarmCenter();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x/3),Math.round(camera.target.z/3),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/(entry.blend>.02?20:30)){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
@@ -1820,7 +1927,7 @@ if(waterMotion.length){
 const animated=new Set(flowBatch?[flowBatch]:[]);
 const casters=new Set(shadow.getShadowMap().renderList||[]);
 for(const [id,parts] of Object.entries(groups)){
- if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','chimney smoke','world precipitation','dog','cat','pet bowls','pet toys','hoe tool'].includes(id))continue;
+ if(['terrain','grass details','farm visitor','porch cultivated flowers','run dust','seated articulated legs','wheat dynamic cultivation','residence fence','hoe soil effects','construction preview','construction tools','chimney smoke','world precipitation','dog','cat','pet bowls','pet toys','hoe tool'].includes(id))continue;
  const buckets=new Map(),kept=[];
  for(const m of parts){
   if(animated.has(m)||m.parent||!m.material||m.getTotalVertices()===0||m.hasThinInstances){kept.push(m);continue}
@@ -1843,4 +1950,4 @@ batching.after=scene.meshes.length;
 // Assign interior emitters to interior surfaces, not the outside façade/roof.
 for(const {id,light:l} of nightLights){if(id==='warm interior'||id==='warm loft')l.includedOnlyMeshes=[...(groups.house||[]),...(groups['farm visitor']||[]),...(groups.dog||[]),...(groups.cat||[])];}
 
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});

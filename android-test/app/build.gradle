@@ -8,8 +8,8 @@ android {
         applicationId 'br.com.colheitavitural.html5.qa'
         minSdk 24
         targetSdk 35
-        versionCode 141
-        versionName '0.1.41'
+        versionCode 142
+        versionName '0.1.42'
     }
     buildTypes { debug { minifyEnabled false } }
     compileOptions {
