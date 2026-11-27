@@ -1,6 +1,7 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer,Frustum} from '@babylonjs/core';
 import layout from '../layout.json';
 import {SKILLS,ACTIVE_SKILLS,EVENTS,LAND,PERKS,freshProgress,validProgress,rank,threshold,title,points,reputationTitle,hasPerk,offers,accept,record,claim,unlock,buyLand,achievements} from './progression.js';
+import {freshHusbandry,validHusbandry,settleHusbandry,husbandryAction,SPECIES,PRODUCTS,MAX_ANIMALS,MAX_SUPPLY,FEED_PRICE} from './husbandry.js';
 import {freshFishery,validFishery,fishingReady,landFish,sellFish,FISH_PRICE,fishingWindow} from './fishing.js';
 import {freshNature,validNature,natureStage,natureAction,RESOURCE_LABELS,RESOURCE_PRICES,resourceTrade,transferResources} from './nature.js';
 import {DEFAULT_APPEARANCE,PALETTES,validAppearance,withAppearance} from './appearance.js';
@@ -16,7 +17,7 @@ import {PRICES,SUPPLIES,INITIAL_COINS,validBalance,commitTrade,quoteTrade,quoteS
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
 const $=id=>document.getElementById(id),canvas=$('view'),inventoryDialog=$('inventory-dialog'),progressDialog=$('progress-dialog'),ruralDialog=$('rural-dialog');
-let regionalOpen=false;
+let regionalOpen=false,livestockPen=null;const livestockAgents=new Map(),livestockRails=[];
 const engine=new Engine(canvas,true,{preserveDrawingBuffer:true,stencil:true,adaptToDeviceRatio:false});
 // Render in physical pixels rather than downscaling the CSS viewport on high-DPR phones.
 const qualityProfiles=Object.freeze({economico:540,equilibrado:720,alto:1080});
@@ -916,7 +917,7 @@ const WHEAT_SAVE='cv.wheat.v1',LEGACY_WHEAT_GROW=90000;
 const wheatDuration=p=>Number.isFinite(p?.durationMs)&&p.durationMs>0?p.durationMs:LEGACY_WHEAT_GROW;
 function wheatSchedule(now=Date.now(),crop='wheat'){return cropSchedule(crop,calendarAt(worldElapsed(now)).month);}
 updateWorldClock(Date.now(),true);
-const freshWheat=()=>({schema:1,coins:INITIAL_COINS,progress:freshProgress(),appearance:{...DEFAULT_APPEARANCE},nature:freshNature(),fishery:freshFishery(),warehouse:{},seeds:24,grain:0,plots:{},stocks:Object.fromEntries(Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat').map(id=>[id,{seeds:['corn','rice','strawberry'].includes(id)?12:0,grain:0}])),compost:24,treatments:24,quality:{}});
+const freshWheat=()=>({schema:1,coins:INITIAL_COINS,progress:freshProgress(),appearance:{...DEFAULT_APPEARANCE},nature:freshNature(),fishery:freshFishery(),husbandry:freshHusbandry(),warehouse:{},seeds:24,grain:0,plots:{},stocks:Object.fromEntries(Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat').map(id=>[id,{seeds:['corn','rice','strawberry'].includes(id)?12:0,grain:0}])),compost:24,treatments:24,quality:{}});
 let wheatState=freshWheat(),wheatSaveError='',wheatSaveLocked=false;
 try{
  const raw=localStorage.getItem(WHEAT_SAVE);
@@ -928,6 +929,7 @@ try{
  if(v.appearance!==undefined&&!validAppearance(v.appearance))throw Error('invalid appearance');
  if(v.nature!==undefined&&!validNature(v.nature))throw Error('invalid natural resources');
  if(v.fishery!==undefined&&!validFishery(v.fishery))throw Error('invalid fishing');
+ if(v.husbandry!==undefined&&!validHusbandry(v.husbandry))throw Error('invalid livestock');
  if(v.coins!==undefined&&!validBalance(v.coins))throw Error('invalid economy balance');
  const defaults=freshWheat();for(const id of Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat')){const stock=v.stocks?.[id];if(stock&&(!Number.isSafeInteger(stock.seeds)||stock.seeds<0||!Number.isSafeInteger(stock.grain)||stock.grain<0))throw Error('invalid stock');}
  for(const k of ['compost','treatments'])if(v[k]!==undefined&&(!Number.isSafeInteger(v[k])||v[k]<0))throw Error('invalid farm resources');
@@ -1592,6 +1594,7 @@ function blocked(x,z,interacting=false,from=null,ignoreFences=false){
  if(!bridge&&check((a,b)=>{const n=nearRiver(a,b);return n.dist-n.w*.54-.12;}))return true;
  if(!bridge&&check((a,b)=>eastWaterAt(a,b).edge-.15))return true;
  if(rockBlocked(x,z,from))return true;
+ if(livestockRails.some(([a,b])=>check((u,v)=>segDist(u,v,a,b)-.24)))return true;
  if(trunkColliders.some(t=>check((a,b)=>Math.hypot(a-t.x,b-t.z)-t.r-.18)))return true;
  if(!ignoreFences&&!bridge&&fenceColliders.some(([a,b])=>check((u,v)=>segDist(u,v,a,b)-.24)))return true;
  if(homeBlocked(x,z,interacting))return true;
@@ -1857,13 +1860,14 @@ function terrainMotionAllowed(x0,z0,x1,z1,y0,y1){
  return true;
 }
 let petBodyBlocked=()=>false;
-function playerBlocked(x,z,from=null){return blocked(x,z,false,from)||petBodyBlocked(x,z,from);}
+function livestockBodyBlocked(x,z,from=null){return [...livestockAgents.values()].some(a=>{const p=a.root.position,r=a.radius+.20;return obstacleEntered(Math.hypot(x-p.x,z-p.z)-r,from?Math.hypot(from.x-p.x,from.z-p.z)-r:null);});}
+function playerBlocked(x,z,from=null){return blocked(x,z,false,from)||petBodyBlocked(x,z,from)||livestockBodyBlocked(x,z,from);}
 function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  let floor=surfaceHeight(oldX,oldZ);
  const attempt=(x,z)=>{
-  const from={x:avatar.position.x,z:avatar.position.z};if(blocked(x,z,interacting,from)||petBodyBlocked(x,z,from))return false;
+  const from={x:avatar.position.x,z:avatar.position.z};if(blocked(x,z,interacting,from)||petBodyBlocked(x,z,from)||livestockBodyBlocked(x,z,from))return false;
   const next=surfaceHeight(x,z);if(!terrainMotionAllowed(avatar.position.x,avatar.position.z,x,z,floor,next))return false;
   avatar.position.x=x;avatar.position.z=z;floor=next;return true;
  };
@@ -2145,7 +2149,7 @@ function buildEnds(){
 function canBuild(a,b){
  if(Math.abs(a.y-b.y)>.70)return false;
  for(let i=0;i<=18;i++){
-  const p=Vector3.Lerp(a,b,i/18);if(!landBuildAllowed(p.x,p.z)||blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||petBodyBlocked(p.x,p.z)||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
+  const p=Vector3.Lerp(a,b,i/18);if(livestockReserved(p.x,p.z)||!landBuildAllowed(p.x,p.z)||blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||petBodyBlocked(p.x,p.z)||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
   for(const [u,v] of fenceColliders){if(segDist(p.x,p.z,u,v)<.22){const endpoint=[a,b].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30)&&[u,v].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30);if(!endpoint)return false;}}
  }
  return true;
@@ -2366,7 +2370,7 @@ function createWarehouseVisual(f){
 function stationNearby(f){if(!f)return false;const p=localOffset(f.x,f.z,f.yaw||0,avatar.position.x,avatar.position.z);return Math.hypot(Math.max(0,Math.abs(p.x)-f.hx),Math.max(0,Math.abs(p.z)-f.hz))<1.0&&Math.abs(avatar.position.y-f.y)<.8;}
 function warehouseCandidate(){return {x:build.x,z:build.z,yaw:((build.angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2)};}
 function warehouseStand(p){const {hz}=WAREHOUSE_SIZE;const front=worldOffset(p.x,p.z,p.yaw,0,-hz-.65);return V(front.x,surfaceHeight(front.x,front.z),front.z);}
-function canPlaceWarehouse(p,restore=false){const clear=(x,z)=>!blocked(x,z)&&!onBridge(x,z)&&!sectorAt(x,z)&&landBuildAllowed(x,z)&&!petBodyBlocked(x,z)&&(restore||Math.hypot(x-avatar.position.x,z-avatar.position.z)>.48);if(!placementClear(p,{minX,maxX,minZ,maxZ},clear,height))return false;const stand=warehouseStand(p);return !blocked(stand.x,stand.z)&&!petBodyBlocked(stand.x,stand.z)&&Math.abs(stand.y-height(p.x,p.z))<.45;}
+function canPlaceWarehouse(p,restore=false){const clear=(x,z)=>!livestockReserved(x,z)&&!blocked(x,z)&&!onBridge(x,z)&&!sectorAt(x,z)&&landBuildAllowed(x,z)&&!petBodyBlocked(x,z)&&(restore||Math.hypot(x-avatar.position.x,z-avatar.position.z)>.48);if(!placementClear(p,{minX,maxX,minZ,maxZ},clear,height))return false;const stand=warehouseStand(p);return !blocked(stand.x,stand.z)&&!petBodyBlocked(stand.x,stand.z)&&Math.abs(stand.y-height(p.x,p.z))<.45;}
 function activateWarehouse(p){if(warehouseStation)return false;const f={id:'farm-warehouse',...p,y:height(p.x,p.z),...WAREHOUSE_SIZE,stand:warehouseStand(p)};createWarehouseVisual(f);warehouseStation=f;worldFixtures.push(f);farmStations.push(f);return true;}
 function placeWarehouse(){const p=warehouseCandidate();if(!build.open||build.kind!=='warehouse'||buildData.warehouse||!canPlaceWarehouse(p))return false;const next={...buildData,warehouse:p};if(!saveBuild(next))return false;activateWarehouse(p);progressEvent('build',{key:'warehouse'});shadowMap.resetRefreshCounter();farmAudio.action('hammer');closeBuild();drawMinimap(0,true);return true;}
 function restoreWarehouse(){if(buildData.warehouse&&!buildError){if(canPlaceWarehouse(buildData.warehouse,true))activateWarehouse(buildData.warehouse);else buildError='Local do armazém salvo em conflito; dados preservados.';}}
@@ -2554,6 +2558,7 @@ function applyTrade(id,action,quantity){
  if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);farmAudio.action('trade');progressNotice(oldRank);}
  return q;
 }
+function renderAnimalMarket(grid){const card=document.createElement('article');card.className='market-card';card.dataset.animalMarket='true';const h=document.createElement('strong');h.textContent='Produtos da criação';card.append(h);for(const [id,p] of Object.entries(PRODUCTS)){const line=document.createElement('small');line.textContent=p.icon+' '+p.name+' · '+wheatState.husbandry.products[id];const b=document.createElement('button');b.type='button';b.textContent='Vender · '+p.price*tradeQuantity+' 🪙';b.disabled=wheatSaveLocked||!stationNearby(marketStation)||wheatState.husbandry.products[id]<tradeQuantity;b.onclick=()=>{if(!inventoryDialog.open||inventoryCategory!=='market'||!stationNearby(marketStation)||wheatSaveLocked)return;const ok=progressCommit(next=>{const q=husbandryAction(next,'sell',id,Math.floor(worldElapsed()),tradeQuantity);if(!q)return false;Object.assign(next,q.next);record(next.progress,'sell',{units:tradeQuantity,value:p.price*tradeQuantity});return true;});if(ok)farmAudio.action('trade');$('inventory-message').textContent=ok?'Venda salva.':'Não foi possível vender.';renderInventory(true);};card.append(line,b);}grid.append(card);}
 function renderFishMarket(grid){const card=document.createElement('article');card.className='market-card';card.dataset.fishMarket='true';const name=document.createElement('strong');name.textContent='Peixe de rio';const count=document.createElement('small');count.textContent='Mochila: '+wheatState.fishery.fish;const b=document.createElement('button');b.type='button';b.textContent='Vender · '+FISH_PRICE*tradeQuantity+' 🪙';b.disabled=wheatSaveLocked||!stationNearby(marketStation)||wheatState.fishery.fish<tradeQuantity;b.onclick=()=>{if(!inventoryDialog.open||inventoryCategory!=='market'||!stationNearby(marketStation)||wheatSaveLocked)return;const q=sellFish(wheatState,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(q.ok){wheatState=q.next;farmAudio.action('trade');}$('inventory-message').textContent=q.ok?'Venda salva.':q.error;renderInventory(true);};card.append(name,count,b);grid.append(card);}
 function renderResourceStock(grid,category){
  const station=category==='market'?marketStation:warehouseStation,near=stationNearby(station),card=document.createElement('article');card.className='market-card';card.dataset.resources=category;
@@ -2569,7 +2574,7 @@ function renderResourceStock(grid,category){
  }grid.append(card);
 }
 function renderMarket(){
- const grid=$('inventory-items');grid.replaceChildren();renderResourceStock(grid,'market');renderFishMarket(grid);
+ const grid=$('inventory-items');grid.replaceChildren();renderResourceStock(grid,'market');renderFishMarket(grid);renderAnimalMarket(grid);
  for(const [id,supply] of Object.entries(SUPPLIES)){const card=document.createElement('article');card.className='market-card';card.dataset.supply=id;const name=document.createElement('strong');name.textContent=supply.name;const balance=document.createElement('small');balance.textContent=wheatSaveLocked?'Estoque indisponível':'Mochila: '+wheatState[id];const b=document.createElement('button');b.type='button';b.dataset.trade='buy';b.textContent='Comprar · '+supply.buy*tradeQuantity+' 🪙';b.disabled=wheatSaveLocked||!quoteSupply(wheatState,id,tradeQuantity).ok;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='market')return;const res=commitSupply(wheatState,id,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(res.ok){wheatState=res.next;farmCache.clear();updateWheat(Date.now(),true);farmAudio.action('trade');}$('inventory-message').textContent=res.ok?'Compra realizada: '+supply.name:res.error;renderInventory(true);};card.append(name,balance,b);grid.append(card);}
  for(const [id,price] of Object.entries(PRICES)){
   const stock=stockFor(wheatState,id),card=document.createElement('article');card.className='market-card';card.dataset.market=id;
@@ -2626,7 +2631,7 @@ $('market-quantity').onchange=()=>{tradeQuantity=Number($('market-quantity').val
 function landRect(a){const [u,v,u2,v2]=a.rect;return {x1:X(u),x2:X(u2),z1:Z(v2),z2:Z(v)};}
 function landAt(x,z){return LAND.find(a=>{const r=landRect(a);return x>=r.x1&&x<=r.x2&&z>=r.z1&&z<=r.z2;});}
 function landBuildAllowed(x,z){const a=landAt(x,z);return !a||wheatState.progress.land.includes(a.id);}
-const cycleNames={daily:'Diárias',weekly:'Semanais',monthly:'Mensais'},skillIcons={cultivo:'🌱',manejo:'🐾',floresta:'🌳',pesca:'🎣',construcao:'🔨',comercio:'🪙',mineracao:'⛏'},eventIcons={till:'⛏',plant:'🌱',water:'💧',harvest:'🌾',weed:'🌿',build:'🔨',paint:'🎨',care:'🐾',sell:'🪙'};
+const cycleNames={daily:'Diárias',weekly:'Semanais',monthly:'Mensais'},skillIcons={cultivo:'🌱',manejo:'🐾',floresta:'🌳',pesca:'🎣',construcao:'🔨',comercio:'🪙',mineracao:'⛏'},eventIcons={till:'⛏',plant:'🌱',water:'💧',harvest:'🌾',weed:'🌿',build:'🔨',paint:'🎨',care:'🐾',sell:'🪙',chop:'🪓',mine:'⛏',fish:'🎣',animalcollect:'🐄'};
 let progressTab='summary',trackerKey='',missionCycle='daily';
 const profileName=()=>String(wheatState.progress.profileName||'Meu personagem').slice(0,32),medal=l=>l>=50?'👑':l>=30?'🏆':l>=20?'🏅':l>=10?'🌻':l>=5?'🌾':'🌱';
 function refreshProfile(){const p=wheatState.progress,l=rank(p.xp),xp=p.xp-threshold(l),max=threshold(l+1)-threshold(l);$('profile-name').textContent=profileName();$('profile-rank').textContent='Nv. '+l+' · '+title(l);$('profile-medal').textContent=medal(l);$('profile-fill').style.width=Math.min(100,100*xp/max)+'%';$('profile-xp-text').textContent=xp+' / '+max+' XP';}
@@ -2704,13 +2709,13 @@ const wardrobeFixture=roomFixture('wardrobe','Guarda-roupa','👕',-6.1,.0,.62,.
 roomFixture('kitchen','Cozinha','🍳',5.55,2.95,1.35,.55,B=>{B('counter',0,.45,0,2.65,.90,1.06,M.wood);B('stone worktop',0,.95,0,2.75,.14,1.13,M.stoneLight);B('stove',-.78,1.06,0,.83,.08,.78,M.black);for(const d of [-1,1])B('burner',-.78+d*.18,1.12,0,.20,.035,.20,M.stone);B('sink',.73,1.05,0,.80,.08,.62,M.stone);});
 roomFixture('sofa','Sofá','🪑',5.5,-.6,1.05,.55,B=>{B('base',0,.27,0,2.1,.40,1.05,M.woodDark);B('seat',0,.56,-.05,1.8,.24,.86,M.leaf);B('back',0,.85,.44,2.1,.72,.22,M.leaf);for(const d of [-1,1])B('armrest',d*.94,.72,0,.22,.38,.98,M.leaf);});
 roomFixture('bath','Banheiro','💧',2.8,3.2,.64,.65,B=>{B('vanity',0,.45,0,1.16,.90,1.13,M.woodLight);B('basin',0,.96,0,.93,.16,.73,M.white);B('tap',0,1.14,.27,.10,.34,.10,M.stone);});
-function ruralNearby(){return [...ruralFixtures.filter(f=>['bed','wardrobe'].includes(f.id)),...natureNodes,...fishingSpots].filter(f=>stationNearby(f)).sort((a,b)=>Math.hypot(a.x-avatar.position.x,a.z-avatar.position.z)-Math.hypot(b.x-avatar.position.x,b.z-avatar.position.z))[0]||null;}
+function ruralNearby(){return [...ruralFixtures.filter(f=>['bed','wardrobe'].includes(f.id)),...natureNodes,...fishingSpots,...(livestockPen?[livestockPen.station]:[])].filter(f=>stationNearby(f)).sort((a,b)=>Math.hypot(a.x-avatar.position.x,a.z-avatar.position.z)-Math.hypot(b.x-avatar.position.x,b.z-avatar.position.z))[0]||null;}
 function sleepAtBed(minutes){if(![30,60,360].includes(minutes)||!stationNearby(bedFixture)||clockLocked)return false;const now=Date.now(),elapsed=worldElapsed(now)+minutes*REAL_MS_PER_GAME_MINUTE,next={...worldClock,anchor:now,offset:elapsed,floor:elapsed};try{localStorage.setItem(WORLD_KEY,JSON.stringify(next));}catch{return false;}worldClock=next;clockLastSave=now;farmCache.clear();updateWorldClock(now,true);updateWheat(now,true);updateGarden();return true;}
 function ruralCard(root,label,detail,fn,disabled=false){const c=progressEl('article','','rural-action-card');c.append(progressEl('strong',label),progressEl('small',detail),progressButton('Confirmar',fn,disabled));root.append(c);return c;}
 function changeAppearance(part,id){if(!ruralDialog.open||ruralNearby()?.id!=='wardrobe'||wheatSaveLocked)return false;const next=withAppearance(wheatState.appearance,part,id);if(!next)return false;if(!progressCommit(state=>{state.appearance=next;return true;}))return false;applyAvatarAppearance(next);return true;}
 const appearanceLabels={skin:'Tom de pele',shirt:'Camisa',trousers:'Calça',hat:'Chapéu'};
 function renderWardrobe(root){const labels={original:'Original',clara:'Claro',media:'Médio',morena:'Moreno',escura:'Escuro',verde:'Verde',azul:'Azul',vinho:'Vinho',creme:'Creme',jeans:'Jeans',oliva:'Oliva',carvao:'Carvão',marrom:'Marrom',sem:'Sem chapéu'};for(const [part,options] of Object.entries(PALETTES)){const card=progressEl('article','','rural-action-card');card.append(progressEl('strong',appearanceLabels[part]));const row=document.createElement('div');row.style.display='flex';row.style.flexWrap='wrap';row.style.gap='6px';for(const [id,color] of Object.entries(options)){const b=progressButton(labels[id],()=>{if(changeAppearance(part,id)){renderRural(wardrobeFixture);$('rural-status').textContent='Aparência salva.';}else $('rural-status').textContent='Não foi possível salvar a aparência.';},wheatSaveLocked);b.dataset.appearance=part+':'+id;b.setAttribute('aria-pressed',String(wheatState.appearance[part]===id));if(color){b.style.borderLeft='8px solid '+color;}if(wheatState.appearance[part]===id)b.style.outline='2px solid #c4db9b';row.append(b);}card.append(row);root.append(card);}root.append(progressEl('small','As alterações são aplicadas ao personagem atual e salvas neste mundo.'));}
-function renderRural(f){const root=$('rural-content');root.replaceChildren();$('rural-title').textContent=f.icon+' '+f.label;if(f.id==='bed'){for(const [minutes,label] of [[30,'30 minutos'],[60,'1 hora'],[360,'6 horas']])ruralCard(root,'🌙 '+label,'Avança o relógio rural e os cultivos.',()=>{if(sleepAtBed(minutes))ruralDialog.close();else $('rural-status').textContent='Não foi possível salvar o descanso.';});}else if(f.id==='wardrobe'){renderWardrobe(root);}else if(f.kind==='tree'||f.kind==='stone'){renderNature(f,root);}else if(f.kind==='fishing'){renderFishing(f,root);}}
+function renderRural(f){const root=$('rural-content');root.replaceChildren();$('rural-title').textContent=f.icon+' '+f.label;if(f.id==='bed'){for(const [minutes,label] of [[30,'30 minutos'],[60,'1 hora'],[360,'6 horas']])ruralCard(root,'🌙 '+label,'Avança o relógio rural e os cultivos.',()=>{if(sleepAtBed(minutes))ruralDialog.close();else $('rural-status').textContent='Não foi possível salvar o descanso.';});}else if(f.id==='wardrobe'){renderWardrobe(root);}else if(f.kind==='tree'||f.kind==='stone'){renderNature(f,root);}else if(f.kind==='fishing'){renderFishing(f,root);}else if(f.kind==='livestock'){renderLivestock(root);}}
 function openRural(){const f=ruralNearby();if(!f||titleMode||photoMode||regionalOpen||inventoryDialog.open||progressDialog.open||ruralDialog.open||build.open||tillWork||entry.action||gateWork||seating.phase!=='idle')return false;cancelInput();if(petSystem.interactionActive())petSystem.cancelInteraction();$('rural-status').textContent='';renderRural(f);ruralDialog.showModal();return true;}
 $('rural-open').onclick=openRural;$('rural-close').onclick=()=>ruralDialog.close();ruralDialog.addEventListener('close',cancelInput);
 restoreWarehouse();
@@ -2795,6 +2800,74 @@ function tickFishing(){
  if(phase==='missed'){stopFishing();renderRural(a.f);$('rural-status').textContent='O peixe escapou. Lance novamente.';}else{a.meshes[0].position.y=a.f.water.y-.05;renderRural(a.f);}
 }
 initFishing();
+function livestockReserved(x,z){return !!livestockPen&&Math.abs(x-livestockPen.x)<livestockPen.h+1.5&&Math.abs(z-livestockPen.z)<livestockPen.h+2;}
+function initLivestock(){
+ // A modest experimental paddock, not a barn or a reconstruction of the approved map.
+ const h=4.5;let spot=null;
+ outer:for(const v of [535,610,685,760,470,800])for(const u of [210,320,430,520,145]){
+  const x=X(u),z=Z(v),y=surfaceHeight(x,z);let free=true;
+  for(let a=-h-1.5;a<=h+1.5&&free;a+=1)for(let b=-h-1.5;b<=h+1.5;b+=1){const px=x+a,pz=z+b;if(blocked(px,pz)||sectorAt(px,pz)||roadMaskAt(px,pz)>.10||!landBuildAllowed(px,pz)||Math.abs(surfaceHeight(px,pz)-y)>.6||natureNodes.some(f=>Math.hypot(f.x-px,f.z-pz)<.85)||fishingSpots.some(f=>Math.hypot(f.x-px,f.z-pz)<.85)){free=false;break;}}
+  if(free){spot={x,z,y,h};break outer;}
+ }
+ if(!spot)return;livestockPen=spot;const {x,z,y}=spot;entity('livestock pasture');
+ const rail=(ax,az,bx,bz)=>{const a=V(x+ax,surfaceHeight(x+ax,z+az),z+az),b=V(x+bx,surfaceHeight(x+bx,z+bz),z+bz);livestockRails.push([a,b]);for(const height of [.36,.83])beam('pasture timber rail',a.add(V(0,height,0)),b.add(V(0,height,0)),.09,M.wood);for(const p of [a,b])box('pasture timber post',p.x,p.y+.58,p.z,.15,1.16,.15,M.woodDark);};
+ for(const edge of [-h,h])for(let i=-h;i<h-.1;i+=1.5){rail(edge,i,edge,Math.min(h,i+1.5));if(edge===h)rail(i,edge,Math.min(h,i+1.5),edge);}
+ for(const [a,b] of [[-h,-1.0],[1.0,h]])for(let i=a;i<b-.1;i+=1.5)rail(i,-h,Math.min(b,i+1.5),-h);
+ // Feed and water troughs, with independent physical footprints.
+ for(const [id,dx,dz,material] of [['feed',-2.9,2.9,M.woodLight],['water',2.9,2.9,M.water]]){const px=x+dx,pz=z+dz,py=surfaceHeight(px,pz);box('animal trough '+id,px,py+.20,pz,1.20,.37,.65,M.woodDark);box('animal trough basin '+id,px,py+.40,pz,1.07,.06,.52,material);worldFixtures.push({id:'livestock-trough-'+id,x:px,z:pz,y:py,hx:.60,hz:.33});}
+ const station={id:'livestock-station',kind:'livestock',label:'Criação',icon:'🐄',x:x+1.65,z:z-h-.7,y:surfaceHeight(x+1.65,z-h-.7),hx:.48,hz:.15};livestockPen.station=station;
+ box('livestock sign post',station.x,station.y+.65,station.z,.12,1.3,.12,M.woodDark);box('livestock sign board',station.x,station.y+1.26,station.z,.96,.34,.15,M.woodLight);stationSign(station,'CRIAÇÃO',1.26,.9);worldFixtures.push(station);syncLivestockModels();
+}
+function makeLivestockModel(a){
+ const root=new Mesh('livestock '+a.id,scene);entity('livestock animal '+a.id);
+ const species=a.species,bird=species==='chicken'||species==='duck',cow=species==='cow',sheep=species==='sheep',pig=species==='pig',size=bird?.55:cow?1.14:.82;
+ const coat=pig?M.pink2:cow?M.white:sheep?M.white:species==='duck'?M.white:M.woodLight;
+ const B=(n,x,y,z,rx,ry,rz,material=coat)=>{const part=sphere(n,x*size,y*size,z*size,rx*size,ry*size,rz*size,material);part.parent=root;return part;};
+ B('animal torso',0,bird?.48:.77,0,bird?.42:.48,bird?.34:.40,bird?.50:.74);
+ B('animal head',0,bird?.80:.94,bird?.36:.63,bird?.22:.32,bird?.24:.29,bird?.22:.32);
+ if(bird){B('beak',0,.78,.59,.13,.09,.16,M.yellow);B('left wing',-.30,.47,0,.16,.20,.32);B('right wing',.30,.47,0,.16,.20,.32);if(species==='chicken')B('comb',0,1.02,.34,.075,.12,.12,M.red);else B('duck tail',0,.54,-.46,.21,.17,.25);}
+ else{for(const side of [-1,1]){B('ear',side*.28,1.08,.61,.18,.10,.12);if(cow)B('horn',side*.23,1.23,.60,.08,.16,.07,M.stoneLight);}if(pig)B('snout',0,.88,.88,.23,.16,.14,M.pink);if(cow){B('dark flank',-.39,.80,-.09,.13,.29,.29,M.black);B('dark flank',.39,.73,.16,.13,.27,.24,M.black);}if(sheep)for(const [x,z] of [[-.25,-.30],[.25,-.30],[-.25,.25],[.25,.25]])B('wool tuft',x,.96,z,.30,.28,.36,M.white);}
+ for(const side of [-1,1])B('eye',side*(bird?.17:.26),bird?.85:1.01,bird?.46:.78,.04,.045,.045,M.black);
+ const legs=[];for(const side of [-1,1])for(const z of bird?[0]:[-.40,.40]){const leg=box('animal leg',side*(bird?.18:.28)*size,(bird?.20:.29)*size,z*size,.11*size,(bird?.36:.54)*size,.13*size,bird?M.yellow:M.woodDark);leg.parent=root;legs.push(leg);}
+ const {x,z,h}=livestockPen,angle=a.id*2.399,rad=1.2+(a.id%3)*.8;root.position=V(x+Math.cos(angle)*rad,0,z+Math.sin(angle)*rad);root.position.y=surfaceHeight(root.position.x,root.position.z);
+ return {root,legs,species,radius:bird?.28:cow?.57:.43,phase:a.id,angle,target:null,elapsed:0};
+}
+function syncLivestockModels(){
+ if(!livestockPen)return;
+ for(const a of wheatState.husbandry.animals){let model=livestockAgents.get(a.id);if(!model){model=makeLivestockModel(a);livestockAgents.set(a.id,model);}const scale=.65+.35*Math.min(1,a.age/SPECIES[a.species].adult);model.root.scaling.setAll(scale);}
+}
+let livestockClock=-Infinity;
+function settleLivestock(force=false){
+ const now=Math.floor(worldElapsed());if(!force&&now-livestockClock<30000)return;livestockClock=now;if(wheatSaveLocked||!wheatState.husbandry.animals.length)return;
+ const h=settleHusbandry(wheatState.husbandry,now);if(h&&h!==wheatState.husbandry&&progressCommit(next=>{next.husbandry=h;return true;}))syncLivestockModels();
+}
+function tickLivestock(){
+ if(!livestockPen)return;settleLivestock();const dt=Math.min(.05,Math.max(0,engine.getDeltaTime()/1000)),pen=livestockPen;
+ if(Math.hypot(avatar.position.x-pen.x,avatar.position.z-pen.z)>42)return;
+ for(const a of wheatState.husbandry.animals){const m=livestockAgents.get(a.id);if(!m)continue;const p=m.root.position;m.elapsed+=dt;
+ if(!m.target||m.elapsed>5||Math.hypot(m.target.x-p.x,m.target.z-p.z)<.35){m.elapsed=0;const angle=m.phase+=2.399,rad=1.1+(a.id%3)*.72;const hungry=a.condition<70;m.target={x:pen.x+(hungry?-1.7:Math.cos(angle)*rad),z:pen.z+(weatherVisual.night?1.2:Math.sin(angle)*rad)};}
+ const dx=m.target.x-p.x,dz=m.target.z-p.z,len=Math.hypot(dx,dz);let moving=false;
+ if(len>.25&&!weatherVisual.night){const speed=m.species==='chicken'||m.species==='duck'?.72:.48,step=Math.min(len,dt*speed),x=p.x+dx/len*step,z=p.z+dz/len*step;
+ if(Math.abs(x-pen.x)<pen.h-.65&&Math.abs(z-pen.z)<pen.h-.65&&!blocked(x,z)&&Math.hypot(x-avatar.position.x,z-avatar.position.z)>m.radius+.35&&![...livestockAgents.values()].some(o=>o!==m&&Math.hypot(o.root.position.x-x,o.root.position.z-z)<o.radius+m.radius)){p.set(x,surfaceHeight(x,z),z);m.root.rotation.y=Math.atan2(dx,dz);moving=true;}else m.target=null;}
+ for(let i=0;i<m.legs.length;i++)m.legs[i].rotation.x=moving?Math.sin(performance.now()*.009+i*Math.PI)*.3:0;
+ }
+}
+function interactLivestock(action,id){
+ if(!livestockPen||!ruralDialog.open||ruralNearby()!==livestockPen.station||wheatSaveLocked)return false;
+ const ok=progressCommit(next=>{const q=husbandryAction(next,action,id,Math.floor(worldElapsed()));if(!q)return false;Object.assign(next,q.next);if(q.event)record(next.progress,q.event);return true;});
+ if(ok){syncLivestockModels();farmAudio.action(action==='collect'?'harvest':action==='water'?'water':'trade');}return ok;
+}
+function renderLivestock(root){
+ settleLivestock(true);const h=wheatState.husbandry;
+ root.append(progressEl('p','Criação · '+h.animals.length+' / '+MAX_ANIMALS+' animais'));
+ root.append(progressEl('small','Ração: '+h.feed+' · Água: '+h.water+' · Consumo e produção a cada dia rural.'));
+ const act=(action,id,label,disabled=false)=>{const b=progressButton(label,()=>{const ok=interactLivestock(action,id);renderRural(livestockPen.station);$('rural-status').textContent=ok?'Ação salva.':'Ação indisponível.';},wheatSaveLocked||disabled);b.dataset.livestock=action+(id?':'+id:'');return b;};
+ const supply=progressEl('article','','rural-action-card');supply.append(act('feed',null,'Ração +10 · '+FEED_PRICE+' moedas',h.feed+10>MAX_SUPPLY||wheatState.coins<FEED_PRICE),act('water',null,'Abastecer água +10',h.water+10>MAX_SUPPLY));root.append(supply);
+ for(const [id,p] of Object.entries(SPECIES)){const card=progressEl('article','','rural-action-card');card.append(progressEl('strong',p.icon+' '+p.name),progressEl('small','Ração '+p.feed+' · água '+p.water+' por dia · '+p.adult+' dias para adulto'),act('buy',id,'Adquirir · '+p.price+' moedas',h.animals.length>=MAX_ANIMALS||wheatState.coins<p.price));root.append(card);}
+ for(const a of h.animals)root.append(progressEl('small',SPECIES[a.species].icon+' '+SPECIES[a.species].name+' #'+a.id+' · '+(a.age>=SPECIES[a.species].adult?'Adulto':'Jovem')+' · bem-estar '+a.condition+'%'));
+ root.append(progressEl('p','Produção disponível: '+Object.entries(PRODUCTS).map(([id,p])=>p.name+' '+h.pending[id]).join(' · ')),act('collect',null,'Recolher produção',!Object.values(h.pending).some(Boolean)));
+}
+initLivestock();
 ruralDialog.addEventListener('close',stopFishing);
-scene.onBeforeRenderObservable.add(()=>{if(!regionalOpen){syncNature();tickFishing();}});
-window.cvQA={scene,engine,fishingSpots,castFishing,reelFishing,get fishery(){return wheatState.fishery},natureNodes,interactNature,syncNature,get nature(){return wheatState.nature},changeAppearance,avatarAppearanceMaterials,get appearance(){return {...wheatState.appearance}},ruralFixtures,bedFixture,wardrobeFixture,ruralNearby,openRural,sleepAtBed,openWarehouseBuild,canPlaceWarehouse,placeWarehouse,missionStation,openProgress,openRegional,closeRegional,regionalQA,regionalCamera,get regionalOpen(){return regionalOpen},landAt,landBuildAllowed,get progression(){return wheatState.progress},titleBootQA,roadUnionQA,roadMaskAt,roadJoins,ranchRopes,nearbyBench,seatIcon,eastChannels,eastPolygons,eastWaterAt,terrainPatches,expansionQA,expansionVisibility,syncExpansionVisibility,extraFarmRails,nearbyFarmRails,insidePolygon,farmSectors,allFarmPlots,allFarmBeds,sectorAt,nearbyFarmSign,expansionRoads,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{if(titleReady)return;titleReady=true;titleBootQA.readyTransitions++;$('loading').remove();refreshTitle();$('title-continue').disabled=false;$('title-options').disabled=false;$('title-boot-status').hidden=true;window.cvQA.ready=true;});
+scene.onBeforeRenderObservable.add(()=>{if(!regionalOpen){syncNature();tickFishing();tickLivestock();}});
+window.cvQA={scene,engine,get livestockPen(){return livestockPen},livestockAgents,interactLivestock,settleLivestock,get husbandry(){return wheatState.husbandry},fishingSpots,castFishing,reelFishing,get fishery(){return wheatState.fishery},natureNodes,interactNature,syncNature,get nature(){return wheatState.nature},changeAppearance,avatarAppearanceMaterials,get appearance(){return {...wheatState.appearance}},ruralFixtures,bedFixture,wardrobeFixture,ruralNearby,openRural,sleepAtBed,openWarehouseBuild,canPlaceWarehouse,placeWarehouse,missionStation,openProgress,openRegional,closeRegional,regionalQA,regionalCamera,get regionalOpen(){return regionalOpen},landAt,landBuildAllowed,get progression(){return wheatState.progress},titleBootQA,roadUnionQA,roadMaskAt,roadJoins,ranchRopes,nearbyBench,seatIcon,eastChannels,eastPolygons,eastWaterAt,terrainPatches,expansionQA,expansionVisibility,syncExpansionVisibility,extraFarmRails,nearbyFarmRails,insidePolygon,farmSectors,allFarmPlots,allFarmBeds,sectorAt,nearbyFarmSign,expansionRoads,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{if(titleReady)return;titleReady=true;titleBootQA.readyTransitions++;$('loading').remove();refreshTitle();$('title-continue').disabled=false;$('title-options').disabled=false;$('title-boot-status').hidden=true;window.cvQA.ready=true;});

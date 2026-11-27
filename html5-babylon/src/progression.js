@@ -1,7 +1,7 @@
 // Progression is part of the authoritative agricultural save, not a parallel currency ledger.
 export const SKILLS=Object.freeze({cultivo:'Cultivo',manejo:'Manejo animal',floresta:'Floresta',pesca:'Pesca',construcao:'Construção',comercio:'Comércio',mineracao:'Mineração'});
 export const ACTIVE_SKILLS=['cultivo','manejo','construcao','comercio','floresta','mineracao','pesca'];
-export const EVENTS={till:['cultivo',3,'Preparar canteiros'],plant:['cultivo',4,'Plantar sementes'],water:['cultivo',2,'Regar plantações'],harvest:['cultivo',12,'Colher produtos'],weed:['cultivo',4,'Capinar canteiros'],build:['construcao',8,'Construir cercas'],paint:['construcao',3,'Pintar cercas'],care:['manejo',7,'Cuidar dos pets'],sell:['comercio',4,'Vender produtos'],chop:['floresta',12,'Cortar árvores'],mine:['mineracao',12,'Extrair pedra'],fish:['pesca',10,'Pescar']};
+export const EVENTS={till:['cultivo',3,'Preparar canteiros'],plant:['cultivo',4,'Plantar sementes'],water:['cultivo',2,'Regar plantações'],harvest:['cultivo',12,'Colher produtos'],weed:['cultivo',4,'Capinar canteiros'],build:['construcao',8,'Construir cercas'],paint:['construcao',3,'Pintar cercas'],care:['manejo',7,'Cuidar dos pets'],sell:['comercio',4,'Vender produtos'],chop:['floresta',12,'Cortar árvores'],mine:['mineracao',12,'Extrair pedra'],fish:['pesca',10,'Pescar'],animalcollect:['manejo',10,'Recolher produção animal']};
 export const LAND=[
 {id:'pomar',name:'Pomar do Leste',price:300,level:2,rect:[100,920,315,1030]},
 {id:'pastagem',name:'Pastagem Alta',price:650,level:3,rect:[355,920,570,1030]},
