@@ -179,7 +179,7 @@ function eastWaterAt(x,z){
  }
  const value={edge,y,id};eastCache={x,z,value};return value;
 }
-function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const east=eastWaterAt(x,z);if(x>X(896)&&east.edge<edge&&east.edge<2){a={y:east.y};edge=east.edge;}const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const flat=2.65+west+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
+function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const east=eastWaterAt(x,z);if(x>X(896)&&east.edge<edge&&east.edge<2){a={y:east.y};edge=east.edge;}const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const ramp=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);},outside=ramp((-z-37)/20)*ramp((14-x)/24),hill=.62*outside*(.5+.5*Math.sin(x*.075-z*.047))*(.5+.5*Math.cos(z*.09+x*.031));const flat=2.65+west+hill+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
 entity('terrain');const minX=X(20),oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(1370),maxZ=Z(-20),nx=284,nz=281,pos=[],idx=[],colors=[],uvs=[];
 const axis=(a,b,n)=>Array.from({length:n+1},(_,i)=>a+(b-a)*i/n);
 const terrainXs=[...axis(minX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,Z(950),64),...axis(Z(950),oldMinZ,96).slice(1),...axis(oldMinZ,maxZ,121).slice(1)];
@@ -209,7 +209,7 @@ const terrainSkirtStats={rings:0,vertices:0,margin:64,maxJoinGap:0};
  for(let i=nx-1;i>=0;i--)boundary.push(nz*(nx+1)+i);
  for(let j=nz-1;j>0;j--)boundary.push(j*(nx+1));
  const pv=[],pi=[],pc=[],pu=[],n=boundary.length,cx=(minX+maxX)/2,cz=(minZ+maxZ)/2,hx=(maxX-minX)/2,hz=(maxZ-minZ)/2;
- const margins=[0,1,3,6,11,18,28,42,64];
+ const margins=[0,1,2,3,5,7,10,14,19,25,32,40,48,56,64];
  for(let ring=0;ring<margins.length;ring++){
   const m=margins[ring];
   for(const k of boundary){
