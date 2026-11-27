@@ -419,7 +419,7 @@ for(const f of expansionRoads)for(const p of [f.curve[0],f.curve.at(-1)]){
 roadCtx.strokeStyle='#ffffff';for(const f of [...expansionRoads,...roadJoins])paintRoad(f.curve,f.width);
 paintRoad(approachCurve,3.0);
 // Small direct links from each gate to the nearest existing road; no new grid.
-for(const f of layout.fields){const p=P(...f.gate.at);let best=null,dist=7;for(const road of expansionRoads)for(const q of road.curve){const d=Math.hypot(p.x-q.x,p.z-q.z);if(d<dist){best=q;dist=d;}}if(best){const link={curve:[p,best],width:Math.min(2.6,f.gate.width/8)};roadJoins.push(link);paintRoad(link.curve,link.width);}}
+for(const f of layout.fields){const p=P(...f.gate.at);let best=null,dist=7;for(const road of expansionRoads)for(const q of road.curve){const d=Math.hypot(p.x-q.x,p.z-q.z);if(d<dist){best=q;dist=d;}}if(best){const link={curve:[p,best],width:Math.min(2.2,f.gate.width/8)};roadJoins.push(link);paintRoad(link.curve,link.width);}}
 // Water is an exclusion mask, not a second surface covering the roads.
 roadCtx.globalCompositeOperation='destination-out';for(let i=1;i<channel.length;i++)paintRoad([channel[i-1].p,channel[i].p],Math.max(channel[i-1].w,channel[i].w)*1.12+.35);
 for(const {curve} of eastChannels)for(let i=1;i<curve.length;i++)paintRoad([curve[i-1].p,curve[i].p],Math.max(curve[i-1].w,curve[i].w)*1.12+.35);
