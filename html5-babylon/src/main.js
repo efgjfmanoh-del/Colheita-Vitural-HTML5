@@ -2396,14 +2396,14 @@ const mapCanvas=$('minimap-canvas'),mapCtx=mapCanvas.getContext('2d'),mapBase=do
 const mapXY=(x,z)=>[(x-minX)*mapScale,(maxZ-z)*mapScale];
 function mapLine(points,color,width,close=false){if(points.length<2)return;baseCtx.beginPath();for(const [i,p] of points.entries()){const q=mapXY(p.x,p.z);i?baseCtx.lineTo(...q):baseCtx.moveTo(...q);}if(close)baseCtx.closePath();baseCtx.strokeStyle=color;baseCtx.lineWidth=width*mapScale;baseCtx.lineJoin='round';baseCtx.lineCap='round';baseCtx.stroke();}
 function mapPoly(points,color){baseCtx.beginPath();points.forEach((p,i)=>{const q=mapXY(p.x,p.z);i?baseCtx.lineTo(...q):baseCtx.moveTo(...q);});baseCtx.closePath();baseCtx.fillStyle=color;baseCtx.fill();}
-baseCtx.fillStyle='#c9bda1';baseCtx.fillRect(0,0,512,512);
-for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z+seg.dz)],'#668eaa',seg.w);}
-for(const f of eastPolygons)mapPoly(f.points,'#668eaa');for(const {curve} of eastChannels)for(let i=1;i<curve.length;i++)mapLine([curve[i-1].p,curve[i].p],'#668eaa',(curve[i-1].w+curve[i].w)/2);
+baseCtx.fillStyle='#435d37';baseCtx.fillRect(0,0,512,512);
+for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z+seg.dz)],'#357f94',seg.w);}
+for(const f of eastPolygons)mapPoly(f.points,'#357f94');for(const {curve} of eastChannels)for(let i=1;i<curve.length;i++)mapLine([curve[i-1].p,curve[i].p],'#357f94',(curve[i-1].w+curve[i].w)/2);
 mapLine(pathRows.map(row=>row[1]),'#c6b38a',2.3);mapLine(approachRows.map(row=>row[1]),'#b89664',2.6);mapLine([bridgeEntry,bridgeExit],'#c6a273',3.0);
 mapPoly([home.C(-home.w/2,0,-home.d/2),home.C(home.w/2,0,-home.d/2),home.C(home.w/2,0,home.d/2),home.C(-home.w/2,0,home.d/2)],'#a96342');
 for(const f of farmStations)mapPoly([V(f.x-f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z+f.hz),V(f.x-f.hx,0,f.z+f.hz)],f.id==='farm-warehouse'?'#9a724c':'#c99e70');
-for(const road of [...expansionRoads,...roadJoins])mapLine(road.curve,'#e8d8b5',road.width);for(const f of farmSectors)mapPoly(f.polygon,'#b3a17d');for(const b of allFarmBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#856b54');
-for(const tree of treePositions){const x=X(tree[0]),z=Z(tree[1]);if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#747a64';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
+for(const road of [...expansionRoads,...roadJoins])mapLine(road.curve,'#b89664',road.width);for(const f of farmSectors)mapPoly(f.polygon,'#73824d');for(const b of allFarmBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
+for(const tree of treePositions){const x=X(tree[0]),z=Z(tree[1]);if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
 function layoutMinimap(){
  const el=$('minimap'),head=$('hud').getBoundingClientRect(),control=$('run-action').getBoundingClientRect();
  const top=Math.ceil(head.bottom+8);el.style.setProperty('--map-top',top+'px');
@@ -2417,14 +2417,14 @@ function drawMinimap(dt,force=false){
  const centerX=avatar.position.x,centerZ=avatar.position.z,[mx,my]=mapXY(centerX,centerZ),fixedScale=(rad-5)/24;
  const screen=p=>[mid+(p.x-centerX)*fixedScale,mid-(p.z-centerZ)*fixedScale],marker=screen(avatar.position);
  const mapKey=JSON.stringify([[centerX,centerZ],fenceColliders.map(([a,b])=>[a.x,a.z,b.x,b.z]),gates.map(g=>[g.center.x,g.center.z,g.open>.9])]);
- if(mapKey!==lastMapKey){lastMapKey=mapKey;mapQA.terrainFrames++;c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#c9bda1';c.fillRect(0,0,W,H);
+ if(mapKey!==lastMapKey){lastMapKey=mapKey;mapQA.terrainFrames++;c.clearRect(0,0,W,H);c.save();c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.clip();c.fillStyle='#364a31';c.fillRect(0,0,W,H);
  // drawImage clips source bounds correctly; padded base is drawn through a transform.
  c.drawImage(mapBase,mid-mx*fixedScale/mapScale,mid-my*fixedScale/mapScale,512*fixedScale/mapScale,512*fixedScale/mapScale);
- c.lineWidth=1.6;c.strokeStyle='#665747';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
+ c.lineWidth=1.6;c.strokeStyle='#d6c095';c.beginPath();for(const [a,b] of fenceColliders){c.moveTo(...screen(a));c.lineTo(...screen(b));}c.stroke();
  for(const g of gates){const p=screen(g.center);c.fillStyle=g.open>.9?'#bcd893':'#e2ac70';c.fillRect(p[0]-2,p[1]-2,4,4);}
  // Recognizable house icon, anchored to the actual footprint.
  const hp=screen(V(home.x,0,home.z));c.save();c.translate(hp[0],hp[1]);c.fillStyle='#ead7ae';c.fillRect(-7,-1,14,9);c.fillStyle='#a8502d';c.beginPath();c.moveTo(-10,0);c.lineTo(0,-9);c.lineTo(10,0);c.closePath();c.fill();c.fillStyle='#355b70';c.fillRect(-2,3,4,5);c.restore();
- c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#fff5dc';c.fill();c.strokeStyle='#4e4435';c.lineWidth=1.7;c.stroke();c.restore();}
+ c.beginPath();c.arc(marker[0],marker[1],4.5,0,Math.PI*2);c.fillStyle='#ffe9b0';c.fill();c.strokeStyle='#203722';c.lineWidth=1.7;c.stroke();c.restore();}
  c=compassCtx;c.clearRect(0,0,W,H);
  c.beginPath();c.arc(mid,mid,rad,0,Math.PI*2);c.strokeStyle='#d1d4a9';c.lineWidth=1.5;c.stroke();
  // Independent compass ring; terrain stays fixed north-up.
