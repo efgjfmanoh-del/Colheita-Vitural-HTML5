@@ -346,3 +346,7 @@
 
 ## RC 0.2.0 — conciliação de desenvolvimento simultâneo
 - Branch experimental rc/0.2.0 (c5f203f, run 45926804179) criada a partir de qa-v150. Durante a criação, main avançou para 7640aa7 com gate de distribuição e comércio próprios. Consolidar expansão agrícola na main sem substituir API commitTrade nem campo coins (não mesclar esquema economy da branch experimental). Preservar gate publish=false e todos os demais testes. Novas culturas alface, cenoura, ervilha, manjericão, tomate, brócolis, girassol, nabo: catálogo/guia, seletores, estoque inicial zero, preços e geometria procedural provisória. 12 culturas. Testes de catálogo, ciclo e comércio. Não publicar branch experimental ou instalar seus artefatos. main é única linha canônica da RC; pendências restantes e QA físico explícitos.
+
+
+## RC 0.2.0 — interações contextuais unificadas
+- Feedback físico da 0.1.50: botão da porta sobre o minimapa e rótulo da casa dos gatos visível a distância. Substituir ações rápidas existentes por círculos compactos com nomes acessíveis; manter mecanismos reais de porta, banco, vaso, pets, mural, cercas e cultivo recolhido. Posicionamento projetado com zonas de exclusão do HUD, minimapa, joystick, corrida, avatar, painéis e outros círculos; sem espaço livre, suprimir ação em vez de sobrepor. Casa dos pets exige 1,40m de ponto de entrada/saída e diferença de altura menor que 0,85m; cuidado mantém regras existentes. Não criar comandos de luz ou escada sem sistema funcional. Gate RC mantido. Regressão mobile de toque, geometria e captura; CI e teste físico pendentes.

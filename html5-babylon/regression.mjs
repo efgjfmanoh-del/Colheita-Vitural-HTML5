@@ -281,18 +281,18 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  // Walk to the two benches, use actual buttons and inspect jointed poses and state.
  const seats=[];
  for(const id of ['bench-right','bench-yard']){
-  await page.evaluate(id=>{const q=cvQA,b=q.allBenches.find(x=>x.id===id),p=q.seatStand(b);p.x+=.03;q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);q.updateEntry(.05);},id);
+  await page.evaluate(id=>{const q=cvQA,b=q.allBenches.find(x=>x.id===id),p=q.seatStand(b);p.x+=.03;q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);q.updateEntry(.05);q.layoutContextActions();},id);
   await page.locator('#seat-action').click();
   const seated=await page.evaluate(()=>{const q=cvQA;for(let i=0;i<100;i++)q.updateEntry(.025);const b=q.seating.bench,p=q.seatTarget(b);const before=q.avatar.position.clone();q.updateLocomotion(1,0,.1,true);return {phase:q.seating.phase,blend:q.seating.blend,seatError:Math.hypot(q.avatar.position.x-p.x,q.avatar.position.z-p.z),facing:Math.abs(Math.sin((q.avatar.rotation.y-q.seatYaw(b))/2)),legs:q.seatLegs.every(l=>l.thigh.isEnabled()&&l.shin.isEnabled()),locked:q.avatar.position.subtract(before).length()<1e-8};});
   assert(seated.phase==='seated'&&seated.blend===1&&seated.seatError<.001&&seated.facing<.001&&seated.legs&&seated.locked);
   if(id==='bench-right')await capture('banco-sentado',null,await page.evaluate(()=>cvQA.scene.activeCamera.beta*180/Math.PI));
-  await page.locator('#seat-action').click();
+  await page.evaluate(()=>cvQA.layoutContextActions());await page.locator('#seat-action').click();
   const stood=await page.evaluate(()=>{const q=cvQA;for(let i=0;i<50;i++)q.updateEntry(.025);return {phase:q.seating.phase,blend:q.seating.blend,last:q.seating.last,legsRestored:q.bodyParts[1].isEnabled()&&q.bodyParts[2].isEnabled(),blocked:q.blocked(q.avatar.position.x,q.avatar.position.z)};});
   assert(stood.phase==='idle'&&stood.blend===0&&stood.last.success&&stood.last.bench===id&&stood.legsRestored&&!stood.blocked);seats.push({id,seated,stood});
  }
  fs.writeFileSync('qa/assentos.json',JSON.stringify({walkway,seats},null,2));console.log('PASS aligned walkway, clear side flowers and animated seating',JSON.stringify({walkway,seats}));
  // Interact with each separate planter via the real UI. No inventory or time simulation claimed.
- const visit=async id=>page.evaluate(id=>{const q=cvQA,p=q.planters.find(x=>x.id===id),v=q.home.C(p.x+(p.x<0?1:-1)*.92,0,p.z);q.avatar.position.copyFrom(v);q.avatar.position.y=q.surfaceHeight(v.x,v.z);q.updateGarden(Date.now()+1000);q.updateWheat(Date.now(),true);},id);
+ const visit=async id=>page.evaluate(id=>{const q=cvQA,p=q.planters.find(x=>x.id===id),v=q.home.C(p.x+(p.x<0?1:-1)*.92,0,p.z);q.avatar.position.copyFrom(v);q.avatar.position.y=q.surfaceHeight(v.x,v.z);q.updateGarden(Date.now()+1000);q.updateWheat(Date.now(),true);q.layoutContextActions();},id);
  await visit('porch-ceramic');await page.locator('#garden-action').click();await page.locator('[data-flower="rose"]').click();assert(await page.locator('[data-flower="daisy"]').isDisabled());
  await page.locator('#garden-close').click();await visit('porch-wooden');await page.locator('#garden-action').click();await page.locator('[data-flower="lavender"]').click();await page.locator('#garden-close').click();
  const crops=await page.evaluate(()=>{const q=cvQA;for(const p of q.planters)q.updateCrop(p,p.crop.plantedAt+90000);return q.planters.map(p=>({id:p.id,type:p.type,species:p.crop.species,stage:p.stage,vertices:p.mesh.getTotalVertices(),visible:p.mesh.isEnabled()}));});
@@ -537,8 +537,9 @@ await page.locator('#inventory-close').click();assert(await page.locator('#inven
  // production door state machine after confirming the real gesture started it.
  await mobile.evaluate(()=>{const q=cvQA,H=q.home;q.engine.stopRenderLoop();const p=H.C(0,0,-H.d/2-.9);q.avatar.position.copyFrom(p);q.avatar.position.y=q.surfaceHeight(p.x,p.z);for(let i=0;i<120;i++)q.updateEntry(.05);window.doorTouchTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','lostpointercapture','click'])document.getElementById('door-action').addEventListener(type,e=>window.doorTouchTrace.push({type,trusted:e.isTrusted,pointerType:e.pointerType,detail:e.detail}),true);});
  await mobile.locator('#door-action').waitFor({state:'visible'});
- await mobile.evaluate(()=>{cvQA.updateWheat(Date.now(),true);cvQA.updateGarden(Date.now());});
+ await mobile.evaluate(()=>{cvQA.updateWheat(Date.now(),true);cvQA.updateGarden(Date.now());cvQA.layoutContextActions();});
  const doorRect=await mobile.locator('#door-action').boundingBox();
+ const contextQA=await mobile.evaluate(()=>{const ids=['door-action','seat-action','garden-action','pet-action','pet-context','world-quick','fence-context','wheat-expand','minimap','joy','run-action','hud','world-calendar','inventory-open'];const visible=ids.map(id=>document.getElementById(id)).filter(e=>!e.hidden&&getComputedStyle(e).visibility!=='hidden'&&e.offsetWidth>0);const pairs=[];for(const e of visible.filter(e=>['door-action','seat-action','garden-action','pet-action','pet-context','world-quick','fence-context','wheat-expand'].includes(e.id))){const a=e.getBoundingClientRect();for(const f of visible){if(f===e)continue;const b=f.getBoundingClientRect();if(a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top)pairs.push([e.id,f.id]);}}const door=document.getElementById('door-action');return {pairs,round:getComputedStyle(door).borderRadius,width:door.offsetWidth,height:door.offsetHeight,label:door.getAttribute('aria-label')};});assert.deepEqual(contextQA.pairs,[]);assert(contextQA.round==='50%'&&contextQA.width===contextQA.height&&contextQA.label);console.log('Contextual interaction geometry',JSON.stringify(contextQA));await mobile.screenshot({path:'qa/interacoes-contextuais.png'});
  const tap={x:doorRect.x+doorRect.width/2,y:doorRect.y+doorRect.height/2};
  assert.equal(await mobile.evaluate(({x,y})=>document.elementFromPoint(x,y)?.id,tap),'door-action','door touch must hit its own control');
  await mobile.touchscreen.tap(tap.x,tap.y);
