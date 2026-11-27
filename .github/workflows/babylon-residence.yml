@@ -1,7 +1,7 @@
 name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
-    branches: [main]
+    branches: ['qa/0.1.51']
     paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
@@ -112,7 +112,7 @@ jobs:
           if-no-files-found: error
   publish-qa:
     needs: preview
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/qa/0.1.51'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -132,7 +132,7 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           code=$(jq -er '.versionCode | numbers' update.json)
           version=$(jq -er '.versionName' update.json)
-          [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 109 ]]
+          [[ "$code" == 151 && "$version" == "0.1.51" ]]
           tag="qa-v$code"
           if gh release view "$tag" >/dev/null 2>&1; then
             mkdir existing
