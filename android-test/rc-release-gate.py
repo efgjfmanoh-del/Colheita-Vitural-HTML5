@@ -24,4 +24,6 @@ elif ref=='refs/heads/main':
     if (name,code)==('0.2.2',202):
         # Explicit owner authorization for progression and real-calendar missions, QA only.
         ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":202,"channel":"qa","scope":"progression-missions"}'
+    if (name,code)==('0.2.3',203):
+        ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":203,"channel":"qa","scope":"progression-ui-regional"}'
 print('ready='+str(ready).lower())

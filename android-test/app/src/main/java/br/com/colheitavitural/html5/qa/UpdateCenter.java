@@ -63,7 +63,7 @@ final class UpdateCenter {
         badge=new Button(a);badge.setAllCaps(false);badge.setTextColor(0xfff5efd8);badge.setTextSize(12);
         GradientDrawable bg=new GradientDrawable();bg.setColor(0xe6213525);bg.setCornerRadius(dp(10));bg.setStroke(dp(1),0xff93a779);
         badge.setBackground(bg);badge.setMinHeight(dp(36));badge.setPadding(dp(10),0,dp(10),0);
-        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,dp(38),Gravity.TOP|Gravity.LEFT);lp.setMargins(dp(12),dp(10),0,0);root.addView(badge,lp);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,dp(38),Gravity.TOP|Gravity.LEFT);lp.setMargins(dp(12),dp(10),0,0);/* Update center is opened from the in-game settings menu; no native overlay. */
         badge.setOnClickListener(v->show());refresh();
     }
     int dp(int v){return Math.round(v*a.getResources().getDisplayMetrics().density);}
@@ -164,7 +164,7 @@ final class UpdateCenter {
         boolean report=showReport;
         if(report){showReport=false;history.edit().putLong("seenVersion",installed).apply();}
         LinearLayout content=new LinearLayout(a);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(8),dp(20),dp(10));
-        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nAtualização experimental: "+(installed==202?"progressão rural e mural de missões.":installed==201?"minimapa verde e bússola verde-oliva aprovada.":"consulte as novidades da versão.") );reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
+        if(report){TextView reportText=new TextView(a);reportText.setText("Versão "+installedName+" instalada!\nAtualização experimental: "+(installed==203?"perfil rural, mural reorganizado e mapa regional ao vivo.":installed==202?"progressão rural e mural de missões.":installed==201?"minimapa verde e bússola verde-oliva aprovada.":"consulte as novidades da versão.") );reportText.setTextSize(14);reportText.setPadding(0,0,0,dp(12));content.addView(reportText);}
         detail=new TextView(a);detail.setTextSize(15);content.addView(detail);bar=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);content.addView(bar,new LinearLayout.LayoutParams(-1,dp(24)));
         checkButton=new Button(a);checkButton.setText("Verificar atualizações");checkButton.setOnClickListener(v->check());content.addView(checkButton);
         downloadButton=new Button(a);downloadButton.setText("Baixar em segundo plano");downloadButton.setOnClickListener(v->start());content.addView(downloadButton);

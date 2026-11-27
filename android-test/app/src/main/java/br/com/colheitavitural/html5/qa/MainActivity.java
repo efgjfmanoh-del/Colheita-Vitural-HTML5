@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
         frame.addView(web, new android.widget.FrameLayout.LayoutParams(-1,-1));
         updates = new UpdateCenter(this, frame);
+        web.addJavascriptInterface(new Object(){ @android.webkit.JavascriptInterface public void openUpdates(){runOnUiThread(()->{if(updates!=null)updates.show();});} @android.webkit.JavascriptInterface public String version(){return updates==null?"0.2.3":updates.installedName;}},"CVAndroid");
         setContentView(frame);
         hideBars();
         web.loadUrl(HOME);
