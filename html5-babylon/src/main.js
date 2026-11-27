@@ -4,7 +4,7 @@ import {createPets} from './pets.js';
 import {createFarmAudio} from './audio.js';
 import {validWarehouse,transferWarehouse} from './warehouse.js';
 import {inventorySnapshot,cropIcons,TOOL_CATALOG,equippedTool,equipTool} from './inventory.js';
-import {PRICES,INITIAL_COINS,validBalance,commitTrade,quoteTrade} from './economy.js';
+import {PRICES,SUPPLIES,INITIAL_COINS,validBalance,commitTrade,quoteTrade,quoteSupply,commitSupply} from './economy.js';
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
 const $=id=>document.getElementById(id),canvas=$('view'),inventoryDialog=$('inventory-dialog');
@@ -2328,6 +2328,7 @@ function applyTrade(id,action,quantity){
 }
 function renderMarket(){
  const grid=$('inventory-items');grid.replaceChildren();
+ for(const [id,supply] of Object.entries(SUPPLIES)){const card=document.createElement('article');card.className='market-card';card.dataset.supply=id;const name=document.createElement('strong');name.textContent=supply.name;const balance=document.createElement('small');balance.textContent=wheatSaveLocked?'Estoque indisponível':'Mochila: '+wheatState[id];const b=document.createElement('button');b.type='button';b.dataset.trade='buy';b.textContent='Comprar · '+supply.buy*tradeQuantity+' 🪙';b.disabled=wheatSaveLocked||!quoteSupply(wheatState,id,tradeQuantity).ok;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='market')return;const res=commitSupply(wheatState,id,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(res.ok){wheatState=res.next;farmCache.clear();updateWheat(Date.now(),true);farmAudio.action('trade');}$('inventory-message').textContent=res.ok?'Compra realizada: '+supply.name:res.error;renderInventory(true);};card.append(name,balance,b);grid.append(card);}
  for(const [id,price] of Object.entries(PRICES)){
   const stock=stockFor(wheatState,id),card=document.createElement('article');card.className='market-card';card.dataset.market=id;
   const name=document.createElement('strong');name.textContent=CROP_CALENDAR[id].name;
@@ -2341,6 +2342,7 @@ function renderMarket(){
 }
 function renderWarehouse(){
  const grid=$('inventory-items');grid.replaceChildren();
+ const supplies=document.createElement('article');supplies.className='market-card';supplies.dataset.warehouse='supplies';const heading=document.createElement('strong');heading.textContent='Insumos agrícolas';supplies.append(heading);for(const [kind,info] of Object.entries(SUPPLIES)){const held=wheatState.warehouse?.supplies?.[kind]??0,label=document.createElement('small');label.textContent=info.name+' · Mochila '+wheatState[kind]+' · Baú '+held;supplies.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';for(const [dir,name] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+dir;b.textContent=name+' '+tradeQuantity;b.disabled=wheatSaveLocked||(dir==='deposit'?wheatState[kind]:held)<tradeQuantity;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const q=transferWarehouse(wheatState,'supplies',kind,dir,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(q.ok){wheatState=q.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=q.ok?'Transferência salva.':q.error;renderInventory(true);};buttons.append(b);}supplies.append(buttons);}grid.append(supplies);
  for(const [id,crop] of Object.entries(CROP_CALENDAR)){const stock=stockFor(wheatState,id),stored=wheatState.warehouse?.[id]??{seeds:0,grain:0},card=document.createElement('article');card.className='market-card';card.dataset.warehouse=id;
  const title=document.createElement('strong');title.textContent=crop.name;card.append(title);
  for(const [kind,name] of [['seeds','Sementes'],['grain','Colheita']]){const label=document.createElement('small');label.textContent=name+' · Mochila '+stock[kind]+' · Armazém '+stored[kind];card.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';
