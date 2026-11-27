@@ -56,3 +56,9 @@ export const BALCONY=Object.freeze({half:2.8,front:-4.39,back:-2.25,railZ:-4.12,
 export function balconyRailBlocked(p,r=.2){return Math.abs(p.z-BALCONY.railZ)<.065+r&&Math.abs(p.x)<BALCONY.half+r;}
 export function gardenGrowth(crop,now,needsWater=false,duration=90000){if(!crop||!Number.isFinite(now)||!Number.isFinite(duration)||duration<=0)return 0;const start=needsWater?crop.wateredAt:crop.plantedAt;if(!Number.isFinite(start)||start<0||start<crop.plantedAt)return 0;return Math.max(0,Math.min(1,(now-start)/duration));}
 export function waterGardenCrop(crop,now){if(!crop||!Number.isFinite(now)||now<crop.plantedAt||Number.isFinite(crop.wateredAt))return null;return {...crop,wateredAt:now};}
+
+// Shared furniture positions and front-side interaction strips, in house-local space.
+// The refrigerator no longer occupies the working aisle in front of the stove.
+export const KITCHEN_FIXTURES=Object.freeze({kitchen:Object.freeze({x:5.55,z:2.95,hx:1.35,hz:.55}),fridge:Object.freeze({x:3.15,z:3.65,hx:.37,hz:.42})});
+export function kitchenAccessDistance(p,id){const f=KITCHEN_FIXTURES[id];if(!f||!Number.isFinite(p.x)||!Number.isFinite(p.z))return Infinity;const front=f.z-f.hz;if(p.z>front-.12)return Infinity;return Math.hypot(Math.max(0,Math.abs(p.x-f.x)-Math.max(.1,f.hx-.1)),p.z-(front-.45));}
+export function kitchenAccessNearby(p,id){return kitchenAccessDistance(p,id)<.78;}

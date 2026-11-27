@@ -104,3 +104,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210: run 46055514193 aprovou quartos/portas/assinatura. 02.01/02.02: varanda superior frontal recuada com abertura, guarda-corpo, vasos e rega inicial, mantendo cultivos inferiores. Nova CI e inspeção física/visual pendentes; não equivale a jardim avançado ou residência completa.
 
 - QA 210: run 46057405633 aprovou varanda e rega. 02.01/02.02 avançam com seis móveis complementares, higiene persistente no chuveiro/vaso e geladeira como consulta do estoque real. Nova regressão pendente; armazenamento dedicado, demais interações, acabamento e aprovação física ainda abertos.
+
+- Recuperação QA 210: run 46059290882 falhou por sobreposição de acesso geladeira/cozinha. Reposicionamento e áreas frontais específicas implementados, teste original preservado e regressão antirreincidência adicionada. Nova CI obrigatória; mobiliário ainda não aprovado.
