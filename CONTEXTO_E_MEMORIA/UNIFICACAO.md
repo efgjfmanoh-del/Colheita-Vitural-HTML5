@@ -36,3 +36,7 @@ Após QA 0.1.52, consolidar e entregar 4 frentes iniciais; depois 3+3+1. Manter 
 
 ## RC lote 1 retomado após QA 0.1.53
 Base visual/funcional qa-v153 (e3ee63d), conciliação seletiva do código RC anterior: 12 espécies, saldo e comércio agrícola atômico, preferências e ambiente de áudio, testes combinados. Novo armazém agrícola na mesma transação do save de cultivo: depósito/retirada de sementes e colheitas, testes de conservação e falha de gravação. Preservadas pintura, cercas encadeadas, minimapa superior, pets e painel compacto. Armazém é interface lógica, não edifício físico. Quatro frentes permanecem parciais: ferramentas/equipamento/baús físicos, feira espacial, novas áreas/ervas, música e sons específicos ainda pendentes. Gate fechado; nenhum APK OTA RC parcial publicado. CI e validação física pendentes.
+
+
+## Decisão de escopo — armazém central
+Usuário autorizou retirar o baú físico independente. Todas as transferências de sementes, colheitas e insumos usam o armazém único; o inventário permite consulta remota, não transferência remota. Substituído modelo de baú por pequeno galpão de madeira com placa e colisão, próximo à área agrícola em ponto livre; localização e dimensões provisórias sujeitas à validação visual. Mesma chave de save e mesmo ledger warehouse, sem migração destrutiva. Testes de bloqueio remoto, transferência local e ausência do baú; CI pendente. Baús decorativos futuros não devem duplicar armazenamento. Não alterar gate de publicação.

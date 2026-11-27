@@ -2152,9 +2152,9 @@ function boardNearby(){return Math.hypot(avatar.position.x-fieldSignCollider.x,a
 const farmStations=[];
 function locateFarmStation(id,hx,hz){
  const clear=(x,z)=>!blocked(x,z)&&!inWheat(x,z)&&!onBridge(x,z)&&roadClearance(pathRows,x,z)>.38&&roadClearance(approachRows,x,z)>.38;
- for(let r=4.6;r<=18;r+=.8)for(let k=0;k<32;k++){
+ for(let r=4.6;r<=24;r+=.8)for(let k=0;k<32;k++){
   const a=k*Math.PI/16,x=fieldSignCollider.x+Math.cos(a)*r,z=fieldSignCollider.z+Math.sin(a)*r,y=height(x,z);
-  if(farmStations.some(f=>Math.hypot(f.x-x,f.z-z)<4.8))continue;
+  if(farmStations.some(f=>Math.abs(f.x-x)<f.hx+hx+2&&Math.abs(f.z-z)<f.hz+hz+2))continue;
   let valid=true;for(const dx of [-hx-.25,0,hx+.25])for(const dz of [-hz-.25,0,hz+.25])if(!clear(x+dx,z+dz)||Math.abs(height(x+dx,z+dz)-y)>.30)valid=false;
   if(!valid)continue;
   for(const [dx,dz] of [[0,-1],[0,1],[-1,0],[1,0]]){
@@ -2165,12 +2165,29 @@ function locateFarmStation(id,hx,hz){
  }
  return null;
 }
-const marketStation=locateFarmStation('farm-market',1.05,.68),warehouseStation=locateFarmStation('farm-warehouse',.58,.36);
+const marketStation=locateFarmStation('farm-market',1.05,.68),warehouseStation=locateFarmStation('farm-warehouse',1.55,1.15);
 function stationSign(f,label,y,width){const tex=new DynamicTexture('station sign '+f.id,{width:256,height:64},scene,true),c=tex.getContext();c.fillStyle='#ba8e58';c.fillRect(0,0,256,64);c.strokeStyle='#68482b';c.lineWidth=5;c.strokeRect(3,3,250,58);c.fillStyle='#30261b';c.font='bold 29px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(label,128,32,240);tex.update();const m=mat('station label '+f.id,'#ffffff');m.diffuseTexture=tex;m.emissiveColor=new Color3(.12,.10,.07);m.backFaceCulling=false;for(const d of [-1,1]){const face=MeshBuilder.CreatePlane(f.id+' sign face',{width,height:.27},scene);face.position=V(f.x,f.y+y,f.z+d*(f.hz+.065));face.rotation.y=d===1?Math.PI:0;own(face,m,false);}}
 if(marketStation){const f=marketStation,B=(n,x,y,z,w,h,d,m)=>box(n,f.x+x,f.y+y,f.z+z,w,h,d,m);entity('farm market stall');B('stall counter',0,.87,0,2.1,.16,1.36,M.woodLight);B('stall cabinet',0,.4,0,1.95,.72,1.18,M.wood);for(const x of [-.92,.92])for(const z of [-.55,.55])B('stall timber support',x,1.12,z,.10,2.24,.10,M.woodDark);for(let k=0;k<8;k++)B('stall striped awning',-.94+k*.27,2.26,0,.27,.09,1.48,k%2?M.plaster:M.roof);for(let k=0;k<3;k++){B('produce crate',-.65+k*.65,1.02,0,.50,.16,.45,M.woodDark);for(const x of [-.13,.13])for(const z of [-.09,.09])sphere('market produce',f.x-.65+k*.65+x,f.y+1.16,f.z+z,.11,.11,.11,[M.red,M.leaf2,M.yellow][k]);}stationSign(f,'FEIRA',1.78,1.4);}
-if(warehouseStation){const f=warehouseStation;entity('farm storage chest');box('storage chest body',f.x,f.y+.28,f.z,1.16,.55,.72,M.wood);box('storage chest lid',f.x,f.y+.60,f.z,1.23,.13,.79,M.woodLight);for(const d of [-1,1])box('storage chest iron band',f.x+d*.39,f.y+.60,f.z,.075,.14,.80,M.black);box('storage latch',f.x,f.y+.45,f.z-.37,.13,.17,.045,M.black);stationSign(f,'BAÚ',.27,.48);}
-function stationNearby(f){return !!f&&Math.hypot(avatar.position.x-f.x,avatar.position.z-f.z)<1.85&&Math.abs(avatar.position.y-f.y)<.8;}
-function openFarmStation(f,category){if(!stationNearby(f)||!openInventory())return false;inventoryCategory=category;inventoryKey='';$('inventory-message').textContent=category==='market'?'Feira do rancho · compre sementes e venda colheitas.':'Baú do rancho · guarde e retire seus produtos.';renderInventory(true);return true;}
+if(warehouseStation){
+ const f=warehouseStation,B=(n,x,y,z,w,h,d,m)=>box(n,f.x+x,f.y+y,f.z+z,w,h,d,m);
+ entity('farm warehouse building');
+ B('warehouse foundation',0,.13,0,3.10,.26,2.30,M.stoneLight);
+ B('warehouse back',0,1.27,.98,2.90,2.28,.16,M.wood);
+ for(const d of [-1,1]){
+  B('warehouse side',d*1.40,1.27,0,.16,2.28,1.96,M.wood);
+  for(const z of [-.98,.98])B('warehouse timber corner',d*1.4,1.28,z,.17,2.40,.17,M.woodDark);
+  B('warehouse front planks',d*.96,1.27,-.98,.85,2.28,.16,M.woodLight);
+  B('warehouse sliding door',d*.43,1.16,-1.03,.85,2.04,.13,M.wood);
+  B('warehouse door brace',d*.43,1.16,-1.11,.67,.08,.05,M.woodDark);
+  B('warehouse door handle',d*.12,1.13,-1.13,.07,.21,.07,M.black);
+  const roof=B('warehouse sloped roof',0,2.68,d*.57,3.26,.16,1.28,M.roof);roof.rotation.x=d*.37;
+ }
+ B('warehouse ridge',0,2.93,0,3.30,.12,.14,M.woodDark);
+ B('warehouse lintel',0,2.32,-1.02,2.90,.17,.19,M.woodDark);
+ stationSign(f,'ARMAZÉM',2.16,1.52);
+}
+function stationNearby(f){return !!f&&Math.hypot(Math.max(0,Math.abs(avatar.position.x-f.x)-f.hx),Math.max(0,Math.abs(avatar.position.z-f.z)-f.hz))<1.0&&Math.abs(avatar.position.y-f.y)<.8;}
+function openFarmStation(f,category){if(!stationNearby(f)||!openInventory())return false;inventoryCategory=category;inventoryKey='';$('inventory-message').textContent=category==='market'?'Feira do rancho · compre sementes e venda colheitas.':'Armazém do rancho · guarde e retire seus produtos.';renderInventory(true);return true;}
 $('market-open').onclick=()=>openFarmStation(marketStation,'market');$('warehouse-open').onclick=()=>openFarmStation(warehouseStation,'warehouse');
 
 $('gate-action').onclick=()=>toggleGate();
@@ -2193,7 +2210,7 @@ function layoutContextActions(){
  'seat-action':bench?seatStand(bench).add(V(0,.65,0)):avatar.position,
  'garden-action':planter?home.C(planter.x,1.0,planter.z):avatar.position,
  'wheat-expand':wheatSelected?V(wheatSelected.x,surfaceHeight(wheatSelected.x,wheatSelected.z)+.7,wheatSelected.z):avatar.position,
- 'world-quick':stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+.85,warehouseStation.z):boardNearby()?V(fieldSignCollider.x,surfaceHeight(fieldSignCollider.x,fieldSignCollider.z)+1.5,fieldSignCollider.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
+ 'world-quick':stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+1.9,warehouseStation.z):boardNearby()?V(fieldSignCollider.x,surfaceHeight(fieldSignCollider.x,fieldSignCollider.z)+1.5,fieldSignCollider.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
  'pet-action':petHome?petHome.threshold.add(V(0,.65,0)):avatar.position,
  'pet-context':animal?animal.rig.root.position.add(V(0,.5,0)):avatar.position,
  'fence-context':nearFence?Vector3.Lerp(nearFence.a,nearFence.b,.5).add(V(0,1.35,0)):avatar.position};
@@ -2231,6 +2248,7 @@ baseCtx.fillStyle='#435d37';baseCtx.fillRect(0,0,512,512);
 for(const seg of riverSegments){mapLine([V(seg.x,0,seg.z),V(seg.x+seg.dx,0,seg.z+seg.dz)],'#357f94',seg.w);}
 mapLine(pathRows.map(row=>row[1]),'#c6b38a',2.3);mapLine(approachRows.map(row=>row[1]),'#b89664',2.6);mapLine([bridgeEntry,bridgeExit],'#c6a273',3.0);
 mapPoly([home.C(-home.w/2,0,-home.d/2),home.C(home.w/2,0,-home.d/2),home.C(home.w/2,0,home.d/2),home.C(-home.w/2,0,home.d/2)],'#a96342');
+for(const f of farmStations)mapPoly([V(f.x-f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z-f.hz),V(f.x+f.hx,0,f.z+f.hz),V(f.x-f.hx,0,f.z+f.hz)],f.id==='farm-warehouse'?'#9a724c':'#c99e70');
 mapPoly(wheatPolygon,'#73824d');for(const b of wheatBeds)mapPoly([V(b.x1,0,b.z1),V(b.x2,0,b.z1),V(b.x2,0,b.z2),V(b.x1,0,b.z2)],'#967450');
 for(const tree of treePositions){const x=X(tree[0]),z=Z(tree[1]);if(!Number.isFinite(x)||!Number.isFinite(z))continue;const q=mapXY(x,z);baseCtx.fillStyle='#264b30';baseCtx.beginPath();baseCtx.arc(q[0],q[1],1.8,0,Math.PI*2);baseCtx.fill();}
 function layoutMinimap(){
@@ -2341,17 +2359,18 @@ function renderMarket(){
  }
 }
 function renderWarehouse(){
- const grid=$('inventory-items');grid.replaceChildren();
- const supplies=document.createElement('article');supplies.className='market-card';supplies.dataset.warehouse='supplies';const heading=document.createElement('strong');heading.textContent='Insumos agrícolas';supplies.append(heading);for(const [kind,info] of Object.entries(SUPPLIES)){const held=wheatState.warehouse?.supplies?.[kind]??0,label=document.createElement('small');label.textContent=info.name+' · Mochila '+wheatState[kind]+' · Baú '+held;supplies.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';for(const [dir,name] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+dir;b.textContent=name+' '+tradeQuantity;b.disabled=wheatSaveLocked||(dir==='deposit'?wheatState[kind]:held)<tradeQuantity;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const q=transferWarehouse(wheatState,'supplies',kind,dir,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(q.ok){wheatState=q.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=q.ok?'Transferência salva.':q.error;renderInventory(true);};buttons.append(b);}supplies.append(buttons);}grid.append(supplies);
+ const grid=$('inventory-items');grid.replaceChildren();const canTransfer=stationNearby(warehouseStation);
+ if(!canTransfer){const notice=document.createElement('p');notice.className='market-card';notice.textContent='Consulta de estoque. Vá ao armazém do rancho para guardar ou retirar itens.';grid.append(notice);}
+ const supplies=document.createElement('article');supplies.className='market-card';supplies.dataset.warehouse='supplies';const heading=document.createElement('strong');heading.textContent='Insumos agrícolas';supplies.append(heading);for(const [kind,info] of Object.entries(SUPPLIES)){const held=wheatState.warehouse?.supplies?.[kind]??0,label=document.createElement('small');label.textContent=info.name+' · Mochila '+wheatState[kind]+' · Armazém '+held;supplies.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';for(const [dir,name] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+dir;b.textContent=name+' '+tradeQuantity;b.disabled=!canTransfer||wheatSaveLocked||(dir==='deposit'?wheatState[kind]:held)<tradeQuantity;b.onclick=()=>{if(!stationNearby(warehouseStation)||wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const q=transferWarehouse(wheatState,'supplies',kind,dir,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(q.ok){wheatState=q.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=q.ok?'Transferência salva.':q.error;renderInventory(true);};buttons.append(b);}supplies.append(buttons);}grid.append(supplies);
  for(const [id,crop] of Object.entries(CROP_CALENDAR)){const stock=stockFor(wheatState,id),stored=wheatState.warehouse?.[id]??{seeds:0,grain:0},card=document.createElement('article');card.className='market-card';card.dataset.warehouse=id;
  const title=document.createElement('strong');title.textContent=crop.name;card.append(title);
  for(const [kind,name] of [['seeds','Sementes'],['grain','Colheita']]){const label=document.createElement('small');label.textContent=name+' · Mochila '+stock[kind]+' · Armazém '+stored[kind];card.append(label);const buttons=document.createElement('div');buttons.className='market-buttons';
- for(const [direction,label] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+direction;b.textContent=label+' '+tradeQuantity;b.disabled=wheatSaveLocked||(direction==='deposit'?stock[kind]:stored[kind])<tradeQuantity;b.onclick=()=>{if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const result=transferWarehouse(wheatState,id,kind,direction,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(result.ok){wheatState=result.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=result.ok?'Transferência salva.':result.error;renderInventory(true);};buttons.append(b);}card.append(buttons);}
+ for(const [direction,label] of [['deposit','Guardar'],['withdraw','Retirar']]){const b=document.createElement('button');b.type='button';b.dataset.transfer=kind+':'+direction;b.textContent=label+' '+tradeQuantity;b.disabled=!canTransfer||wheatSaveLocked||(direction==='deposit'?stock[kind]:stored[kind])<tradeQuantity;b.onclick=()=>{if(!stationNearby(warehouseStation)||wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='warehouse')return;const result=transferWarehouse(wheatState,id,kind,direction,tradeQuantity,json=>localStorage.setItem(WHEAT_SAVE,json));if(result.ok){wheatState=result.next;farmCache.clear();updateWheat(Date.now(),true);}$('inventory-message').textContent=result.ok?'Transferência salva.':result.error;renderInventory(true);};buttons.append(b);}card.append(buttons);}
  grid.append(card);}
 }
 function renderInventory(force=false){
  if(!inventoryDialog.open)return;
- const items=inventoryItems(),selected=selectedSpecies(),key=JSON.stringify([inventoryCategory,selected,items,wheatState.coins,wheatState.warehouse,tradeQuantity,activeTool]);
+ const items=inventoryItems(),selected=selectedSpecies(),key=JSON.stringify([inventoryCategory,selected,items,wheatState.coins,wheatState.warehouse,tradeQuantity,activeTool,stationNearby(warehouseStation)]);
  if(!force&&key===inventoryKey)return;inventoryKey=key;
  const grid=$('inventory-items');grid.replaceChildren();
  for(const button of inventoryDialog.querySelectorAll('[data-inventory-category]'))button.setAttribute('aria-pressed',String(button.dataset.inventoryCategory===inventoryCategory));
