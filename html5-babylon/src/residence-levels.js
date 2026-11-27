@@ -34,3 +34,9 @@ export const STAIR_RAILS=Object.freeze([
  [[R,LANDING_Y+1.05,s.turn+.04],[s.exit,UPPER_Y+1.05,s.turn+.04]]
 ]);
 export function railTargets(p){return STAIR_RAILS.map(([a,b])=>{const dx=b[0]-a[0],dz=b[2]-a[2],u=Math.max(0,Math.min(1,((p.x-a[0])*dx+(p.z-a[2])*dz)/(dx*dx+dz*dz)));return {x:a[0]+u*dx,y:a[1]+u*(b[1]-a[1]),z:a[2]+u*dz};});}
+
+// The living room fronts the house; kitchen is behind it on the right.
+// The west circulation hall stays open to the L staircase.
+export const GROUND_DIVIDER=Object.freeze({z:.85,thickness:.18,from:.95,to:7.03,doorLeft:3.65,doorRight:5.35,height:2.82,doorHeight:2.25});
+export function groundWallSegments(){const d=GROUND_DIVIDER;return [[d.from,d.doorLeft],[d.doorRight,d.to]];}
+export function groundDividerBlocked(p,radius=.20){const d=GROUND_DIVIDER;if(Math.abs(p.z-d.z)>=d.thickness/2+radius)return false;return groundWallSegments().some(([a,b])=>p.x>a-radius&&p.x<b+radius);}
