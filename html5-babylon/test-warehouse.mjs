@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';import {transferWarehouse,validWarehouse} from './src/warehouse.js';
+let state={seeds:24,grain:5,coins:500,stocks:{corn:{seeds:12,grain:2}},warehouse:{}};let saved;
+const write=s=>{saved=JSON.parse(s);};const initial=JSON.stringify(state);
+let q=transferWarehouse(state,'wheat','grain','deposit',3,write);assert(q.ok);assert.equal(q.next.grain,2);assert.equal(q.next.warehouse.wheat.grain,3);assert.equal(JSON.stringify(state),initial);assert.deepEqual(saved,q.next);
+q=transferWarehouse(q.next,'wheat','grain','withdraw',3,write);assert(q.ok);assert.equal(q.next.grain,5);assert.equal(q.next.warehouse.wheat.grain,0);
+assert(!transferWarehouse(state,'corn','seeds','deposit',13,write).ok);assert(!transferWarehouse(state,'corn','seeds','deposit',1,()=>{throw Error('full')}).ok);assert(!validWarehouse({wheat:{seeds:-1,grain:0}}));assert(!transferWarehouse(state,'bad','grain','deposit',1,write).ok);console.log('PASS warehouse conservation, persistence and rejected transactions');

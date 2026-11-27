@@ -372,3 +372,7 @@ Barra recolhível global, arco de construção (cercas ativas; celeiros, currais
 
 ## QA 0.1.53 — minimapa e painel de construção
 Minimapa superior direito ancorado abaixo do HUD, com tamanho reduzido, sem sobreposição do HUD/corrida; ocultação somente se faltar espaço. Painel de construção reduzido e rebaixado, mantendo comandos. Testes mobile de geometria e captura. Versão incremental devido à execução em curso da 0.1.52, sem sobrescrever artefatos. RC continua pausada. CI e teste físico pendentes.
+
+
+## RC lote 1 retomado após QA 0.1.53
+Base visual/funcional qa-v153 (e3ee63d), conciliação seletiva do código RC anterior: 12 espécies, saldo e comércio agrícola atômico, preferências e ambiente de áudio, testes combinados. Novo armazém agrícola na mesma transação do save de cultivo: depósito/retirada de sementes e colheitas, testes de conservação e falha de gravação. Preservadas pintura, cercas encadeadas, minimapa superior, pets e painel compacto. Armazém é interface lógica, não edifício físico. Quatro frentes permanecem parciais: ferramentas/equipamento/baús físicos, feira espacial, novas áreas/ervas, música e sons específicos ainda pendentes. Gate fechado; nenhum APK OTA RC parcial publicado. CI e validação física pendentes.
