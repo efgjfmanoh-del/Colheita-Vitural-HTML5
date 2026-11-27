@@ -23,5 +23,5 @@ elif ref=='refs/heads/main':
         ready=all(subprocess.check_output(['git','hash-object',str(root.parent/p)],text=True).strip()==digest for p,digest in approved.items())
     if (name,code)==('0.2.2',202):
         # Explicit owner authorization for progression and real-calendar missions, QA only.
-        ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":202,"channel":"qa","scope":"progression-missions"}')
+        ready=(root/'qa-progression-authorization.json').read_text().strip()=='{"version":202,"channel":"qa","scope":"progression-missions"}'
 print('ready='+str(ready).lower())

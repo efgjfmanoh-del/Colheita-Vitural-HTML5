@@ -2591,7 +2591,7 @@ function landBuildAllowed(x,z){const a=landAt(x,z);return !a||wheatState.progres
 const cycleNames={daily:'Diárias',weekly:'Semanais',monthly:'Mensais'};
 let progressTab='summary',trackerKey='',progressMapMode=false;
 function refreshMissionTracker(){
- const p=wheatState.progress,n=$('mission-tracker'),now=Math.max(Date.now(),p.lastReal);
+ const p=wheatState.progress,n=$('mission-tracker'),now=Math.max(Date.now(),p.lastReal);const calendar=$('world-calendar').getBoundingClientRect(),inv=$('inventory-open').getBoundingClientRect();n.style.top=Math.ceil(Math.max(calendar.bottom,inv.bottom)+5)+'px';
  const m=Object.values(p.missions).filter(m=>!m.claimed&&(m.end>now||m.done===m.target));
  const key=JSON.stringify(m.map(x=>[x.id,x.done,x.target]));if(key===trackerKey)return;trackerKey=key;n.replaceChildren();n.hidden=!m.length;if(!m.length)return;
  const heading=document.createElement('strong');heading.textContent='Missões ativas';n.append(heading);
@@ -2620,7 +2620,7 @@ function renderProgress(){
   for(const cycle of ['daily','weekly','monthly']){root.append(progressEl('h3',cycleNames[cycle]));for(const m of all.filter(m=>m.cycle===cycle)){const started=!!p.missions[m.id],card=progressEl('article','');card.append(progressEl('strong',EVENTS[m.event][2]+' · '+m.target),progressEl('small',(started?m.done+'/'+m.target+' · ':'')+'Recompensa '+m.reward+' moedas · até '+new Date(m.end-1).toLocaleDateString('pt-BR')));if(m.claimed)card.append(progressEl('small','Recompensa resgatada ✓'));else if(started&&m.done>=m.target)card.append(progressButton('Resgatar recompensa',()=>{if(stationNearby(missionStation))progressAction(n=>claim(n,m.id));}));else if(started)card.append(progressEl('small','Em andamento'));else card.append(progressButton('Aceitar missão',()=>{if(stationNearby(missionStation))progressAction(n=>accept(n.progress,m.id));}));root.append(card);}}
  }
 }
-function openProgress(tab='summary'){if(progressDialog.open||inventoryDialog.open||tillWork||entry.action||seating.phase!=='idle'||build.work||gateWork||tab==='missions'&&!stationNearby(missionStation))return false;if(build.open)closeBuild();cancelInput();playerMenu.hidden=true;controlsMenu.hidden=true;closeGarden();farmCenter.hidden=true;progressTab=tab;$('progress-status').textContent='';progressDialog.showModal();renderProgress();return true;}
+function openProgress(tab='summary'){if(progressDialog.open||inventoryDialog.open||tillWork||entry.action||seating.phase!=='idle'||build.work||gateWork||tab==='missions'&&!stationNearby(missionStation))return false;if(build.open)closeBuild();if(petSystem.interactionActive())petSystem.cancelInteraction();cancelInput();playerMenu.hidden=true;controlsMenu.hidden=true;closeGarden();farmCenter.hidden=true;progressTab=tab;$('progress-status').textContent='';progressDialog.showModal();renderProgress();return true;}
 $('progress-open').onclick=()=>openProgress();$('mission-open').onclick=()=>openProgress('missions');$('progress-close').onclick=()=>progressDialog.close();
 progressDialog.addEventListener('close',cancelInput);
 for(const b of $('progress-tabs').querySelectorAll('[data-progress-tab]'))b.onclick=()=>{progressTab=b.dataset.progressTab;renderProgress();};
