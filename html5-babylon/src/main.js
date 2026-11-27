@@ -112,7 +112,18 @@ const sphere=(name,x,y,z,rx,ry,rz,m,cast=true)=>{const b=MeshBuilder.CreateSpher
 const cyl=(name,x,y,z,r,h,m,top=r,cast=true)=>{const b=MeshBuilder.CreateCylinder(name,{diameterTop:top*2,diameterBottom:r*2,height:h,tessellation:12},scene);b.position=V(x,y,z);return own(b,m,cast)};
 const beam=(name,a,b,w,m,depth=w,cast=true)=>{const d=b.subtract(a);const obj=box(name,...a.add(b).scale(.5).asArray(),w,d.length(),depth,m,0,cast);const n=d.normalize(),axis=Vector3.Cross(Vector3.Up(),n),dot=Vector3.Dot(Vector3.Up(),n);obj.rotationQuaternion=dot<-.99999?Quaternion.RotationAxis(Vector3.Right(),Math.PI):new Quaternion(axis.x,axis.y,axis.z,1+dot).normalize();return obj};
 const quad=(name,pts,m,cast=false)=>{const q=new Mesh(name,scene),v=new VertexData();v.positions=pts.flatMap(p=>p.asArray());const u=Vector3.Distance(pts[0],pts[1]),vv=Vector3.Distance(pts[1],pts[2]);v.uvs=[0,0,u/2,0,u/2,vv/2,0,vv/2];v.indices=[0,1,2,0,2,3];v.normals=[];VertexData.ComputeNormals(v.positions,v.indices,v.normals);if(v.normals[1]<-0.001){v.indices=[0,2,1,0,3,2];VertexData.ComputeNormals(v.positions,v.indices,v.normals);}m.backFaceCulling=false;v.applyToMesh(q);return own(q,m,cast)};
-const poly=(name,pts,indices,m,cast=true)=>{const q=new Mesh(name,scene),v=new VertexData();v.positions=pts.flatMap(p=>p.asArray());v.uvs=[0,0,2,0,1,1];v.indices=indices.slice(0,3);v.normals=[];VertexData.ComputeNormals(v.positions,v.indices,v.normals);m.backFaceCulling=false;v.applyToMesh(q);return own(q,m,cast)};
+// Preserve every face and every UV. The old helper discarded all but the
+// first triangle, leaving half of each gable patch absent.
+const polyQA=[];
+const poly=(name,pts,indices,m,cast=true)=>{
+ const q=new Mesh(name,scene),v=new VertexData(),seen=new Set(),faces=[];
+ for(let i=0;i+2<indices.length;i+=3){const tri=indices.slice(i,i+3),key=tri.slice().sort((a,b)=>a-b).join(':');if(seen.has(key))continue;seen.add(key);faces.push(...tri);}
+ const origin=pts[0],u=pts[1].subtract(origin).normalize(),n=Vector3.Cross(u,pts[2].subtract(origin)).normalize(),w=Vector3.Cross(n,u).normalize();
+ v.positions=pts.flatMap(p=>p.asArray());v.uvs=pts.flatMap(p=>{const d=p.subtract(origin);return [Vector3.Dot(d,u)/2,Vector3.Dot(d,w)/2];});
+ v.indices=faces;v.normals=[];VertexData.ComputeNormals(v.positions,v.indices,v.normals);m.backFaceCulling=false;v.applyToMesh(q);
+ polyQA.push({name,vertices:pts.length,triangles:faces.length/3,uvs:v.uvs.length/2,area:faces.reduce((sum,_,i)=>i%3?sum:sum+Vector3.Cross(pts[faces[i+1]].subtract(pts[faces[i]]),pts[faces[i+2]].subtract(pts[faces[i]])).length()/2,0)});
+ return own(q,m,cast);
+};
 const rawChannel=layout.water.channels[0].points.filter(p=>p[0]<=925).map(([u,v,y,w])=>({p:P(u,v,y),w:w/8}));
 const channel=[];for(let i=0;i<rawChannel.length-1;i++){const a=rawChannel[i],b=rawChannel[i+1],p0=rawChannel[Math.max(0,i-1)].p,p3=rawChannel[Math.min(rawChannel.length-1,i+2)].p;
  const n=Math.max(6,Math.ceil(Vector3.Distance(a.p,b.p)/.85)),fall=i===1||i===3;const ts=Array.from({length:n},(_,j)=>j/n).filter(t=>!fall||t<.45||t>.55);if(fall)ts.push(.45,.47,.49,.51,.53,.55);ts.sort((a,b)=>a-b);for(const t of ts){const p=Vector3.CatmullRom(p0,a.p,b.p,p3,t);let ht=t;if(fall)ht=Math.max(0,Math.min(1,(t-.47)/.06));p.y=a.p.y+(b.p.y-a.p.y)*ht;channel.push({p,w:a.w+(b.w-a.w)*t,fall});}}
@@ -682,7 +693,7 @@ const gardenPanel=$('garden-panel'),gardenAction=$('garden-action');
 function renderGarden(){
  if(!selectedPlanter)return;const p=selectedPlanter;
  $('garden-title').textContent=p.config.name;
- $('garden-state').textContent=gardenError||(p.crop?flowerCatalog[p.crop.species].name+' · '+(p.stage>=1?'Floresceu':Math.floor(p.stage*100)+'% de crescimento'):'Vazio · escolha uma espécie');
+ $('garden-portrait').textContent=p.crop?({rose:'🌹',daisy:'🌼',lavender:'🪻'})[p.crop.species]||'🌱':'🪴';$('garden-state').textContent=gardenError||(p.crop?flowerCatalog[p.crop.species].name+' · '+(p.stage>=1?'Floresceu':Math.floor(p.stage*100)+'% de crescimento'):'Vazio · escolha uma espécie');
  for(const button of $('garden-species').querySelectorAll('button'))button.disabled=!!p.crop;
  $('garden-remove').disabled=!p.crop;
 }
@@ -695,15 +706,15 @@ function changeCrop(species){
  rebuildCrop(p);updateCrop(p);renderGarden();return true;
 }
 for(const [id,f] of Object.entries(flowerCatalog)){
- const b=document.createElement('button');b.textContent=f.name;b.dataset.flower=id;b.addEventListener('click',()=>changeCrop(id));$('garden-species').append(b);
+ const b=document.createElement('button');b.textContent=f.name;b.dataset.flower=id;b.dataset.icon=({rose:'🌹',daisy:'🌼',lavender:'🪻'})[id]||'🌱';b.addEventListener('click',()=>changeCrop(id));$('garden-species').append(b);
 }
 gardenAction.addEventListener('click',()=>{selectedPlanter=nearbyPlanter();if(selectedPlanter){gardenPanel.hidden=false;renderGarden();}});
 function closeGarden(){gardenPanel.hidden=true;selectedPlanter=null;}
 $('garden-close').addEventListener('click',closeGarden);$('garden-remove').addEventListener('click',()=>changeCrop(null));
 for(const p of planters){rebuildCrop(p);updateCrop(p);}
 function updateGarden(now=Date.now()){
- const near=nearbyPlanter(),hide=!near||!gardenPanel.hidden;if(gardenAction.hidden!==hide)gardenAction.hidden=hide;
- if(selectedPlanter&&selectedPlanter!==near)closeGarden();
+ const near=nearbyPlanter(),hide=!near||!gardenPanel.hidden||buildModeActive||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden;if(gardenAction.hidden!==hide)gardenAction.hidden=hide;
+ if(selectedPlanter&&(selectedPlanter!==near||buildModeActive||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))closeGarden();
  if(now-lastGardenTick>=250){lastGardenTick=now;for(const p of planters)updateCrop(p,now);if(selectedPlanter)renderGarden();}
 }
 
@@ -743,7 +754,7 @@ function updateWorldClock(now=Date.now(),force=false){
   lastWeatherSlot=w.slot;weatherVisual=weatherPresentation(w,daylight,c.hour);const weatherLabel=weatherVisual.label+' · '+w.temperature+' °C';$('world-weather').textContent=weatherLabel;$('weather-icon').textContent=weatherVisual.icon;document.body.dataset.weather=w.kind;
   lastLightMinute=minute;const k=daylight.daylight;
   // Maintain the existing daytime art. At night keep paths and controls readable.
-  const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;sun.shadowEnabled=k>.18;
+  const cloud=w.kind==='sun'?1:w.kind==='cloud'?.80:w.kind==='rain'?(weatherVisual.showers?.87:.65):.50;light.intensity=.38+.47*k*cloud;sun.intensity=.09+.81*k*cloud;const shadowsOn=k>.18;if(sun.shadowEnabled!==shadowsOn){sun.shadowEnabled=shadowsOn;shadow.getShadowMap().resetRefreshCounter();}
   scene.clearColor=new Color4(.08+.28*k,.13+.43*k,.19+.10*k,1);updateNightLighting(k);
  }
 }
@@ -912,19 +923,24 @@ function rebuildWheat(now){
   moundQA.peak=Math.max(0,...Array.from(moundState.values(),m=>m.target));
  }
 }
-const wheatPanel=$('wheat-panel'),wheatAction=$('wheat-action'),wheatUndo=$('wheat-undo');
+const wheatPanel=$('wheat-panel'),wheatAction=$('wheat-action'),wheatUndo=$('wheat-undo');let wheatCollapsed=false;$('wheat-close').onclick=()=>{wheatCollapsed=true;updateWheat(Date.now(),true);};$('wheat-expand').onclick=()=>{wheatCollapsed=false;updateWheat(Date.now(),true);};
 const wheatNames={raw:'Terra por preparar',tilled:'Terra arada',sown:'Sementes · precisa regar',watered:'Crescendo',ripe:'Pronto para colher'};
 const wheatActions={raw:'till',tilled:'plant',sown:'water',ripe:'harvest'};
 const wheatLabels={till:'Arar',plant:'Plantar trigo',water:'Regar',harvest:'Colher'};
 let wheatSelected=null;
 function updateWheat(now=Date.now(),force=false){
- const p=tillWork?wheatPlots.find(p=>p.bedId===tillWork.bed.id):nearestWheat();if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
- if(wheatPanel.hidden===!!p)wheatPanel.hidden=!p;
+ const p=tillWork?wheatPlots.find(p=>p.bedId===tillWork.bed.id):nearestWheat();if(!p)wheatCollapsed=false;if(p!==wheatSelected||force){wheatSelected=p;plotOutline.setEnabled(!!p);if(p){plotOutline.position.copyFromFloats(p.x,Math.max(height(p.x,p.z),renderedTerrainY(p.x,p.z))+.11,p.z);plotOutline.scaling.x=.62;}}
+ const expanded=!!p&&!wheatCollapsed;wheatPanel.hidden=!expanded;$('wheat-expand').hidden=!p||expanded;
  // Keep the runner reachable when the farm panel is displayed.
  if(document.body.classList.contains('wheat-near')!==!!p)document.body.classList.toggle('wheat-near',!!p);
  if(force||now-lastWheatTick>=250){lastWheatTick=now;rebuildWheat(now);}
  if(!p)return;
  const status=wheatStatus(p.id,now),action=wheatActions[status],data=evaluatedPlot(p.id,now),crop=status==='raw'||status==='tilled'?selectedSpecies():data?.crop||'wheat',stock=stockFor(wheatState,crop),soil=data?.soil||newSoil(worldElapsed(now)),legacy=status==='watered'&&!data?.soil,label=action==='plant'?'Plantar '+CROP_CALENDAR[crop].name.toLowerCase():action?wheatLabels[action]:('Crescendo '+Math.floor(wheatProgress(p.id,now)*100)+'%');
+ const cropIcons={wheat:'🌾',corn:'🌽',rice:'🌱',strawberry:'🍓'};
+ $('wheat-portrait').textContent=cropIcons[crop];$('wheat-title').textContent=CROP_CALENDAR[crop].name;
+ $('crop-options').hidden=!['raw','tilled'].includes(status);
+ for(const button of $('crop-options').querySelectorAll('button')){const selected=button.dataset.crop===crop;if(button.getAttribute('aria-pressed')!==String(selected))button.setAttribute('aria-pressed',String(selected));}
+ wheatAction.dataset.icon=({till:'⛏',plant:'🌱',water:'💧',harvest:'🧺'})[action]||'🌿';
  $('crop-select').hidden=!['raw','tilled'].includes(status);
  if(wheatAction.textContent!==label)wheatAction.textContent=label;
  wheatAction.disabled=!!tillWork||!action||wheatSaveLocked||(action==='plant'&&stock.seeds===0);
@@ -941,6 +957,7 @@ function updateWheat(now=Date.now(),force=false){
 wheatAction.addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction(wheatActions[wheatStatus(p.id)],p.id);});
 wheatUndo.addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction('undo',p.id);});
 $('crop-select').addEventListener('change',()=>updateWheat(Date.now(),true));
+for(const button of $('crop-options').querySelectorAll('button'))button.onclick=()=>{$('crop-select').value=button.dataset.crop;updateWheat(Date.now(),true);};
 for(const [id,action] of [['farm-water','water'],['farm-irrigate','irrigate'],['farm-fertilize','fertilize'],['farm-treat','treat']])$(id).addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction(action,p.id);});
 const farmCenter=$('farm-center');
 let lastFarmCenter=-Infinity;
@@ -1348,7 +1365,19 @@ function blocked(x,z,interacting=false,from=null,ignoreFences=false){
  if(worldFixtures.some(f=>check((a,b)=>Math.max(Math.abs(a-f.x)-f.hx-.18,Math.abs(b-f.z)-f.hz-.18))))return true;
  return false;
 }
-function setHouseGroup(id,visible){for(const mesh of groups[id]||[])mesh.setEnabled(visible);}
+// Track original shadow membership after batching; avoid stale shadows of hidden
+// walls and transparent roofs. Change membership only when the state changes.
+const residenceShadowState={members:new Map(),changes:0,insideSwitches:0};
+function syncHouseShadows(){
+ for(const [mesh,state] of residenceShadowState.members){
+  const opaque=mesh.visibility>.98&&mesh.isEnabled(),cast=state.cast&&opaque,receive=state.receive&&opaque;
+  if(mesh.receiveShadows!==receive)mesh.receiveShadows=receive;
+  if(cast===state.active)continue;
+  if(cast)shadow.addShadowCaster(mesh,false);else shadow.removeShadowCaster(mesh,false);
+  state.active=cast;residenceShadowState.changes++;shadow.getShadowMap().resetRefreshCounter();
+ }
+}
+function setHouseGroup(id,visible){for(const mesh of groups[id]||[])if(mesh.isEnabled()!==visible)mesh.setEnabled(visible);}
 // Interaction state owns the leaf: proximity and the button never drive it directly.
 const doorAngle=()=>home.angle-entry.door*Math.PI*.49;
 function setDoorPose(turn=0){
@@ -1485,13 +1514,15 @@ function avatarOccludedByHouse(alpha,beta){
  return false;
 }
 function updateAvatarVisibility(dt,inside){
- const occluded=!inside&&avatarOccludedByHouse(camera.alpha,camera.beta),target=occluded?.15:1;
+ // The entrance has its own roof cutaway; exterior occlusion must not compete
+ // with it. Preserve the approved rear/side transparency outside the porch.
+ const occluded=!inside&&entry.mode==='exterior'&&avatarOccludedByHouse(camera.alpha,camera.beta),target=occluded?.15:1;
  cameraStability.occluded=occluded;
  const opacity=cameraStability.houseOpacity+(target-cameraStability.houseOpacity)*(1-Math.exp(-dt*14));
  const next=Math.abs(opacity-target)<.015?target:opacity;
  if(next!==cameraStability.houseOpacity){
   cameraStability.houseOpacity=next;
-  for(const id of ['house','house-roof','house-front','house-porch-roof','house-door'])for(const mesh of groups[id]||[]){mesh.visibility=next;mesh.receiveShadows=next>.98;}
+  for(const id of ['house','house-roof','house-front','house-porch-roof','house-door'])for(const mesh of groups[id]||[]){mesh.visibility=next;}
  }
 }
 function stableCameraZone(front,external,near,dt){
@@ -1511,7 +1542,8 @@ function updateEntry(dt){
  const steering=pointer!==null||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(k=>keys.has(k));
  const gesture=cameraGesture(dt,steering);
  const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
- const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+.22&&p.z<home.d/2-.12;
+ const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+(entry.inside?.08:.34)&&p.z<home.d/2-.12;
+ if(inside!==entry.inside)residenceShadowState.insideSwitches++;
  const porch=Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9-porchExtension&&p.z<=f+.25;
  const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95-porchExtension&&p.z<f-2.8-porchExtension;
  const near=inside||porch||stairs;
@@ -1552,7 +1584,7 @@ function updateEntry(dt){
   retarget(Vector3.Lerp(camera.target,trackingAim,1-Math.exp(-dt*10)),beta);fit();
   if(!gesture&&weight===0&&b<.004&&Math.abs(angleDelta(camera.alpha,saved.alpha))<.008){camera.alpha=saved.alpha;span=saved.span;retarget(baseAim,saved.beta);fit();entry.previous=null;entry.blend=0;follow=saved.follow;}
  }else if(follow)retarget(Vector3.Lerp(camera.target,explorationAim(),1-Math.exp(-dt*10)));
- updateAvatarVisibility(dt,inside);
+ updateAvatarVisibility(dt,inside);syncHouseShadows();
 }
 // The ordinary gameplay camera follows the actor across the entire map.
 const EXPLORATION_SPAN=54;
@@ -1902,7 +1934,7 @@ const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,m
 petBodyBlocked=petSystem.bodyBlocked;
 // Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
 for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=8;
-let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||build.open))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);tickBuild(dt,Math.hypot(input.x,input.z)>.03);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork&&!build.open);refreshFarmCenter();
+let t=0,frames=0;const shadowMap=shadow.getShadowMap();const shadowCache={refreshes:0,lastSignature:null,lastRefreshMs:-Infinity};shadowMap.refreshRate=0;scene.onBeforeRenderObservable.add(()=>{const rawDt=Math.max(0,engine.getDeltaTime()/1000),dt=Math.min(.05,rawDt);motion.peakDeltaMs=Math.max(motion.peakDeltaMs,rawDt*1000);t+=dt;waterTex.vOffset=-(t*.035)%1;fallTex.vOffset=-(t*.27)%1;for(let i=0;i<waterMotion.length;i++){const f=waterMotion[i],p=Vector3.Lerp(f.a,f.b,(f.phase+t*f.speed)%1).add(f.side);p.y+=.035;Matrix.Compose(f.scale,f.rotation,p).copyToArray(flowMatrices,i*16);}if(flowBatch)flowBatch.thinInstanceBufferUpdated('matrix');let x=joy.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),z=joy.z+(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0);let len=Math.hypot(x,z);if(len>1){x/=len;z/=len}const input=worldInput(x,z);if(petSystem.interactionActive()&&(Math.hypot(input.x,input.z)>.03||entry.action||seating.phase!=='idle'||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||build.open))petSystem.cancelInteraction();if(tillWork&&(Math.hypot(input.x,input.z)>.03||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden))endTill(false);if(tillWork)tickTill(dt);else if(!petSystem.interactionActive())updateLocomotion(input.x,input.z,rawDt);updateDust(Math.min(.12,rawDt));updateEntry(dt);updateGarden();updateWheat();tickMounds(dt);tickBuild(dt,Math.hypot(input.x,input.z)>.03);updateWorldClock();updateRain(rawDt);petSystem.update(rawDt,!entry.inside&&!entry.action&&seating.phase==='idle'&&playerMenu.hidden&&controlsMenu.hidden&&gardenPanel.hidden&&farmCenter.hidden&&!tillWork&&!build.open&&wheatPanel.hidden);refreshFarmCenter();
  const sig=[Math.round(avatar.position.x*4),Math.round(avatar.position.z*4),Math.round(avatar.rotation.y*4),Math.round(avatar.rotation.x*20),Math.round(seating.blend*20),seating.phase,Math.round(gait.stride*Math.sin(gait.phase)*4),Math.round(entry.door*20),entry.action?.phase||'',Math.round((entry.action?.turn||0)*10),entry.mode,Math.round(camera.target.x/3),Math.round(camera.target.z/3),...petSystem.pets.map(p=>Math.round(p.rig.root.position.x*2)+':'+Math.round(p.rig.root.position.z*2))].join('|');const now=performance.now();if(sig!==shadowCache.lastSignature&&now-shadowCache.lastRefreshMs>=1000/(entry.blend>.02?20:30)){shadowCache.lastSignature=sig;shadowCache.lastRefreshMs=now;shadowMap.resetRefreshCounter();shadowCache.refreshes++;}frames++});
 // Measure elapsed real time between completed render callbacks, not the engine's startup estimate.
 const perf={fps:null,p95Ms:null,maxMs:null,slowFrames:0,frames:0,last:null,windowStart:null,samples:[]};
@@ -1947,7 +1979,8 @@ for(const [id,parts] of Object.entries(groups)){
  groups[id]=kept;
 }
 batching.after=scene.meshes.length;
+const residenceCasters=new Set(shadow.getShadowMap().renderList||[]);for(const id of ['house','house-roof','house-front','house-porch-roof','house-door'])for(const mesh of groups[id]||[]){const cast=residenceCasters.has(mesh);residenceShadowState.members.set(mesh,{cast,active:cast,receive:mesh.receiveShadows});}
 // Assign interior emitters to interior surfaces, not the outside façade/roof.
 for(const {id,light:l} of nightLights){if(id==='warm interior'||id==='warm loft')l.includedOnlyMeshes=[...(groups.house||[]),...(groups['farm visitor']||[]),...(groups.dog||[]),...(groups.cat||[])];}
 
-window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
+window.cvQA={scene,engine,roofCraft,facadeCraft,petSystem,polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{$('loading').remove();window.cvQA.ready=true});
