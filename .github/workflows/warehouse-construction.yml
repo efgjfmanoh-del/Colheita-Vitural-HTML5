@@ -10,11 +10,10 @@ concurrency:
   group: colheita-babylon-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  preview:
-    outputs:
-      publish_ready: ${{ steps.release_gate.outputs.ready }}
+  build:
+    name: 1 - Preparar e compilar código
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: html5-babylon
@@ -43,8 +42,65 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ runner.arch }}-node22-npm-${{ hashFiles('html5-babylon/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node22-npm-
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - name: Registrar checkpoint imutável por commit
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > efg-commit.txt
+          sha256sum dist/index.html dist/game.js package-lock.json efg-commit.txt > efg-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: efg-web-checkpoint
+          path: |
+            html5-babylon/dist/
+            html5-babylon/package-lock.json
+            html5-babylon/efg-commit.txt
+            html5-babylon/efg-sha256.txt
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
+  warehouse:
+    name: 2 - Teste direcionado do armazém
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: html5-babylon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: efg-web-checkpoint
+          path: html5-babylon
+      - name: Conferir commit e integridade do checkpoint
+        run: |
+          set -euo pipefail
+          test "$(cat efg-commit.txt)" = "$GITHUB_SHA"
+          sha256sum --check efg-sha256.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ runner.arch }}-node22-npm-${{ hashFiles('html5-babylon/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node22-npm-
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-ubuntu24-playwright-${{ hashFiles('html5-babylon/package-lock.json') }}
       - name: Preparar dependências Chromium sem feed externo desnecessário
         working-directory: .
         run: |
@@ -59,24 +115,104 @@ jobs:
             if [[ "$attempt" == 3 ]]; then exit 1; fi
             sleep "$((attempt * 10))"
           done
-      - name: Testar o motor e registrar capturas
+      - name: Executar testes e registrar capturas
         run: |
+          set -euo pipefail
           python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/cv-babylon.log 2>&1 &
           for i in {1..20}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
-          npm test
+          npm run test:warehouse
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Colheita-Babylon-Etapa1-QA
+          name: efg-warehouse-evidence
           path: html5-babylon/qa/
-          retention-days: 3
+          retention-days: 14
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
+          overwrite: true
+  integration:
+    name: 3 - Regressão integrada (desktop e Android simulado)
+    needs: [build, warehouse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: html5-babylon
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: Colheita-Babylon-Etapa1-Web
-          path: html5-babylon/dist/
-          retention-days: 3
-          if-no-files-found: error
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: efg-web-checkpoint
+          path: html5-babylon
+      - name: Conferir commit e integridade do checkpoint
+        run: |
+          set -euo pipefail
+          test "$(cat efg-commit.txt)" = "$GITHUB_SHA"
+          sha256sum --check efg-sha256.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-${{ runner.arch }}-node22-npm-${{ hashFiles('html5-babylon/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node22-npm-
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-ubuntu24-playwright-${{ hashFiles('html5-babylon/package-lock.json') }}
+      - name: Preparar dependências Chromium sem feed externo desnecessário
+        working-directory: .
+        run: |
+          python3 android-test/test-browser-apt.py
+          sudo python3 android-test/prepare-browser-apt.py --apply
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+      - name: Instalar Chromium e dependências verificadas
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then exit 0; fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Executar testes e registrar capturas
+        run: |
+          set -euo pipefail
+          python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/cv-babylon.log 2>&1 &
+          for i in {1..20}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          npm run test:regression
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: efg-integration-evidence
+          path: html5-babylon/qa/
+          retention-days: 14
+          if-no-files-found: warn
+          overwrite: true
+  apk:
+    name: 4 - Compilar, assinar e validar APK
+    needs: [build, warehouse, integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: html5-babylon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: efg-web-checkpoint
+          path: html5-babylon
+      - name: Conferir commit e integridade do checkpoint
+        run: |
+          set -euo pipefail
+          test "$(cat efg-commit.txt)" = "$GITHUB_SHA"
+          sha256sum --check efg-sha256.txt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -127,5 +263,7 @@ jobs:
         with:
           name: Colheita-Vitural-APK-QA
           path: android-test/qa/
-          retention-days: 3
+          retention-days: 14
           if-no-files-found: error
+          overwrite: true
+
