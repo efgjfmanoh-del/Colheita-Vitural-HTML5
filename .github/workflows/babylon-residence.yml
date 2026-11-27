@@ -8,7 +8,9 @@ permissions:
   contents: read
 concurrency:
   group: colheita-babylon-${{ github.ref }}
-  cancel-in-progress: false
+  # A newer QA candidate supersedes obsolete same-version publication runs.
+  # Main and legacy QA continue without interruption.
+  cancel-in-progress: ${{ github.ref == 'refs/heads/qa/lote-final-025' }}
 jobs:
   build:
     name: 1 - Preparar e compilar código
@@ -246,6 +248,10 @@ jobs:
             refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" || "$code" == 202 && "$version" == "0.2.2" || "$code" == 203 && "$version" == "0.2.3" || "$code" == 204 && "$version" == "0.2.4" ]] ;;
             *) exit 1 ;;
           esac
+          if [[ "$GITHUB_REF" == refs/heads/qa/lote-final-025 ]]; then
+            head=$(gh api "repos/$GH_REPO/git/ref/heads/qa/lote-final-025" --jq .object.sha)
+            [[ "$head" == "$GITHUB_SHA" ]] || { echo 'Candidato substituído; publicação bloqueada.'; exit 1; }
+          fi
           tag="qa-v$code"
           if gh release view "$tag" >/dev/null 2>&1; then
             mkdir existing
