@@ -25,3 +25,5 @@ Cada função legada deve ser rastreável ao código original e ao teste na nova
 
 ## Rodada consolidada 0.2.0 RC
 Base qa-v150 aprovada. Desenvolvimento interno em main, pacote e certificado permanentes preservados; distribuição bloqueada por android-test/rc-release-gate.json, incluindo todas as onze frentes e teste físico. Artefatos de CI não são releases OTA. Inventário e economia parcial: comércio agrícola transacional com preços originais compartilhados e arroz provisório. Feira espacial e demais sistemas pendentes.
+
+- Conciliação: branch experimental rc/0.2.0 não será mesclada integralmente. main mantém economia transacional coins/commitTrade e gate; expansão agrícola incorporada isoladamente, sem duplicar saldos. Não instalar artefatos experimentais.

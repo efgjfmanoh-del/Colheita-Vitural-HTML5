@@ -32,7 +32,15 @@ export const CROP_CALENDAR=Object.freeze({
  wheat:Object.freeze({name:'Trigo',preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:4,offSeasonMultiplier:1.5,temperature:19,moisture:.48,yield:3,regrow:0}),
  corn:Object.freeze({name:'Milho',preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:6,offSeasonMultiplier:1.5,temperature:26,moisture:.58,yield:4,regrow:0}),
  rice:Object.freeze({name:'Arroz',preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:8,offSeasonMultiplier:1.5,temperature:25,moisture:.88,yield:5,regrow:0}),
- strawberry:Object.freeze({name:'Morango',preferredMonths:Object.freeze([4,5,6,7,8,9]),hours:5,offSeasonMultiplier:1.5,temperature:18,moisture:.60,yield:3,regrow:2})
+ strawberry:Object.freeze({name:'Morango',preferredMonths:Object.freeze([4,5,6,7,8,9]),hours:5,offSeasonMultiplier:1.5,temperature:18,moisture:.60,yield:3,regrow:2}),
+ lettuce:Object.freeze({name:"Alface",preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:3,offSeasonMultiplier:1.5,temperature:18,moisture:0.6,yield:3,regrow:0}),
+ carrot:Object.freeze({name:"Cenoura",preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:5,offSeasonMultiplier:1.5,temperature:19,moisture:0.52,yield:3,regrow:0}),
+ pea:Object.freeze({name:"Ervilha",preferredMonths:Object.freeze([4,5,6,7,8]),hours:4,offSeasonMultiplier:1.5,temperature:17,moisture:0.56,yield:4,regrow:0}),
+ basil:Object.freeze({name:"Manjericão",preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:3,offSeasonMultiplier:1.5,temperature:25,moisture:0.5,yield:3,regrow:2}),
+ tomato:Object.freeze({name:"Tomate",preferredMonths:Object.freeze([8,9,10,11,12,1]),hours:6,offSeasonMultiplier:1.5,temperature:23,moisture:0.57,yield:4,regrow:2}),
+ broccoli:Object.freeze({name:"Brócolis",preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:6,offSeasonMultiplier:1.5,temperature:18,moisture:0.62,yield:3,regrow:0}),
+ sunflower:Object.freeze({name:"Girassol",preferredMonths:Object.freeze([9,10,11,12,1,2]),hours:6,offSeasonMultiplier:1.5,temperature:25,moisture:0.45,yield:3,regrow:0}),
+ turnip:Object.freeze({name:"Nabo",preferredMonths:Object.freeze([3,4,5,6,7,8]),hours:4,offSeasonMultiplier:1.5,temperature:17,moisture:0.55,yield:3,regrow:0})
 });
 export function cropSchedule(id,month){
  const crop=CROP_CALENDAR[id];if(!crop||!Number.isInteger(month)||month<1||month>12)throw Error('invalid crop calendar');

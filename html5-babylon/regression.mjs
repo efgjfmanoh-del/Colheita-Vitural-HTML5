@@ -330,7 +330,7 @@ try{const page=await browser.newPage({viewport:{width:1280,height:720},hasTouch:
  assert(harvest.state==='tilled'&&harvest.grain>=2&&harvest.grain<=4&&harvest.seeds===24&&!harvest.repeat&&harvest.persisted.grain===harvest.grain);
  await page.locator('#inventory-open').click();assert(await page.locator('#inventory-dialog').isVisible());
  assert.equal(await page.locator('[data-item="seed:wheat"] [data-count]').getAttribute('data-count'),String(harvest.seeds));assert.equal(await page.locator('[data-item="harvest:wheat"] [data-count]').getAttribute('data-count'),String(harvest.grain));
- await page.locator('[data-inventory-category="seeds"]').click();assert.equal(await page.locator('#inventory-items .inventory-item').count(),4);
+ await page.locator('[data-inventory-category="seeds"]').click();assert.equal(await page.locator('#inventory-items .inventory-item').count(),12);
  const inventoryBefore=await page.evaluate(()=>JSON.stringify(cvQA.wheatState));await page.locator('[data-item="seed:corn"]').click();assert.equal(await page.locator('#crop-select').inputValue(),'corn');assert.equal(await page.evaluate(()=>JSON.stringify(cvQA.wheatState)),inventoryBefore);
  await page.locator('[data-item="seed:wheat"]').click();await page.screenshot({path:'qa/inventario-unificado.png'});
  await page.locator('[data-inventory-category="market"]').click();const beforeTrade=await page.evaluate(()=>({coins:cvQA.wheatState.coins,grain:cvQA.wheatState.grain,seeds:cvQA.wheatState.seeds}));

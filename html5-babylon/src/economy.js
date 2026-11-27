@@ -1,6 +1,6 @@
 import {CROP_CALENDAR} from './world-calendar.js';
 // Prices for the three original shared species are preserved; rice is new.
-export const PRICES=Object.freeze({wheat:Object.freeze({buy:10,sell:25}),corn:Object.freeze({buy:15,sell:42}),rice:Object.freeze({buy:16,sell:40}),strawberry:Object.freeze({buy:12,sell:32})});
+export const PRICES=Object.freeze({wheat:Object.freeze({buy:10,sell:25}),corn:Object.freeze({buy:15,sell:42}),rice:Object.freeze({buy:16,sell:40}),strawberry:Object.freeze({buy:12,sell:32}),lettuce:Object.freeze({buy:5,sell:12}),carrot:Object.freeze({buy:15,sell:40}),pea:Object.freeze({buy:9,sell:24}),basil:Object.freeze({buy:7,sell:18}),tomato:Object.freeze({buy:18,sell:48}),broccoli:Object.freeze({buy:20,sell:55}),sunflower:Object.freeze({buy:11,sell:29}),turnip:Object.freeze({buy:8,sell:20})});
 export const INITIAL_COINS=500;
 export const validBalance=n=>Number.isSafeInteger(n)&&n>=0;
 export function quoteTrade(state,id,action,quantity){

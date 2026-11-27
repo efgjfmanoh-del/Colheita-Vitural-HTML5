@@ -1,7 +1,7 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer} from '@babylonjs/core';
 import layout from '../layout.json';
 import {createPets} from './pets.js';
-import {inventorySnapshot} from './inventory.js';
+import {inventorySnapshot,cropIcons} from './inventory.js';
 import {PRICES,INITIAL_COINS,validBalance,commitTrade,quoteTrade} from './economy.js';
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
@@ -786,7 +786,7 @@ const WHEAT_SAVE='cv.wheat.v1',LEGACY_WHEAT_GROW=90000;
 const wheatDuration=p=>Number.isFinite(p?.durationMs)&&p.durationMs>0?p.durationMs:LEGACY_WHEAT_GROW;
 function wheatSchedule(now=Date.now(),crop='wheat'){return cropSchedule(crop,calendarAt(worldElapsed(now)).month);}
 updateWorldClock(Date.now(),true);
-const freshWheat=()=>({schema:1,coins:INITIAL_COINS,seeds:24,grain:0,plots:{},stocks:{corn:{seeds:12,grain:0},rice:{seeds:12,grain:0},strawberry:{seeds:12,grain:0}},compost:24,treatments:24,quality:{}});
+const freshWheat=()=>({schema:1,coins:INITIAL_COINS,seeds:24,grain:0,plots:{},stocks:Object.fromEntries(Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat').map(id=>[id,{seeds:['corn','rice','strawberry'].includes(id)?12:0,grain:0}])),compost:24,treatments:24,quality:{}});
 let wheatState=freshWheat(),wheatSaveError='',wheatSaveLocked=false;
 try{
  const raw=localStorage.getItem(WHEAT_SAVE);
@@ -794,7 +794,7 @@ try{
  for(const [id,p] of Object.entries(v.plots)){if(!p||!wheatPlots.some(q=>q.id===id)||!['raw','tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>3600000)))throw Error('invalid plot');}
  for(const p of Object.values(v.plots)){if(p.crop!==undefined&&!Object.hasOwn(CROP_CALENDAR,p.crop)||p.soil!==undefined&&!validSoil(p.soil))throw Error('invalid agricultural state');}
  if(v.coins!==undefined&&!validBalance(v.coins))throw Error('invalid economy balance');
- const defaults=freshWheat();for(const id of ['corn','rice','strawberry']){const stock=v.stocks?.[id];if(stock&&(!Number.isSafeInteger(stock.seeds)||stock.seeds<0||!Number.isSafeInteger(stock.grain)||stock.grain<0))throw Error('invalid stock');}
+ const defaults=freshWheat();for(const id of Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat')){const stock=v.stocks?.[id];if(stock&&(!Number.isSafeInteger(stock.seeds)||stock.seeds<0||!Number.isSafeInteger(stock.grain)||stock.grain<0))throw Error('invalid stock');}
  for(const k of ['compost','treatments'])if(v[k]!==undefined&&(!Number.isSafeInteger(v[k])||v[k]<0))throw Error('invalid farm resources');
  wheatState={...defaults,...v,stocks:{...defaults.stocks,...v.stocks}};}
 }catch{wheatSaveLocked=true;wheatSaveError='Dados de trigo indisponíveis; cultivo bloqueado para preservar o save.';}
@@ -936,6 +936,14 @@ function rebuildWheat(now){
    quad(plants,[x,b,z-r],[x,b,z+r],[x,b+hh,z+r],[x,b+hh,z-r],col);
    for(const side of [-1,1])tri(plants,[x,b+hh*.25,z],[x+side*hh*.36,b+hh*.48,z+.035],[x,b+hh*.45,z],ripe?gold:leaf);
    if(crop==='strawberry'){for(const side of [-1,1]){tri(plants,[x,b+.05,z],[x+side*.16,b+.10,z-.08],[x+side*.09,b+hh,z+.07],leaf);if(ripe)tri(plants,[x+side*.09,b+.07,z],[x+side*.15,b+.17,z-.03],[x+side*.03,b+.17,z+.03],Color3.FromHexString('#d64142'));}}
+   if(!['wheat','corn','rice','strawberry'].includes(crop)){
+    const low=['lettuce','carrot','turnip','broccoli','basil'].includes(crop),cy=b+hh*(low?.40:.65),radius=low?.12:.085;
+    const leafColor=Color3.FromHexString(crop==='broccoli'?'#285c39':crop==='basil'?'#43834b':'#75a743');
+    for(let n=0;n<5;n++){const a=n*1.2566,dx=Math.cos(a)*radius,dz=Math.sin(a)*radius;tri(plants,[x,cy,z],[x+dx-dz*.5,cy+.065,z+dz+dx*.5],[x+dx+dz*.5,cy+.02,z+dz-dx*.5],leafColor);}
+    if(ripe){const fruit={carrot:'#e58a37',turnip:'#e9d7b3',tomato:'#cf4038',pea:'#83ad42',broccoli:'#356b39',sunflower:'#e8b839',lettuce:'#a8c65c',basil:'#4e9b52'}[crop],cc=Color3.FromHexString(fruit),yy=low?cy:b+hh*.86,rr=crop==='sunflower'?.11:.07;
+      for(let n=0;n<4;n++){const a=n*Math.PI/2,d=Math.PI/2;tri(plants,[x,yy+.08,z],[x+Math.cos(a)*rr,yy,z+Math.sin(a)*rr],[x+Math.cos(a+d)*rr,yy,z+Math.sin(a+d)*rr],cc);tri(plants,[x,yy-.05,z],[x+Math.cos(a+d)*rr,yy,z+Math.sin(a+d)*rr],[x+Math.cos(a)*rr,yy,z+Math.sin(a)*rr],cc);}
+    }
+   }
    if(ripe&&crop==='corn'){for(const side of [-1,1])quad(plants,[x,b+hh*.42,z],[x+side*.075,b+hh*.45,z],[x+side*.075,b+hh*.75,z],[x,b+hh*.78,z],ear);}
    if(ripe&&(crop==='wheat'||crop==='rice'))for(let n=0;n<4;n++){const yy=b+hh-.03+n*.041,side=n%2?1:-1;tri(plants,[x,yy-.035,z],[x+side*.058,yy+.04,z],[x,yy+.065,z],ear);tri(plants,[x,yy-.035,z],[x,yy+.04,z+side*.058],[x,yy+.065,z],gold);}
   }
@@ -959,7 +967,7 @@ function updateWheat(now=Date.now(),force=false){
  if(force||now-lastWheatTick>=250){lastWheatTick=now;rebuildWheat(now);}
  if(!p)return;
  const status=wheatStatus(p.id,now),action=wheatActions[status],data=evaluatedPlot(p.id,now),crop=status==='raw'||status==='tilled'?selectedSpecies():data?.crop||'wheat',stock=stockFor(wheatState,crop),soil=data?.soil||newSoil(worldElapsed(now)),legacy=status==='watered'&&!data?.soil,label=action==='plant'?'Plantar '+CROP_CALENDAR[crop].name.toLowerCase():action?wheatLabels[action]:('Crescendo '+Math.floor(wheatProgress(p.id,now)*100)+'%');
- const cropIcons={wheat:'🌾',corn:'🌽',rice:'🌱',strawberry:'🍓'};
+ // Shared crop icons from inventory catalog.
  $('wheat-portrait').textContent=cropIcons[crop];$('wheat-title').textContent=CROP_CALENDAR[crop].name;
  $('crop-options').hidden=!['raw','tilled'].includes(status);
  for(const button of $('crop-options').querySelectorAll('button')){const selected=button.dataset.crop===crop;if(button.getAttribute('aria-pressed')!==String(selected))button.setAttribute('aria-pressed',String(selected));}
@@ -982,7 +990,7 @@ wheatUndo.addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAc
 $('crop-select').addEventListener('change',()=>updateWheat(Date.now(),true));
 for(const button of $('crop-options').querySelectorAll('button'))button.onclick=()=>{$('crop-select').value=button.dataset.crop;updateWheat(Date.now(),true);};
 for(const [id,action] of [['farm-water','water'],['farm-irrigate','irrigate'],['farm-fertilize','fertilize'],['farm-treat','treat']])$(id).addEventListener('click',()=>{const p=nearestWheat();if(p)applyWheatAction(action,p.id);});
-const farmCenter=$('farm-center');let guideCrop='wheat';const guideIcons={wheat:'🌾',corn:'🌽',rice:'🌱',strawberry:'🍓'};
+const farmCenter=$('farm-center');let guideCrop='wheat';const guideIcons=cropIcons;
 let lastFarmCenter=-Infinity;
 function farmCard(parent,icon,title,detail){
  const el=document.createElement('div');el.className='farm-card';
