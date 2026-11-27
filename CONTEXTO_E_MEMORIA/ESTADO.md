@@ -406,3 +406,5 @@ Não gerar armazém ou baú automaticamente. A feira permanece. Modelo do armaz�
 
 ## Branch feature/warehouse-construction — autorização de desenvolvimento paralelo
 Base e07be76, main intocada. Armazém único sem geração automática; categoria no arco do martelo, prévia de volume e área, posicionamento pelos controles existentes, giro 360°, validação amostrada de área/desnível/colisões/entrada, confirmação no mesmo save cv.build.v1 com campo opcional warehouse, sem tocar nos estoques. Modelo e colisor giram juntos; minimapa atualizado por construção; somente armazém colocado e próximo habilita transferência. Protótipo QA sem custo de materiais (não definido), sem remoção/realocação e sem interior navegável; não alterar release nem declarar aprovado antes de testes. Workflow isolado sem job de publicação. Validação física/artística pendente.
+
+- Falha 45936700464: node --check regression.mjs linha 577, SyntaxError Identifier 'before' has already been declared; novo teste reutilizou nome de variável do escopo anterior. Isolado teste de armazém em bloco léxico próprio e variável renomeada warehouseSeedsBefore. Nova validação completa requerida; main preservada.
