@@ -12,12 +12,12 @@ class Gate(unittest.TestCase):
                 return subprocess.check_output(['python3',str(gate)],env={**os.environ,'GITHUB_REF':ref},text=True).strip()
             self.assertEqual(run('refs/heads/main'),'ready=true')
             self.assertEqual(run('refs/heads/feature/test'),'ready=false')
-            js=p/'html5-babylon/src/main.js'
+            js=p/'android-test/qa-progression-authorization.json'
             original=js.read_bytes()
             js.write_bytes(original+b'\n// unauthorized change\n')
             self.assertEqual(run('refs/heads/main'),'ready=false')
             js.write_bytes(original)
             grad=p/'android-test/app/build.gradle'
-            grad.write_text(grad.read_text().replace('versionCode 201','versionCode 202').replace("versionName '0.2.1'","versionName '0.2.2'"))
+            grad.write_text(grad.read_text().replace('versionCode 202','versionCode 203').replace("versionName '0.2.2'","versionName '0.2.3'"))
             self.assertEqual(run('refs/heads/main'),'ready=false')
 if __name__=='__main__': unittest.main()

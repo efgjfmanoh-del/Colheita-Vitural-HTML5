@@ -1,5 +1,6 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer,Frustum} from '@babylonjs/core';
 import layout from '../layout.json';
+import {SKILLS,ACTIVE_SKILLS,EVENTS,LAND,PERKS,freshProgress,validProgress,rank,threshold,title,points,reputationTitle,hasPerk,offers,accept,record,claim,unlock,buyLand,achievements} from './progression.js';
 import {archiveAvailable,scheduleWorldRestart,applyWorldRestart} from './world-restart.js';
 // Complete a confirmed restart before any subsystem loads or writes its save.
 applyWorldRestart(localStorage);
@@ -10,7 +11,7 @@ import {inventorySnapshot,cropIcons,TOOL_CATALOG,equippedTool,equipTool} from '.
 import {PRICES,SUPPLIES,INITIAL_COINS,validBalance,commitTrade,quoteTrade,quoteSupply,commitSupply} from './economy.js';
 import {weatherAt,WEATHER_INTERVAL,newSoil,validSoil,simulatePlot,harvestInfo,prepareSpecies,cropAdvice,windAt} from './farm-simulation.js';
 import {calendarAt,cropSchedule,daylightAt,CROP_CALENDAR,REAL_MS_PER_GAME_MINUTE,DAYS_PER_MONTH,MONTH_NAMES,newWorldClock,elapsedWorldClock,upgradeWorldClock} from './world-calendar.js';
-const $=id=>document.getElementById(id),canvas=$('view'),inventoryDialog=$('inventory-dialog');
+const $=id=>document.getElementById(id),canvas=$('view'),inventoryDialog=$('inventory-dialog'),progressDialog=$('progress-dialog');
 const engine=new Engine(canvas,true,{preserveDrawingBuffer:true,stencil:true,adaptToDeviceRatio:false});
 // Render in physical pixels rather than downscaling the CSS viewport on high-DPR phones.
 const qualityProfiles=Object.freeze({economico:540,equilibrado:720,alto:1080});
@@ -909,7 +910,7 @@ const WHEAT_SAVE='cv.wheat.v1',LEGACY_WHEAT_GROW=90000;
 const wheatDuration=p=>Number.isFinite(p?.durationMs)&&p.durationMs>0?p.durationMs:LEGACY_WHEAT_GROW;
 function wheatSchedule(now=Date.now(),crop='wheat'){return cropSchedule(crop,calendarAt(worldElapsed(now)).month);}
 updateWorldClock(Date.now(),true);
-const freshWheat=()=>({schema:1,coins:INITIAL_COINS,warehouse:{},seeds:24,grain:0,plots:{},stocks:Object.fromEntries(Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat').map(id=>[id,{seeds:['corn','rice','strawberry'].includes(id)?12:0,grain:0}])),compost:24,treatments:24,quality:{}});
+const freshWheat=()=>({schema:1,coins:INITIAL_COINS,progress:freshProgress(),warehouse:{},seeds:24,grain:0,plots:{},stocks:Object.fromEntries(Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat').map(id=>[id,{seeds:['corn','rice','strawberry'].includes(id)?12:0,grain:0}])),compost:24,treatments:24,quality:{}});
 let wheatState=freshWheat(),wheatSaveError='',wheatSaveLocked=false;
 try{
  const raw=localStorage.getItem(WHEAT_SAVE);
@@ -917,6 +918,7 @@ try{
  for(const [id,p] of Object.entries(v.plots)){if(!p||!farmPlotById.has(id)||!['raw','tilled','sown','watered'].includes(p.state)||(p.state==='watered'&&(!Number.isFinite(p.wateredAt)||p.wateredAt<0))||(p.durationMs!==undefined&&(!Number.isFinite(p.durationMs)||p.durationMs<LEGACY_WHEAT_GROW||p.durationMs>3600000)))throw Error('invalid plot');}
  for(const p of Object.values(v.plots)){if(p.crop!==undefined&&!Object.hasOwn(CROP_CALENDAR,p.crop)||p.soil!==undefined&&!validSoil(p.soil))throw Error('invalid agricultural state');}
  if(v.warehouse!==undefined&&!validWarehouse(v.warehouse))throw Error('invalid warehouse');
+ if(v.progress!==undefined&&!validProgress(v.progress))throw Error('invalid progression');
  if(v.coins!==undefined&&!validBalance(v.coins))throw Error('invalid economy balance');
  const defaults=freshWheat();for(const id of Object.keys(CROP_CALENDAR).filter(id=>id!=='wheat')){const stock=v.stocks?.[id];if(stock&&(!Number.isSafeInteger(stock.seeds)||stock.seeds<0||!Number.isSafeInteger(stock.grain)||stock.grain<0))throw Error('invalid stock');}
  for(const k of ['compost','treatments'])if(v[k]!==undefined&&(!Number.isSafeInteger(v[k])||v[k]<0))throw Error('invalid farm resources');
@@ -938,6 +940,10 @@ function migrateWholeBeds(){
 migrateWholeBeds();
 let tillWork=null,buildModeActive=false;
 let farmCache=new Map(),farmCacheTime=-1;
+function progressCommit(mutator){if(wheatSaveLocked)return false;const next=JSON.parse(JSON.stringify(wheatState));if(!mutator(next))return false;try{localStorage.setItem(WHEAT_SAVE,JSON.stringify(next));}catch{wheatSaveError='Falha ao salvar progressão.';return false;}const old=rank(wheatState.progress.xp);wheatState=next;progressNotice(old);return true;}
+function progressEvent(event,info={}){return progressCommit(next=>record(next.progress,event,info));}
+function progressNotice(old){refreshMissionTracker();const current=rank(wheatState.progress.xp);if(current>old){const n=$('progress-notice');n.textContent='Nível '+current+' · '+title(current);n.hidden=false;clearTimeout(progressNotice.timer);progressNotice.timer=setTimeout(()=>n.hidden=true,4500);}}
+
 function evaluatedPlot(id,now=Date.now()){
  const elapsed=worldElapsed(now),bucket=Math.floor(elapsed/1000);
  if(bucket!==farmCacheTime){farmCacheTime=bucket;farmCache.clear();}
@@ -967,11 +973,11 @@ function applyWheatAction(action,id,now=Date.now()){
  else if(action==='water'&&status==='sown'){p={...p,state:'watered',wateredAt:now,durationMs:p.durationMs??wheatSchedule(now,crop).realMs};if(p.soil)p.soil.moisture=.92;}
  else if(action==='water'&&status==='watered'&&!legacy){p.soil.moisture=.92;}
  else if(action==='irrigate'&&!legacy){p.soil.irrigated=!p.soil.irrigated;if(p.soil.irrigated){p.soil.moisture=Math.max(p.soil.moisture,CROP_CALENDAR[crop].moisture+.1);if(p.state==='sown'){p.state='watered';p.wateredAt=now;}}}
- else if(action==='fertilize'&&!legacy&&next.compost>0&&p.soil.fertility<.99){next.compost--;p.soil.fertility=Math.min(1,p.soil.fertility+.24);}
+ else if(action==='fertilize'&&!legacy&&next.compost>0&&p.soil.fertility<.99){next.compost--;p.soil.fertility=Math.min(1,p.soil.fertility+.24+(hasPerk(next.progress,'solo')?.08:0));}
  else if(action==='treat'&&!legacy&&next.treatments>0&&p.soil.pest>.01){next.treatments--;p.soil.pest=Math.max(0,p.soil.pest-.65);}
  else if(action==='weed'&&!legacy&&status!=='raw'&&(p.soil.weeds??0)>.01){p.soil.weeds=0;}
  else if(action==='harvest'&&status==='ripe'){
-  const result=legacy?{units:CROP_CALENDAR[crop].yield,quality:'Boa'}:harvestInfo(p);
+  const result=legacy?{units:CROP_CALENDAR[crop].yield,quality:'Boa'}:harvestInfo(p);if(hasPerk(next.progress,'colheita'))result.units++;record(next.progress,'harvest',{units:result.units,species:crop,quality:result.quality,now});
   if(!Number.isSafeInteger(stock.grain+result.units)||!Number.isSafeInteger(stock.seeds+1))return false;
   if(crop==='wheat'){next.grain+=result.units;next.seeds++;}else{next.stocks[crop].grain+=result.units;next.stocks[crop].seeds++;}
   next.quality[result.quality]=(next.quality[result.quality]||0)+result.units;
@@ -981,8 +987,9 @@ function applyWheatAction(action,id,now=Date.now()){
  // Legacy watering dates are wall timestamps; simulated crops use soil.at in world elapsed time.
  if(p.soil&&p.state==='watered'&&!Number.isFinite(p.wateredAt))p.wateredAt=now;
  next.plots[id]=p;
+ if(action==='plant'||action==='weed'||(action==='water'&&status==='sown'))record(next.progress,action,{now});const oldRank=rank(wheatState.progress.xp);
  try{localStorage.setItem(WHEAT_SAVE,JSON.stringify(next));}catch{wheatSaveError='Falha ao salvar. Nenhuma alteração aplicada.';return false;}
- wheatState=next;farmCache.clear();wheatSaveError='';wheatVisualKey='';updateWheat(now,true);farmAudio.action(action);return true;
+ wheatState=next;farmCache.clear();wheatSaveError='';wheatVisualKey='';updateWheat(now,true);farmAudio.action(action);progressNotice(oldRank);return true;
 }
 // Rebuild only on a visual stage transition; one mesh for furrows and one for wheat.
 entity('wheat dynamic cultivation');
@@ -1516,7 +1523,7 @@ function reset(){
  if(old!==null&&target?.hasPointerCapture(old))try{target.releasePointerCapture(old);}catch{}
 }
 function cancelInput(){keys.clear();reset();releaseRun();resetSprint();}
-window.addEventListener('keydown',e=>{if(e.key==='Escape'&&photoMode){setPhoto(false);return;}if(titleMode||photoMode||inventoryDialog.open||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&photoMode){setPhoto(false);return;}if(titleMode||photoMode||inventoryDialog.open||progressDialog.open||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur',cancelInput);window.addEventListener('resize',cancelInput);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelInput()});
@@ -1532,7 +1539,7 @@ function move(e){
  knob.style.transform='translate('+dx*k+'px,'+dy*k+'px)';
 }
 function startStick(e){
- if(titleMode||photoMode||inventoryDialog.open||pointer!==null||e.button!==0||!controlsMenu.hidden||!playerMenu.hidden||!gardenPanel.hidden||!farmCenter.hidden)return;
+ if(titleMode||photoMode||inventoryDialog.open||progressDialog.open||pointer!==null||e.button!==0||!controlsMenu.hidden||!playerMenu.hidden||!gardenPanel.hidden||!farmCenter.hidden)return;
  if(e.currentTarget===canvas&&(controls.mode!=='floating'||e.clientX>innerWidth*.47||e.clientY<innerHeight*.42))return;
  const r=pad.getBoundingClientRect(),baseX=r.left+r.width/2,baseY=r.top+r.height/2,free=controls.mode==='floating';
  stickCenter={x:free?e.clientX:baseX,y:free?e.clientY:baseY,baseX,baseY,r:Math.max(12,(r.width-knob.offsetWidth)/2-2)};
@@ -1681,7 +1688,7 @@ doorAction.addEventListener('pointerup',e=>{
 for(const name of ['pointercancel','lostpointercapture'])doorAction.addEventListener(name,e=>{if(e.pointerId===doorPointer)doorPointer=null;});
 doorAction.addEventListener('click',e=>{if(e.detail===0)toggleDoor();});
 
-window.addEventListener('keydown',e=>{if(!inventoryDialog.open&&e.key.toLowerCase()==='e'&&!e.repeat)toggleDoor()});
+window.addEventListener('keydown',e=>{if(!inventoryDialog.open&&!progressDialog.open&&e.key.toLowerCase()==='e'&&!e.repeat)toggleDoor()});
 const smooth01=x=>{const u=Math.max(0,Math.min(1,x));return u*u*(3-2*u);};
 const angleDelta=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
 // Camera influence is spatial and continuous, independent of the door/roof state.
@@ -1876,7 +1883,7 @@ function advanceManual(x,z,dt,speed=WALK_SPEED){
 // The run modifier is independent of joystick input; coast is bounded and collision-tested.
 function updateLocomotion(x,z,rawDt,held=sprint.held||keys.has('shift')){
  const dt=Math.max(0,Math.min(.12,rawDt)),len=Math.hypot(x,z),moving=len>1e-5;
- if(titleMode||photoMode||inventoryDialog.open||seating.phase!=='idle'||!farmCenter.hidden||!controlsMenu.hidden||!playerMenu.hidden)return 0;
+ if(titleMode||photoMode||inventoryDialog.open||progressDialog.open||seating.phase!=='idle'||!farmCenter.hidden||!controlsMenu.hidden||!playerMenu.hidden)return 0;
  if(entry.action||!gardenPanel.hidden){resetSprint();walkPose(0,Math.min(.05,dt));return 0;}
  const running=held&&moving;
  if(running){sprint.brake=0;sprint.coast=false;}
@@ -2048,9 +2055,10 @@ const tillStats={completed:0,cancelled:0,strokes:0,travel:0,sideSamples:0,inside
 function commitBed(id,prepared,now=Date.now()){
  const parts=bedPlots.get(id);if(!parts||wheatSaveLocked||parts.some(p=>!['raw','tilled'].includes(wheatStatus(p.id,now))))return false;
  const next=JSON.parse(JSON.stringify(wheatState)),elapsed=worldElapsed(now);
+ const oldRank=rank(wheatState.progress.xp);if(prepared&&parts.some(p=>wheatStatus(p.id,now)==='raw'))record(next.progress,'till',{now,key:id});
  for(const p of parts){const d=simulatePlot(next.plots[p.id],elapsed)||{crop:'wheat',soil:newSoil(elapsed)};next.plots[p.id]={...d,state:prepared?'tilled':'raw'};}
  try{localStorage.setItem(WHEAT_SAVE,JSON.stringify(next));}catch{wheatSaveError='Falha ao salvar. Nenhuma alteração aplicada.';return false;}
- wheatState=next;farmCache.clear();wheatVisualKey='';updateWheat(now,true);return true;
+ wheatState=next;farmCache.clear();wheatVisualKey='';updateWheat(now,true);progressNotice(oldRank);return true;
 }
 function beginTill(id){
  const p=farmPlotById.get(id),bed=farmBedById.get(p?.bedId);
@@ -2122,7 +2130,7 @@ function buildEnds(){
 function canBuild(a,b){
  if(Math.abs(a.y-b.y)>.70)return false;
  for(let i=0;i<=18;i++){
-  const p=Vector3.Lerp(a,b,i/18);if(blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||petBodyBlocked(p.x,p.z)||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
+  const p=Vector3.Lerp(a,b,i/18);if(!landBuildAllowed(p.x,p.z)||blocked(p.x,p.z,false,null,true)||onBridge(p.x,p.z)||petBodyBlocked(p.x,p.z)||Math.hypot(p.x-avatar.position.x,p.z-avatar.position.z)<.48)return false;
   for(const [u,v] of fenceColliders){if(segDist(p.x,p.z,u,v)<.22){const endpoint=[a,b].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30)&&[u,v].some(e=>Math.hypot(e.x-p.x,e.z-p.z)<.30);if(!endpoint)return false;}}
  }
  return true;
@@ -2144,7 +2152,7 @@ function refreshBuild(){
 function openBuild(){if(tillWork||entry.action||seating.phase!=='idle')return false;cancelInput();playerMenu.hidden=true;build.open=true;buildModeActive=true;build.mode='place';build.anchor=null;closeToolArc();build.x=avatar.position.x+Math.cos(camera.alpha)*1.6;build.z=avatar.position.z+Math.sin(camera.alpha)*1.6;build.angle=0;$('build-angle').value='0';refreshBuild();return true;}
 function closeBuild(){if(build.pointer!==null){const id=build.pointer;build.pointer=null;try{canvas.releasePointerCapture(id);}catch{}}build.open=false;buildModeActive=false;build.anchor=null;build.work=null;hammerRoot.setEnabled(false);releaseHand();refreshBuild();}
 function nudgeBuild(x,z){build.anchor=null;const a=camera.alpha+Math.PI/2;build.x+=(x*Math.cos(a)-z*Math.sin(a))*.35;build.z+=(x*Math.sin(a)+z*Math.cos(a))*.35;refreshBuild();}
-function placeBuild(){const [a,b]=buildEnds();if(!build.open||build.mode!=='place'||buildData.stock<=0||buildData.placed.length>=250||!canBuild(a,b))return false;const next=JSON.parse(JSON.stringify(buildData)),id='custom-'+next.next++;next.stock--;next.placed.push({id,a:[a.x,a.z],b:[b.x,b.z]});if(!saveBuild(next))return false;fencePiece(id,a,b,'custom');build.anchor=b.clone();build.x=b.x+Math.cos(build.angle)*.9;build.z=b.z+Math.sin(build.angle)*.9;buildStats.placed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
+function placeBuild(){const [a,b]=buildEnds();if(!build.open||build.mode!=='place'||buildData.stock<=0||buildData.placed.length>=250||!canBuild(a,b))return false;const next=JSON.parse(JSON.stringify(buildData)),id='custom-'+next.next++;next.stock--;next.placed.push({id,a:[a.x,a.z],b:[b.x,b.z]});if(!saveBuild(next))return false;fencePiece(id,a,b,'custom');build.anchor=b.clone();build.x=b.x+Math.cos(build.angle)*.9;build.z=b.z+Math.sin(build.angle)*.9;buildStats.placed++;progressEvent('build',{key:id});shadowMap.resetRefreshCounter();refreshBuild();return true;}
 function removeBuild(id){const p=editableFences.get(id);if(!p||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8||buildData.stock>=10000)return false;
  const next=JSON.parse(JSON.stringify(buildData));if(p.kind==='custom')next.placed=next.placed.filter(v=>v.id!==id);else next.removed.push(id);next.stock++;if(!saveBuild(next))return false;eraseFence(id);buildStats.removed++;shadowMap.resetRefreshCounter();refreshBuild();return true;}
 function confirmBuild(){if(build.mode==='place')return placeBuild();const p=selectFence();if(!p||build.work||segDist(avatar.position.x,avatar.position.z,p.a,p.b)>=1.8)return false;build.work={id:p.id,elapsed:0,stroke:-1};hammerRoot.setEnabled(true);refreshBuild();return true;}
@@ -2170,7 +2178,7 @@ $('tool-seeds').onclick=()=>{closeToolArc();openInventory();};
 $('tool-hoe').onclick=()=>{selectTool('hoe');closeToolArc();if(nearestWheat()){$('wheat-expand').click();}else{$('tool-hint').textContent='Aproxime-se de um canteiro para arar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);}};
 $('tool-water').onclick=()=>{selectTool('water');closeToolArc();const p=nearestWheat();if(p){$('wheat-expand').click();if(!applyWheatAction('water',p.id))$('tool-hint').textContent='Canteiro não precisa de rega agora.';}else $('tool-hint').textContent='Aproxime-se de um canteiro para regar.';clearTimeout(toolHintTimer);toolHintTimer=setTimeout(()=>$('tool-hint').textContent='',2200);};
 syncToolBar();
-function syncToolVisibility(){const hide=build.open||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||inventoryDialog.open||!wheatPanel.hidden;toolBar.hidden=hide;if(hide)closeToolArc();}
+function syncToolVisibility(){const hide=build.open||!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||inventoryDialog.open||progressDialog.open||!wheatPanel.hidden;toolBar.hidden=hide;if(hide)closeToolArc();}
 
 $('build-place').onclick=()=>{build.mode='place';build.anchor=null;refreshBuild();};$('build-remove').onclick=()=>{build.mode='remove';build.anchor=null;refreshBuild();};$('build-detach').onclick=()=>{build.anchor=null;refreshBuild();};
 $('build-rotate').onclick=()=>{build.angle=(build.angle+Math.PI/12)%(2*Math.PI);$('build-angle').value=String(Math.round(build.angle*180/Math.PI)%360);refreshBuild();};$('build-angle').oninput=e=>{build.angle=Number(e.target.value)*Math.PI/180;refreshBuild();};
@@ -2215,7 +2223,7 @@ function startFenceCare(action){const piece=nearbyFence();if(!piece||build.work|
 for(const [id,action] of [['fence-repair','repair'],['fence-take','remove']])$(id).onclick=()=>startFenceCare(action);
 let paintTarget=null,paintRole='both';
 function closePaint(){paintTarget=null;$('fence-colors').hidden=true;}
-function paintFence(id,role,color){const piece=editableFences.get(id);if(!piece||!['both','post','rail'].includes(role)||!Number.isInteger(color)||color<0||color>3||fenceCareError||segDist(avatar.position.x,avatar.position.z,piece.a,piece.b)>=1.8)return false;accrueFence();const prev=fenceCare.items[id],old=prev||{at:0,paint:0},next={...old};if(role==='both'){next.paint=color;delete next.post;delete next.rail;}else next[role]=color;fenceCare.items[id]=next;if(!saveFenceCare()){if(prev)fenceCare.items[id]=prev;else delete fenceCare.items[id];return false;}fenceLook(piece);shadowMap.resetRefreshCounter();return true;}
+function paintFence(id,role,color){const piece=editableFences.get(id);if(!piece||!['both','post','rail'].includes(role)||!Number.isInteger(color)||color<0||color>3||fenceCareError||segDist(avatar.position.x,avatar.position.z,piece.a,piece.b)>=1.8)return false;accrueFence();const prev=fenceCare.items[id],old=prev||{at:0,paint:0},next={...old};if(role==='both'){next.paint=color;delete next.post;delete next.rail;}else next[role]=color;fenceCare.items[id]=next;if(!saveFenceCare()){if(prev)fenceCare.items[id]=prev;else delete fenceCare.items[id];return false;}fenceLook(piece);if(JSON.stringify(old)!==JSON.stringify(next))progressEvent('paint',{key:id});shadowMap.resetRefreshCounter();return true;}
 $('fence-paint').onclick=()=>{const piece=nearbyFence();if(!piece)return;if(paintTarget===piece.id){closePaint();return;}paintTarget=piece.id;paintRole='both';$('fence-colors').hidden=false;for(const b of $('fence-colors').querySelectorAll('[data-role]'))b.setAttribute('aria-pressed',String(b.dataset.role===paintRole));layoutContextActions();};
 for(const b of $('fence-colors').querySelectorAll('[data-role]'))b.onclick=()=>{paintRole=b.dataset.role;for(const x of $('fence-colors').querySelectorAll('[data-role]'))x.setAttribute('aria-pressed',String(x===b));};
 for(const b of $('fence-colors').querySelectorAll('[data-paint]'))b.onclick=()=>{if(paintTarget&&paintFence(paintTarget,paintRole,Number(b.dataset.paint))){$('fence-paint-status').textContent='Cor aplicada';}};
@@ -2339,6 +2347,7 @@ function createWarehouseVisual(f){
  stationSign(f,'ARMAZÉM',2.16,1.52);
 }
 function stationNearby(f){return !!f&&Math.hypot(Math.max(0,Math.abs(avatar.position.x-f.x)-f.hx),Math.max(0,Math.abs(avatar.position.z-f.z)-f.hz))<1.0&&Math.abs(avatar.position.y-f.y)<.8;}
+const missionStation=(()=>{const polygon=layout.residence.boundary.map(p=>P(...p)),hx=.85,hz=.24;for(const inside of [true,false])for(let r=7.5;r<=25;r+=.6)for(let k=0;k<48;k++){const a=k*Math.PI/24,x=home.x+Math.cos(a)*r,z=home.z+Math.sin(a)*r,y=height(x,z);if(inside!==insidePolygon(polygon,x,z))continue;if(roadClearance(pathRows,x,z)<.7||roadClearance(approachRows,x,z)<.7)continue;let ok=true;for(const dx of [-1.1,0,1.1])for(const dz of [-.5,0,.5])if(blocked(x+dx,z+dz)||sectorAt(x+dx,z+dz)||Math.abs(height(x+dx,z+dz)-y)>.25)ok=false;if(!ok)continue;const stand=[-1,1].map(d=>V(x,surfaceHeight(x,z+d*.9),z+d*.9)).find(p=>!blocked(p.x,p.z));if(!stand)continue;const f={id:'mission-board',x,z,y,hx,hz,stand};worldFixtures.push({id:f.id,x,z,hx,hz});entity('mission board');for(const dx of [-.68,.68])box('mission board post',x+dx,y+.91,z,.13,1.82,.16,M.woodDark);box('mission board panel',x,y+1.28,z,1.7,1.02,.15,M.woodLight);box('mission board roof',x,y+1.90,z,1.96,.13,.60,M.woodDark);for(const dx of [-.48,0,.48])box('mission notice',x+dx,y+1.23,z-.09,.35,.45,.025,M.plaster);stationSign(f,'MISSÕES',1.68,1.45);return f;}return null;})();
 function openFarmStation(f,category){if(!stationNearby(f)||!openInventory())return false;inventoryCategory=category;inventoryKey='';$('inventory-message').textContent=category==='market'?'Feira do rancho · compre sementes e venda colheitas.':'Armazém do rancho · guarde e retire seus produtos.';renderInventory(true);return true;}
 $('market-open').onclick=()=>openFarmStation(marketStation,'market');$('warehouse-open').onclick=()=>openFarmStation(warehouseStation,'warehouse');
 
@@ -2351,9 +2360,9 @@ function layoutContextActions(){
  if(!contextActionIds.some(id=>!$(id).hidden))return;
  const avatarHead=projectWorld(avatar.position.add(V(0,1.95,0))),feet=projectWorld(avatar.position);
  const visibleRect=e=>{if(!e||e.hidden)return null;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display==='none'||s.visibility==='hidden'||!r.width||!r.height?null:r;};
- const obstacles=['inventory-open','world-calendar','hud','joy','run-action','minimap','wheat-panel','pet-panel','garden-panel','farm-center','ranch-panel','player-menu','pet-notice','tool-bar','tool-arc'].map(id=>visibleRect($(id))).filter(Boolean);
+ const obstacles=['inventory-open','world-calendar','hud','joy','run-action','minimap','wheat-panel','pet-panel','garden-panel','farm-center','ranch-panel','player-menu','pet-notice','mission-tracker','tool-bar','tool-arc'].map(id=>visibleRect($(id))).filter(Boolean);
  if([avatarHead.x,avatarHead.y,feet.x,feet.y].every(Number.isFinite))obstacles.push({left:Math.min(avatarHead.x,feet.x)-19,right:Math.max(avatarHead.x,feet.x)+19,top:Math.min(avatarHead.y,feet.y)-10,bottom:Math.max(avatarHead.y,feet.y)+8});
- const modal=!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||build.open||inventoryDialog.open;
+ const modal=!playerMenu.hidden||!controlsMenu.hidden||!farmCenter.hidden||!gardenPanel.hidden||!$('pet-panel').hidden||!$('ranch-panel').hidden||build.open||inventoryDialog.open||progressDialog.open;
  const nearest=(list,point)=>list.slice().sort((a,b)=>Vector3.Distance(avatar.position,point(a))-Vector3.Distance(avatar.position,point(b)))[0];
  const petHome=nearest(petSystem.pets.filter(petSystem.uiHomeNear),p=>p.out),animal=nearest(petSystem.pets.filter(petSystem.animalNear),p=>p.rig.root.position);
  const gate=nearGate(),bench=seating.bench||nearbyBench(),planter=nearbyPlanter();
@@ -2362,7 +2371,7 @@ function layoutContextActions(){
  'seat-action':bench?seatStand(bench).add(V(0,.65,0)):avatar.position,
  'garden-action':planter?home.C(planter.x,1.0,planter.z):avatar.position,
  'wheat-expand':wheatSelected?V(wheatSelected.x,surfaceHeight(wheatSelected.x,wheatSelected.z)+.7,wheatSelected.z):avatar.position,
- 'world-quick':stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+1.9,warehouseStation.z):boardNearby()?V(nearbyFarmSign().sign.x,surfaceHeight(nearbyFarmSign().sign.x,nearbyFarmSign().sign.z)+1.5,nearbyFarmSign().sign.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
+ 'world-quick':stationNearby(missionStation)?V(missionStation.x,missionStation.y+1.9,missionStation.z):stationNearby(marketStation)?V(marketStation.x,marketStation.y+1.5,marketStation.z):stationNearby(warehouseStation)?V(warehouseStation.x,warehouseStation.y+1.9,warehouseStation.z):boardNearby()?V(nearbyFarmSign().sign.x,surfaceHeight(nearbyFarmSign().sign.x,nearbyFarmSign().sign.z)+1.5,nearbyFarmSign().sign.z):gate?gate.center:ranchNearby()?V(arch.x,surfaceHeight(arch.x,arch.z)+1.5,arch.z):avatar.position,
  'pet-action':petHome?petHome.threshold.add(V(0,.65,0)):avatar.position,
  'pet-context':animal?animal.rig.root.position.add(V(0,.5,0)):avatar.position,
  'fence-context':nearFence?Vector3.Lerp(nearFence.a,nearFence.b,.5).add(V(0,1.35,0)):avatar.position};
@@ -2384,10 +2393,10 @@ function layoutContextActions(){
 }
 function positionWorldContext(){layoutContextActions();}
 function updateWorldActions(dt,place=true){if(!farmCenter.hidden&&!boardNearby())farmCenter.hidden=true;contextClock+=dt;if(contextClock<.15){if(place)layoutContextActions();return;}contextClock=0;const now=worldElapsed();if(now-lastCareRefresh>REAL_MS_PER_GAME_MINUTE*10){lastCareRefresh=now;accrueFence(now);for(const piece of editableFences.values())fenceLook(piece);saveFenceCare();}
- nearFence=nearbyFence();syncToolVisibility();if(paintTarget&&nearFence?.id!==paintTarget)closePaint();const free=!inventoryDialog.open&&!build.open&&!build.work&&!entry.action&&seating.phase==='idle'&&!tillWork&&playerMenu.hidden&&controlsMenu.hidden&&farmCenter.hidden&&gardenPanel.hidden&&$('pet-panel').hidden&&$('ranch-panel').hidden;
- const gate=nearGate(),board=boardNearby(),ranch=ranchNearby(),market=stationNearby(marketStation),warehouse=stationNearby(warehouseStation),other=board||ranch||!!gate||market||warehouse,petNear=petSystem.pets.some(p=>petSystem.homeNear(p)||petSystem.animalNear(p));
+ nearFence=nearbyFence();syncToolVisibility();if(paintTarget&&nearFence?.id!==paintTarget)closePaint();const free=!inventoryDialog.open&&!progressDialog.open&&!build.open&&!build.work&&!entry.action&&seating.phase==='idle'&&!tillWork&&playerMenu.hidden&&controlsMenu.hidden&&farmCenter.hidden&&gardenPanel.hidden&&$('pet-panel').hidden&&$('ranch-panel').hidden;
+ const gate=nearGate(),board=boardNearby(),ranch=ranchNearby(),market=stationNearby(marketStation),warehouse=stationNearby(warehouseStation),mission=stationNearby(missionStation),other=board||ranch||!!gate||market||warehouse||mission,petNear=petSystem.pets.some(p=>petSystem.homeNear(p)||petSystem.animalNear(p));
  $('fence-context').hidden=!free||!nearFence||other||petNear||!wheatPanel.hidden||!$('wheat-expand').hidden;if($('fence-context').hidden)closePaint();if(nearFence){$('fence-condition').textContent='Madeira '+Math.round(fenceCondition(nearFence.id)*100)+'% · '+woodNames[fenceCare.items[nearFence.id]?.paint??0];$('fence-repair').disabled=!!fenceCareError||fenceCondition(nearFence.id)>.995;$('fence-paint').disabled=!!fenceCareError;}
- $('gate-action').hidden=!free||!gate;$('gate-action').disabled=!!gateWork;if(gate){$('gate-action').title=gate.target>.5?'Fechar portão':'Abrir portão';$('gate-action').setAttribute('aria-label',$('gate-action').title);$('gate-action').querySelector('.context-icon').textContent=gate.target>.5?'⇥':'⇤';}$('ranch-open').hidden=!free||!ranch;$('farm-open').hidden=!free||!board;$('market-open').hidden=!free||!market;$('warehouse-open').hidden=!free||!warehouse;$('world-quick').hidden=!free||!other;if(place)layoutContextActions();if(!ranch)$('ranch-panel').hidden=true;
+ $('gate-action').hidden=!free||!gate;$('gate-action').disabled=!!gateWork;if(gate){$('gate-action').title=gate.target>.5?'Fechar portão':'Abrir portão';$('gate-action').setAttribute('aria-label',$('gate-action').title);$('gate-action').querySelector('.context-icon').textContent=gate.target>.5?'⇥':'⇤';}$('ranch-open').hidden=!free||!ranch;$('farm-open').hidden=!free||!board;$('market-open').hidden=!free||!market;$('warehouse-open').hidden=!free||!warehouse;$('mission-open').hidden=!free||!mission;$('world-quick').hidden=!free||!other;if(place)layoutContextActions();if(!ranch)$('ranch-panel').hidden=true;
 }
 accrueFence();for(const piece of editableFences.values())fenceLook(piece);window.addEventListener('pagehide',()=>{accrueFence();saveFenceCare();});
 // Draw actual world geometry on a cached north-up map; no second 3D camera.
@@ -2436,7 +2445,7 @@ function drawMinimap(dt,force=false){
 }
 drawMinimap(0,true);
 
-const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,layoutActions:layoutContextActions,onCareSound:id=>farmAudio.action(id),project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
+const petSystem=createPets({V,Mesh,MeshBuilder,scene,entity,own,box,sphere,cyl,mat,M,home,dogHome,porchFixtures,fencePoints,blocked,surfaceHeight,homeLocal,angleDelta,avatar,weather:()=>weatherVisual,doorState:()=>({open:entry.door,active:!!entry.action}),ui:$,cancelInput,playerPose:petPlayerPose,playerFinish:finishPetPlayer,playerMove:(dx,dz,dt)=>moveAvatar(dx,dz,dt),playerBlocked,layoutActions:layoutContextActions,onCareSound:id=>farmAudio.action(id),onCareComplete:(id,action)=>progressEvent('care',{key:id+':'+action}),affinityBonus:()=>hasPerk(wheatState.progress,'afinidade')?1.2:1,project:p=>{const v=Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),rect=canvas.getBoundingClientRect();return {x:rect.left+v.x*rect.width/engine.getRenderWidth(),y:rect.top+v.y*rect.height/engine.getRenderHeight(),z:v.z};}});
 petBodyBlocked=petSystem.bodyBlocked;
 // Five local lights plus sky and sun; limit light selection to local range and leave them disabled by day.
 for(const m of scene.materials)if(m instanceof StandardMaterial)m.maxSimultaneousLights=8;
@@ -2517,8 +2526,8 @@ let tradeQuantity=1;
 const inventoryItems=()=>inventorySnapshot(wheatState,buildData,{farmLocked:wheatSaveLocked,constructionLocked:!!buildError});
 function applyTrade(id,action,quantity){
  if(wheatSaveLocked||!inventoryDialog.open||inventoryCategory!=='market')return {ok:false,error:'Comércio indisponível.'};
- const q=commitTrade(wheatState,id,action,quantity,json=>localStorage.setItem(WHEAT_SAVE,json));
- if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);farmAudio.action('trade');}
+ const oldRank=rank(wheatState.progress.xp),q=commitTrade(wheatState,id,action,quantity,json=>localStorage.setItem(WHEAT_SAVE,json));
+ if(q.ok){wheatState=q.next;farmCache.clear();wheatSaveError='';updateWheat(Date.now(),true);farmAudio.action('trade');progressNotice(oldRank);}
  return q;
 }
 function renderMarket(){
@@ -2575,4 +2584,47 @@ $('inventory-open').onclick=openInventory;$('inventory-close').onclick=()=>inven
 inventoryDialog.addEventListener('close',()=>{cancelInput();updateWheat(Date.now(),true);});
 for(const b of inventoryDialog.querySelectorAll('[data-inventory-category]'))b.onclick=()=>{inventoryCategory=b.dataset.inventoryCategory;$('inventory-message').textContent=inventoryCategory==='market'?'Feira agrícola · estoque e moedas reais.':'Selecione uma semente para preparar seu próximo plantio.';renderInventory(true);};
 $('market-quantity').onchange=()=>{tradeQuantity=Number($('market-quantity').value);renderInventory(true);};
-window.cvQA={scene,engine,titleBootQA,roadUnionQA,roadMaskAt,roadJoins,ranchRopes,nearbyBench,seatIcon,eastChannels,eastPolygons,eastWaterAt,terrainPatches,expansionQA,expansionVisibility,syncExpansionVisibility,extraFarmRails,nearbyFarmRails,insidePolygon,farmSectors,allFarmPlots,allFarmBeds,sectorAt,nearbyFarmSign,expansionRoads,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{if(titleReady)return;titleReady=true;titleBootQA.readyTransitions++;$('loading').remove();refreshTitle();$('title-continue').disabled=false;$('title-options').disabled=false;$('title-boot-status').hidden=true;window.cvQA.ready=true;});
+// Six new construction concessions outside the currently used agricultural sectors.
+function landRect(a){const [u,v,u2,v2]=a.rect;return {x1:X(u),x2:X(u2),z1:Z(v2),z2:Z(v)};}
+function landAt(x,z){return LAND.find(a=>{const r=landRect(a);return x>=r.x1&&x<=r.x2&&z>=r.z1&&z<=r.z2;});}
+function landBuildAllowed(x,z){const a=landAt(x,z);return !a||wheatState.progress.land.includes(a.id);}
+const cycleNames={daily:'Diárias',weekly:'Semanais',monthly:'Mensais'};
+let progressTab='summary',trackerKey='',progressMapMode=false;
+function refreshMissionTracker(){
+ const p=wheatState.progress,n=$('mission-tracker'),now=Math.max(Date.now(),p.lastReal);
+ const m=Object.values(p.missions).filter(m=>!m.claimed&&(m.end>now||m.done===m.target));
+ const key=JSON.stringify(m.map(x=>[x.id,x.done,x.target]));if(key===trackerKey)return;trackerKey=key;n.replaceChildren();n.hidden=!m.length;if(!m.length)return;
+ const heading=document.createElement('strong');heading.textContent='Missões ativas';n.append(heading);
+ for(const a of m.slice(0,3)){const row=document.createElement('small');row.textContent=EVENTS[a.event][2]+' · '+a.done+'/'+a.target+(a.done===a.target?' ✓':'');n.append(row);}
+ if(m.length>3){const row=document.createElement('small');row.textContent='+'+(m.length-3)+' no mural';n.append(row);}
+}
+function progressEl(tag,txt,cls){const n=document.createElement(tag);n.textContent=txt;if(cls)n.className=cls;return n;}
+function progressButton(txt,fn,disabled=false){const b=progressEl('button',txt);b.type='button';b.disabled=disabled;b.onclick=fn;return b;}
+function progressLine(root,name,xp){const l=rank(xp),row=progressEl('article',''),bar=document.createElement('progress');bar.max=threshold(l+1)-threshold(l);bar.value=Math.max(0,xp-threshold(l));row.append(progressEl('strong',name+' · Nv. '+l),bar,progressEl('small',xp+' XP total'));root.append(row);}
+function progressAction(fn){const ok=progressCommit(fn);renderProgress();$('progress-status').textContent=ok?'Salvo.':'Ação indisponível ou falha ao salvar.';return ok;}
+function drawWorldMap(){
+ const c=$('progress-map'),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.drawImage(mapBase,0,0,c.width,c.height);const factor=c.width/512,to=(x,z)=>mapXY(x,z).map(v=>v*factor);
+ for(const a of LAND){const r=landRect(a),[x,y]=to(r.x1,r.z2),[x2,y2]=to(r.x2,r.z1);g.fillStyle=wheatState.progress.land.includes(a.id)?'#c5d58788':'#694f3788';g.fillRect(x,y,x2-x,y2-y);g.strokeStyle='#f1e3b0';g.strokeRect(x,y,x2-x,y2-y);g.fillStyle='#fff4ce';g.font='9px sans-serif';g.fillText(a.name,x+2,y+10);}
+ const dot=(x,z,col,label)=>{const [a,b]=to(x,z);g.fillStyle=col;g.beginPath();g.arc(a,b,4,0,Math.PI*2);g.fill();g.fillStyle='#fff4ce';g.font='10px sans-serif';g.fillText(label,a+6,b);};dot(avatar.position.x,avatar.position.z,'#fff0b4','Você');if(missionStation)dot(missionStation.x,missionStation.z,'#eeb970','Missões');if(marketStation)dot(marketStation.x,marketStation.z,'#eeb970','Feira');for(const m of wheatState.progress.markers)dot(m.x,m.z,'#eeb970',m.name);
+}
+function renderProgress(){
+ const p=wheatState.progress,root=$('progress-content'),now=Math.max(Date.now(),p.lastReal);root.replaceChildren();$('progress-map').hidden=progressTab!=='map';$('progress-marker-name').hidden=progressTab!=='map';$('progress-tabs').hidden=progressTab==='missions';$('progress-title').textContent=progressTab==='missions'?'Mural de missões':'Progressão rural';
+ if(wheatSaveLocked){root.append(progressEl('p','Save indisponível. Nenhuma alteração realizada.'));return;}
+ if(progressTab==='summary'){progressLine(root,title(rank(p.xp)),p.xp);root.append(progressEl('p','Pontos de especialização: '+points(p)),progressEl('strong','Reputação · '+reputationTitle(p.reputation)+' · '+p.reputation),progressEl('small','Aumenta com colheitas especiais, vendas, cuidado e missões.'));for(const [id,name] of Object.entries(SKILLS)){progressLine(root,name,p.skills[id]);if(!ACTIVE_SKILLS.includes(id))root.lastChild.append(progressEl('small','Disponível quando o sistema correspondente for implementado.'));}}
+ if(progressTab==='skills'){root.append(progressEl('p','Pontos disponíveis: '+points(p)));for(const a of PERKS){const card=progressEl('article','');card.append(progressEl('strong',a.name),progressEl('small',SKILLS[a.skill]+' · grau '+a.level+' · '+a.description+(a.requires?' · requer '+PERKS.find(b=>b.id===a.requires).name:'')));const owned=p.perks.includes(a.id);card.append(progressButton(owned?'Aprendida':'Aprender · 1 ponto',()=>progressAction(n=>unlock(n.progress,a.id)),owned||points(p)<1||rank(p.skills[a.skill])<a.level||!!a.requires&&!p.perks.includes(a.requires)));root.append(card);}}
+ if(progressTab==='land'){root.append(progressEl('p','Saldo: '+wheatState.coins+' moedas. Terrenos adicionais liberam construção; áreas atuais permanecem disponíveis.'));for(const a of LAND){const owned=p.land.includes(a.id),card=progressEl('article','');card.append(progressEl('strong',a.name),progressEl('small',a.price+' moedas · nível '+a.level),progressButton('Localizar no mapa',()=>{progressTab='map';renderProgress();}),progressButton(owned?'Adquirido':'Comprar',()=>progressAction(n=>buyLand(n,a.id)),owned||rank(p.xp)<a.level||wheatState.coins<a.price));root.append(card);}}
+ if(progressTab==='diary'){for(const [id,ev] of Object.entries(EVENTS))root.append(progressEl('p',ev[2]+': '+(p.stats[id]||0)));root.append(progressEl('p','Espécies colhidas: '+p.species.length+' · Receita: '+(p.stats.revenue||0)+' moedas'));for(const [name,done] of achievements(p))root.append(progressEl('p',(done?'✓ ':'○ ')+name));for(const item of p.history.slice().reverse())root.append(progressEl('small',new Date(item.at).toLocaleDateString('pt-BR')+' · '+item.text));}
+ if(progressTab==='map'){root.append(progressEl('small','Toque no mapa para marcar um local. Áreas em marrom ainda não foram adquiridas.'));for(const [i,m] of p.markers.entries())root.append(progressButton('Remover '+m.name,()=>progressAction(n=>{n.progress.markers.splice(i,1);return true;})));drawWorldMap();}
+ if(progressTab==='missions'){
+  const available=offers(p,now),active=Object.values(p.missions).filter(m=>!m.claimed&&(m.end>now||m.done===m.target)),all=[...available.map(m=>p.missions[m.id]||m),...active.filter(m=>!available.some(a=>a.id===m.id))];
+  for(const cycle of ['daily','weekly','monthly']){root.append(progressEl('h3',cycleNames[cycle]));for(const m of all.filter(m=>m.cycle===cycle)){const started=!!p.missions[m.id],card=progressEl('article','');card.append(progressEl('strong',EVENTS[m.event][2]+' · '+m.target),progressEl('small',(started?m.done+'/'+m.target+' · ':'')+'Recompensa '+m.reward+' moedas · até '+new Date(m.end-1).toLocaleDateString('pt-BR')));if(m.claimed)card.append(progressEl('small','Recompensa resgatada ✓'));else if(started&&m.done>=m.target)card.append(progressButton('Resgatar recompensa',()=>{if(stationNearby(missionStation))progressAction(n=>claim(n,m.id));}));else if(started)card.append(progressEl('small','Em andamento'));else card.append(progressButton('Aceitar missão',()=>{if(stationNearby(missionStation))progressAction(n=>accept(n.progress,m.id));}));root.append(card);}}
+ }
+}
+function openProgress(tab='summary'){if(progressDialog.open||inventoryDialog.open||tillWork||entry.action||seating.phase!=='idle'||build.work||gateWork||tab==='missions'&&!stationNearby(missionStation))return false;if(build.open)closeBuild();cancelInput();playerMenu.hidden=true;controlsMenu.hidden=true;closeGarden();farmCenter.hidden=true;progressTab=tab;$('progress-status').textContent='';progressDialog.showModal();renderProgress();return true;}
+$('progress-open').onclick=()=>openProgress();$('mission-open').onclick=()=>openProgress('missions');$('progress-close').onclick=()=>progressDialog.close();
+progressDialog.addEventListener('close',cancelInput);
+for(const b of $('progress-tabs').querySelectorAll('[data-progress-tab]'))b.onclick=()=>{progressTab=b.dataset.progressTab;renderProgress();};
+$('progress-map').onclick=e=>{if(progressTab!=='map')return;const c=$('progress-map'),r=c.getBoundingClientRect(),x=minX+(e.clientX-r.left)/r.width*512/mapScale,z=maxZ-(e.clientY-r.top)/r.height*512/mapScale;if(x<minX||x>maxX||z<minZ||z>maxZ)return;const name=$('progress-marker-name').value.trim().slice(0,32)||'Marcador';progressAction(n=>{if(n.progress.markers.length>=20)return false;n.progress.markers.push({x,z,name});return true;});};
+refreshMissionTracker();setInterval(()=>{refreshMissionTracker();if(progressDialog.open&&progressTab==='missions'&&!stationNearby(missionStation))progressDialog.close();},1000);
+
+window.cvQA={scene,engine,missionStation,openProgress,landAt,landBuildAllowed,get progression(){return wheatState.progress},titleBootQA,roadUnionQA,roadMaskAt,roadJoins,ranchRopes,nearbyBench,seatIcon,eastChannels,eastPolygons,eastWaterAt,terrainPatches,expansionQA,expansionVisibility,syncExpansionVisibility,extraFarmRails,nearbyFarmRails,insidePolygon,farmSectors,allFarmPlots,allFarmBeds,sectorAt,nearbyFarmSign,expansionRoads,roofCraft,facadeCraft,petSystem,inventoryItems,openInventory,renderInventory,applyTrade,farmStations,marketStation,get warehouseStation(){return warehouseStation},stationNearby,CAMERA_PROFILES,selectCameraProfile,get cameraProfile(){return cameraProfile},positionWorldContext,layoutContextActions,windAt,updateWindObjects,signMotion,signPivot,vane,nameBoard,archBlocked,archRainSurface,mapQA,drawMinimap,layoutMinimap,projectWorld,cropAdvice,openCropGuide,updateGarden,gates,gatePose,toggleGate,tickGates,gateBlocked,buildPoint,nearbyFence,fenceCondition,accrueFence,maintainFence,paintFence,updateWorldActions,boardNearby,fieldSignCollider,arch,setRanchName,get ranchName(){return ranchName},polyQA,residenceShadowState,syncHouseShadows,editableFences,bridgeFenceLinks,build,buildStats,buildEnds,canBuild,openBuild,closeBuild,refreshBuild,placeBuild,confirmBuild,tickBuild,get buildData(){return buildData},tickTill,tillStats,hoeRoot,get tillWork(){return tillWork},windowApertures,nightLights,get nightPower(){return nightPower},windowPane:M.windowPane,worldFixtures,allBenches,seatYaw,playerBlocked,cameraStability,stableCameraZone,cameraGesture,avatarOccludedByHouse,setView,explorationAim,get cameraFollow(){return entry.previous?.follow??follow},rockColliders,rockBlocked,rockClearance,obstacleEntered,worldInput,setStickMode,get controls(){return {...controls}},get stickCenter(){return stickCenter&&{...stickCenter}},bedPlots,bedBlend,ridgeProfile,soilTone,cameraBuildings,registerCameraBuilding,exteriorCameraZone,terrainContactStats,terrainMotionAllowed,rainStats,rainSurface,rainPool,impactPool,puddles,updateRain,weatherPresentation,get weatherVisual(){return {...weatherVisual}},smokePuffs,smokeOrigin,updateChimneySmoke,qualityProfiles,selectQuality,get quality(){return quality},groups,componentCounts,batching,ground,terrainSkirtStats,bedSurfaceStats,moundQA,moundHeight,tickMounds,avatar,blocked,onBridge,nearRiver,layout,riverMotionMetrics,perf,shadowCache,treePositions,fenceColliders,flowInstancing,roadMetrics,canopyStats,bankStats,gait,bodyParts,entry,entryInfluence,homeLocal,surfaceHeight,homeBlocked,nearRiver,riverSegments,riverStats,shapeStick,joy,motion,advanceManual,sprint,updateLocomotion,updateDust,resetSprint,dustPool,dustAllowed,emitBrakeDust,porchRails,porchFixtures,porchHalf,benches,seating,seatLegs,seatStand,seatTarget,updateSeating,pathPoints,pathRows,pathFlowerPositions,pathDistance,stairFoot,bridgeEntry,pathMesh,road,pavingStats,connectionQA,roadClearance,residenceRails,wheatBounds,wheatBeds,wheatPlots,wheatStatus,wheatProgress,wheatDuration,wheatSchedule,evaluatedPlot,weatherAt,WEATHER_INTERVAL,applyWheatAction,updateWheat,calendarAt,worldElapsed,updateWorldClock,daylightAt,get worldClock(){return {...worldClock}},get daylight(){return {sky:light.intensity,sun:sun.intensity}},get wheatState(){return wheatState},wheatStalks,wheatFurrows,wheatGate,wheatPolygon,fieldRails,inWheat,approachCurve,approachRows,porchExtension,porchDepth:HOUSE.porchDepth,renderedTerrainY,projectPoint:p=>Vector3.Project(p,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight())),planters,flowerCatalog,updateGarden,updateCrop,moveAvatar,updateEntry,reachHand,gripPoint,bridgeEnds:[ba.asArray(),bb.asArray()],home,dogHome,well:well.asArray(),ready:false};engine.runRenderLoop(()=>scene.render());scene.executeWhenReady(()=>{if(titleReady)return;titleReady=true;titleBootQA.readyTransitions++;$('loading').remove();refreshTitle();$('title-continue').disabled=false;$('title-options').disabled=false;$('title-boot-status').hidden=true;window.cvQA.ready=true;});

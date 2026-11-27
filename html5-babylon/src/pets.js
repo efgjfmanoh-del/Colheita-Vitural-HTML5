@@ -269,8 +269,8 @@ export function createPets(api){
  }
  function completeInteraction(a){
   const p=a.p,d=data[p.id],before=d.affinity;
-  d.affinity=clamp01(before+(a.action==='pet'?.025:.04));
-  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;api.onCareSound?.(p.id);if(d.affinity>before)showAffinity(p,Math.round((d.affinity-before)*100));}
+  d.affinity=clamp01(before+(a.action==='pet'?.025:.04)*(api.affinityBonus?.()??1));
+  if(!save())d.affinity=before;else{stats.care++;stats.completedInteractions++;api.onCareSound?.(p.id);api.onCareComplete?.(p.id,a.action);if(d.affinity>before)showAffinity(p,Math.round((d.affinity-before)*100));}
   toys[p.id].root.setEnabled(false);p.interaction=null;state(p,'idle',2);interaction=null;api.playerFinish();
  }
  function updateInteraction(dt){
@@ -322,7 +322,7 @@ export function createPets(api){
   }else return false;
   if(!save()){Object.assign(d,before);return false;}
   // Social interactions are saved only when the physical action completes.
-  stats.care++;return true;
+  stats.care++;if((action==='food'||action==='water')&&before[action]<1)api.onCareComplete?.(id,action);return true;
  }
  const labels={idle:'Observando',walk:'Passeando',sit:'Sentado',sleep:'Dormindo',drink:'Bebendo',eat:'Comendo',pet:'Recebendo carinho',play:'Brincando',house:'Visitando a casa'};
  const panel=ui('pet-panel'),button=ui('pet-action'),actions=ui('pet-context');
