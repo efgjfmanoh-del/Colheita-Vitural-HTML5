@@ -88,3 +88,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 209 publicada (run 46038078246, 4/4 jobs); aprovação física/arte pendente. QA 210: complemento transversal 09.05 solicitado, acesso à central pelo quarto botão do menu inicial, status de versão e disponibilidade, sem Sair; implementado, regressão e teste físico pendentes. Continuidade do lote 02 preservada.
 
 - QA 210: 03.03 expandida para sete espécies físicas e 04.02 quatro produtos de fruta (oficina), preservando os três estoques antigos. Testes e inspeção física pendentes; não conclui as subetapas. 09.03: captura física pontual de 119,2 FPS na 0.2.9 em alta definição; revisão estética geral solicitada após implementação, sem dispensar regressões críticas.
+
+- QA 210: run 46041144746 aprovou 3 gates técnicos; publicação pulada. 04.01 avançou para fila FIFO temporizada persistente da oficina, reserva e recolhimento presencial, ainda não toda a fabricação universal. Novos testes pendentes de execução remota.
