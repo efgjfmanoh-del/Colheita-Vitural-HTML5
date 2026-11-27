@@ -180,9 +180,9 @@ function eastWaterAt(x,z){
  const value={edge,y,id};eastCache={x,z,value};return value;
 }
 function height(x,z){let a=nearRiver(x,z),edge=a.dist-a.w/2;const east=eastWaterAt(x,z);if(x>X(896)&&east.edge<edge&&east.edge<2){a={y:east.y};edge=east.edge;}const u=Math.max(0,Math.min(1,(-20-x)/7)),west=u*u*(3-2*u)*Math.max(0,Math.min(1,(z-5)/16))*2.2;const flat=2.65+west+.035*Math.sin(x*.24+Math.sin(z*.19))*Math.cos(z*.31);if(edge<0)return a.y-.44;if(edge<1.5){let t=edge/1.5;t=t*t*(3-2*t);return (a.y-.44)*(1-t)+Math.max(flat,a.y+.35)*t}return Math.max(flat,a.y+.35*Math.max(0,1-(edge-1.5)/6))}
-entity('terrain');const minX=X(20),oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(950),maxZ=Z(-20),nx=284,nz=217,pos=[],idx=[],colors=[],uvs=[];
+entity('terrain');const minX=X(20),oldMaxX=X(896),oldMinZ=Z(365),maxX=X(1665),minZ=Z(1370),maxZ=Z(-20),nx=284,nz=281,pos=[],idx=[],colors=[],uvs=[];
 const axis=(a,b,n)=>Array.from({length:n+1},(_,i)=>a+(b-a)*i/n);
-const terrainXs=[...axis(minX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,oldMinZ,96),...axis(oldMinZ,maxZ,121).slice(1)];
+const terrainXs=[...axis(minX,oldMaxX,204),...axis(oldMaxX,maxX,80).slice(1)],terrainZs=[...axis(minZ,Z(950),64),...axis(Z(950),oldMinZ,96).slice(1),...axis(oldMinZ,maxZ,121).slice(1)];
 const expansionQA={originalVertices:205*122,terrainVertices:(nx+1)*(nz+1),roads:[],sectors:[],activeSector:null};
 for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let x=terrainXs[i],z=terrainZs[j],y=height(x,z),n=nearRiver(x,z),d=Math.min(n.dist-n.w/2,eastWaterAt(x,z).edge);pos.push(x,y,z);uvs.push(x/2.7,z/2.7);const v=.94+.09*Math.sin(x*.39+Math.sin(z*.52))*Math.cos(z*.43+Math.sin(x*.21))+.025*Math.sin(x*1.71+z*.91);const patch=.5+.5*Math.sin(x*.17+Math.sin(z*.29))*Math.cos(z*.23+x*.07);const c=d<.9?[.57,.44,.27]:d<1.65?[.55,.62,.30]:[.37+.13*patch,.53+.14*patch,.19+.09*patch];colors.push(c[0]*v,c[1]*v,c[2]*v,1)}
 for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){let a=j*(nx+1)+i;idx.push(a,a+nx+1,a+1,a+1,a+nx+1,a+nx+2)}
@@ -197,9 +197,9 @@ function terrainPatch(name,i0,i1,j0,j1){
  for(let j=0;j<j1-j0;j++)for(let i=0;i<i1-i0;i++){const a=j*w+i,b=a+w;if(terrainFlip)ix.push(a,a+1,b,a+1,b+1,b);else ix.push(a,b,a+1,a+1,b,b+1);}
  const mesh=new Mesh(name,scene),vd=new VertexData();vd.positions=p;vd.uvs=uv;vd.colors=co;vd.normals=no;vd.indices=ix;vd.applyToMesh(mesh);own(mesh,M.grass,false);mesh.freezeWorldMatrix();terrainPatches.push({mesh,i0,i1,j0,j1});return mesh;
 }
-const ground=terrainPatch('sculpted terrain mesh',0,204,96,217);
+const ground=terrainPatch('sculpted terrain mesh',0,204,160,281);
 function tileTerrain(i0,i1,j0,j1){for(let j=j0;j<j1;j+=24)for(let i=i0;i<i1;i+=24)terrainPatch('countryside terrain patch '+i+' '+j,i,Math.min(i1,i+24),j,Math.min(j1,j+24));}
-tileTerrain(0,204,0,96);tileTerrain(204,nx,0,nz);
+tileTerrain(0,204,0,160);tileTerrain(204,nx,0,nz);
 expansionQA.terrainPatches=terrainPatches.length;expansionQA.patchCells=terrainPatches.reduce((n,p)=>n+(p.i1-p.i0)*(p.j1-p.j0),0);
 expansionQA.maxPatchVertices=Math.max(...terrainPatches.slice(1).map(p=>p.mesh.getTotalVertices()));
 const terrainSkirtStats={rings:0,vertices:0,margin:64,maxJoinGap:0};
