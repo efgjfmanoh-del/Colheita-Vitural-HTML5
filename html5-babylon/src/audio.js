@@ -10,7 +10,7 @@ export function ambientMix(weather={}){
 }
 // Original sparse pastoral melody; no sampled or licensed recording.
 export const FARM_MELODY=Object.freeze([60,64,67,72,69,67,64,null,62,65,69,74,72,69,65,null,60,64,67,69,67,64,62,null,55,59,62,67,64,62,60,null]);
-export const ACTION_SOUNDS=Object.freeze({hoe:[142,66,.13,.12,'triangle'],hammer:[290,115,.08,.12,'triangle'],plant:[420,680,.10,.07,'sine'],water:[850,260,.18,.05,'sine'],harvest:[520,780,.15,.08,'triangle'],weed:[260,100,.12,.07,'triangle'],dog:[220,135,.17,.07,'triangle'],cat:[490,260,.25,.055,'sine'],trade:[750,1050,.12,.07,'sine']});
+export const ACTION_SOUNDS=Object.freeze({hoe:[142,66,.13,.12,'triangle'],hammer:[290,115,.08,.12,'triangle'],plant:[420,680,.10,.07,'sine'],water:[850,260,.18,.05,'sine'],harvest:[520,780,.15,.08,'triangle'],weed:[260,100,.12,.07,'triangle'],dog:[220,135,.17,.07,'triangle'],cat:[490,260,.25,.055,'sine'],trade:[750,1050,.12,.07,'sine'],chop:[150,58,.18,.11,'triangle'],mine:[680,180,.15,.09,'triangle']});
 export function createFarmAudio({storage,AudioContext,hidden=()=>false}){
  let settings=audioSettings(null),ctx=null,master=null,musicBus=null,wind=null,rain=null,clock=0,nextBird=0,musicClock=0,noteIndex=0;const lastSound=new Map();
  try{settings=audioSettings(JSON.parse(storage.getItem(AUDIO_KEY)));}catch{}
