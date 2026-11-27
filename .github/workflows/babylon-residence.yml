@@ -29,6 +29,9 @@ jobs:
       - name: Testar manifesto de atualização QA
         working-directory: .
         run: python3 android-test/test-qa-manifest.py
+      - name: Testar autorização limitada do canal QA
+        working-directory: .
+        run: python3 android-test/test-qa-release-gate.py
       - name: Conferir configuração de assinatura QA
         env:
           CV_QA_SIGNING_BUNDLE: ${{ secrets.CV_QA_SIGNING_BUNDLE }}
@@ -238,7 +241,7 @@ jobs:
           version=$(jq -er '.versionName' update.json)
           case "$GITHUB_REF" in
             refs/heads/qa/0.1.52) [[ "$code" == 152 && "$version" == "0.1.52" ]] ;;
-            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" ]] ;;
+            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" ]] ;;
             *) exit 1 ;;
           esac
           tag="qa-v$code"

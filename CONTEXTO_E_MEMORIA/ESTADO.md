@@ -469,3 +469,7 @@ Menu inicial real sobre cena, opções e retorno, modo fotografia sem HUD com bo
 
 ## 27/11/2026 — paleta da bússola aprovada pelo proprietário
 - Proprietário aprovou a prévia ilustrativa de anel verde-oliva envelhecido #5F6E4E com letras bege/palha. Substituído exclusivamente o grafite da camada compassCtx; cores de acabamento #C5C59D, #E7DDB0, #A9B28A e #F4E8C4. Mapa verde, culturas, água, estrada, posição, zoom de 24m, marcador central e rotação independente permanecem intactos. Regressão de pixel atualizado para RGB 95/110/78, mantendo demais invariantes. Sintaxe verificada; CI e validação visual física pendentes. Não modificar outros sistemas, saves, pacote, assinatura ou gate de publicação.
+
+
+## 27/11/2026 — autorização de distribuição interna QA 0.2.1
+- Proprietário autorizou expressamente receber esta pequena correção pelo atualizador do aplicativo experimental já instalado, sem download manual. Incrementados versionCode 200→201 e versionName 0.2.0→0.2.1; pacote, assinatura, armazenamento WebView e lógica de instalação preservados. Canal de pré-release qa-v201 autorizado somente com blobs exatos do código e da regressão da bússola aprovada; publicação depende dos três jobs aprovados e manifesto/assinatura/hash. Gate consolidado RC e publicação oficial permanecem fechados; não autoriza próximas versões automaticamente. Relatório de novidades específico da 0.2.1. Teste negativo de alterações não autorizadas, branch e versão futura incluído. CI e entrega OTA ainda pendentes.

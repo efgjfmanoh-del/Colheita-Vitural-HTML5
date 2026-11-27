@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Authorize only the exact maintenance build or the fully validated consolidated RC."""
-import json, pathlib, re, os
+import json, pathlib, re, os, subprocess
 root=pathlib.Path(__file__).resolve().parent
 gradle=(root/'app/build.gradle').read_text()
 name=re.search(r"versionName\s+'([^']+)'",gradle).group(1)
@@ -15,4 +15,10 @@ elif ref=='refs/heads/main':
     ready=(data.get('schema')==1 and name=='0.2.0' and code==200 and name==data.get('target') and code==data.get('versionCode') and
            data.get('publish') is True and data.get('physicalValidation') is True and
            set(data.get('workstreams',{}))==required and all(v=='approved' for v in data['workstreams'].values()))
+    # One explicitly authorized experimental maintenance release. The consolidated
+    # RC gate above stays unchanged and no production channel is touched.
+    if (name,code)==('0.2.1',201):
+        approved={'html5-babylon/src/main.js':'b0359049c563f703c112766eb5d0cfdd81a522a6',
+                  'html5-babylon/regression.mjs':'af93b32f32a28fb809d059b58c616f226d54733d'}
+        ready=all(subprocess.check_output(['git','hash-object',str(root.parent/p)],text=True).strip()==digest for p,digest in approved.items())
 print('ready='+str(ready).lower())
