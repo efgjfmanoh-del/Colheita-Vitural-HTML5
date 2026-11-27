@@ -16,12 +16,13 @@ export function inventorySnapshot(farm,construction,{farmLocked=false,constructi
  add('compost','supplies','Adubo orgânico','🌿',farm?.compost,'agriculture',null,farmLocked);
  add('treatment','supplies','Tratamento de pragas','🛡',farm?.treatments,'agriculture',null,farmLocked);
  for(const [id,name,icon] of [['wood','Madeira','🪵'],['stone','Pedra','🪨'],['saplings','Mudas','🌱']])add('resource:'+id,'building',name,icon,farm?.nature?.[id]??0,'nature',null,farmLocked);
+ add('fish','harvest','Peixe de rio','🐟',farm?.fishery?.fish??0,'fishing',null,farmLocked);
  add('fence','building','Peça de cerca','🪵',construction?.stock,'construction',null,constructionLocked);
  return items;
 }
 
 // Existing functional tools are capabilities, not consumable stock.
-export const TOOL_CATALOG=Object.freeze({hammer:Object.freeze({name:'Martelo',icon:'🔨',use:'Construção e manutenção'}),hoe:Object.freeze({name:'Enxada',icon:'⛏',use:'Preparar e manejar canteiros'}),water:Object.freeze({name:'Regador',icon:'💧',use:'Regar a cultura selecionada'}),axe:Object.freeze({name:'Machado',icon:'🪓',use:'Cortar árvores na interação de proximidade'}),pickaxe:Object.freeze({name:'Picareta',icon:'⛏',use:'Extrair pedra na interação de proximidade'})});
+export const TOOL_CATALOG=Object.freeze({hammer:Object.freeze({name:'Martelo',icon:'🔨',use:'Construção e manutenção'}),hoe:Object.freeze({name:'Enxada',icon:'⛏',use:'Preparar e manejar canteiros'}),water:Object.freeze({name:'Regador',icon:'💧',use:'Regar a cultura selecionada'}),axe:Object.freeze({name:'Machado',icon:'🪓',use:'Cortar árvores na interação de proximidade'}),pickaxe:Object.freeze({name:'Picareta',icon:'⛏',use:'Extrair pedra na interação de proximidade'}),rod:Object.freeze({name:'Vara de pesca',icon:'🎣',use:'Pescar em pontos da margem'})});
 export const EQUIPMENT_KEY='cv.equipment.v1';
 export function equippedTool(storage){try{const id=storage.getItem(EQUIPMENT_KEY);return Object.hasOwn(TOOL_CATALOG,id)?id:'hoe';}catch{return 'hoe';}}
 export function equipTool(storage,id){if(!Object.hasOwn(TOOL_CATALOG,id))return false;try{storage.setItem(EQUIPMENT_KEY,id);return true;}catch{return false;}}
