@@ -80,3 +80,5 @@ Energia do jogador ilimitada; liberdade profissional; identidade rural brasileir
 
 ## Checkpoint QA 209 (candidato)
 Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de aparência, 03.03 três frutíferas e 04.01/04.02 receitas e venda. Todos ainda parciais, pendentes de gates CI e físicos. Continuar 02.01 segundo andar/escadas, demais interações, aparência completa, 03.01 canteiros livres e demais 03.03/04.01. Lotes 03–14 mantidos. Nenhuma caixa de conclusão marcada sem evidência.
+
+- Recuperação 209: run 45991095712 falhou no gate de boot; build/unitários verdes, publicação bloqueada. Instrumentação de diagnóstico adicionada para identificar causa raiz em nova execução; nenhuma subetapa marcada como concluída.
