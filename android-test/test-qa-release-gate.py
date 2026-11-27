@@ -31,6 +31,11 @@ class Gate(unittest.TestCase):
             self.assertEqual(run('refs/heads/main'),'ready=false')
             grad.write_text(actual)
             js.write_bytes(original)
+    def test_207_qa_scope(self):
+        if "versionCode 207" not in (root/'app/build.gradle').read_text(): self.skipTest('Not 207')
+        env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}
+        self.assertEqual(subprocess.check_output(['python3',str(root/'rc-release-gate.py')],env=env,text=True).strip(),'ready=true')
+        self.assertEqual(subprocess.check_output(['python3',str(root/'rc-release-gate.py')],env={**env,'GITHUB_REF':'refs/heads/main'},text=True).strip(),'ready=false')
     def test_206_qa_scope(self):
         if "versionCode 206" not in (root/'app/build.gradle').read_text(): self.skipTest('Not 206')
         env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}

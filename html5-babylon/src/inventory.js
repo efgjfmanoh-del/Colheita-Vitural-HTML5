@@ -16,7 +16,7 @@ export function inventorySnapshot(farm,construction,{farmLocked=false,constructi
  }
  add('compost','supplies','Adubo orgânico','🌿',farm?.compost,'agriculture',null,farmLocked);
  add('treatment','supplies','Tratamento de pragas','🛡',farm?.treatments,'agriculture',null,farmLocked);
- for(const [id,name,icon] of [['wood','Madeira','🪵'],['stone','Pedra','🪨'],['saplings','Mudas','🌱']])add('resource:'+id,'building',name,icon,farm?.nature?.[id]??0,'nature',null,farmLocked);
+ for(const [id,name,icon] of [['wood','Madeira','🪵'],['stone','Pedra','🪨'],['saplings','Muda de árvore verde','🌱'],['pinkSaplings','Muda de cerejeira','🌸']]){add('resource:'+id,id.endsWith('aplings')?'seeds':'building',name,icon,farm?.nature?.[id]??0,'nature',null,farmLocked);if(id.endsWith('aplings'))items.at(-1).treeSpecies=id==='pinkSaplings'?'pink':'green';}
  add('fish','harvest','Peixe de rio','🐟',farm?.fishery?.fish??0,'fishing',null,farmLocked);
  for(const [id,p] of Object.entries(PRODUCTS))add('animal:'+id,'harvest',p.name,p.icon,farm?.husbandry?.products?.[id]??0,'livestock',null,farmLocked);
  add('fence','building','Peça de cerca','🪵',construction?.stock,'construction',null,constructionLocked);

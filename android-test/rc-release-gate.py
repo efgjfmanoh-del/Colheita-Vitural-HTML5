@@ -50,4 +50,10 @@ elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.6',206):
                (root/'qa-206-authorization.json').read_text().strip()=='{"version":206,"channel":"qa","scope":"direct-resource-actions-fishing-atlas"}')
     except (OSError,subprocess.CalledProcessError):
         ready=False
+elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.7',207):
+    try:
+        ready=(subprocess.run(['git','merge-base','--is-ancestor','8c21c96f81c57e05a3288a82e5c7dd895d262911','HEAD'],cwd=root.parent,stderr=subprocess.DEVNULL).returncode==0 and
+               (root/'qa-207-authorization.json').read_text().strip()=='{"version":207,"channel":"qa","scope":"species-seedlings-free-ground"}')
+    except (OSError,subprocess.CalledProcessError):
+        ready=False
 print('ready='+str(ready).lower())

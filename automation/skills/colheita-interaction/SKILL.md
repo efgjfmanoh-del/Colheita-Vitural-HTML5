@@ -14,3 +14,5 @@ Aprovado em 27/11/2026. Complementa EFG MASTER STANDARD 2.2.
 
 ## Exceção aprovada em 27/11 — ações de coleta imediata
 Árvore e pedra: proximidade substitui o botão de correr pelo machado/picareta; cada toque executa um golpe animado, sem abrir painel ou mochila. Afastar restaura corrida. Recompensa apenas no último golpe, queda/fragmentação antes de desaparecer, remoção da colisão e renovação natural persistente. Pesca: pontos específicos identificados no atlas/minimapa; painel contextual permitido. Atlas deve permitir seleção/centralização e filtros recolhíveis.
+
+- Mudas específicas: árvore verde/cerejeira estilizada rendem a muda da própria espécie. Seleção no inventário e plantio por botão contextual em solo livre, não no toco. Crescimento 3 dias, persistência, colisão real somente para recurso presente. Recursos ausentes não devem continuar marcados no minimapa ou bloquear construção. Limite inicial 24 árvores plantadas adicionais; rever por medição física.
