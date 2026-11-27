@@ -1,7 +1,7 @@
 name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
-    branches: [main]
+    branches: [main, 'qa/0.1.51']
     paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
@@ -36,7 +36,7 @@ jobs:
             echo "::error::Cadastre o segredo CV_QA_SIGNING_BUNDLE nas configurações de Actions do repositório. Nenhum APK temporário será distribuído."
             exit 1
           fi
-      - name: Verificar gate da entrega consolidada
+      - name: Verificar autorização de publicação por canal
         id: release_gate
         working-directory: .
         run: python3 android-test/rc-release-gate.py >> "$GITHUB_OUTPUT"
@@ -118,7 +118,7 @@ jobs:
           if-no-files-found: error
   publish-qa:
     needs: preview
-    if: github.ref == 'refs/heads/main' && needs.preview.outputs.publish_ready == 'true'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/qa/0.1.51') && needs.preview.outputs.publish_ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -138,7 +138,11 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           code=$(jq -er '.versionCode | numbers' update.json)
           version=$(jq -er '.versionName' update.json)
-          [[ "$code" =~ ^[0-9]+$ ]] && [[ "$code" -ge 109 ]]
+          case "$GITHUB_REF" in
+            refs/heads/qa/0.1.51) [[ "$code" == 151 && "$version" == "0.1.51" ]] ;;
+            refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" ]] ;;
+            *) exit 1 ;;
+          esac
           tag="qa-v$code"
           if gh release view "$tag" >/dev/null 2>&1; then
             mkdir existing
@@ -151,3 +155,4 @@ jobs:
             gh release edit "$tag" --draft=false --prerelease
           fi
           gh release view "$tag" --json url,isDraft,isPrerelease,assets
+          [[ "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" == "$GITHUB_SHA" ]]

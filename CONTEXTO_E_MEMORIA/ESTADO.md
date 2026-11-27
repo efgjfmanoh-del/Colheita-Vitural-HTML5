@@ -356,3 +356,7 @@
 
 ## RC 0.2.0 — áudio, recuperação parcial
 - Continuidade autorizada após separar manutenção 0.1.51. Motor de áudio procedural original e preferências independentes, testes unitários e regressão de controles; não declarar equivalência artística ou audição validada. Fronte áudio parcial, demais pendências preservadas, publicação RC bloqueada. CI pendente.
+
+
+## Correção de publicação QA 0.1.51
+- Run 45928685317: compilação, regressões, assinatura e SHA256 aprovados; publish-qa job 140276801060 falhou HTTP 403 na criação da release. Workflow divergente da branch padrão aciona restrição de permissão Workflows do GitHub (REST Releases). Unificar conteúdo do workflow e gate nas duas branches, mantendo autorização exata de 0.1.51/151 na manutenção e 0.2.0/200 em main somente após todas as aprovações e validação física. Não usar PAT, não alterar segredo, não publicar RC intermediária. Nova execução necessária; publicação e teste físico ainda pendentes.
