@@ -398,3 +398,7 @@ Run 45934855999 aprovado (equipamento, música, capina, assinatura), sem release
 
 ## Decisão de escopo — armazém central
 Usuário autorizou retirar o baú físico independente. Todas as transferências de sementes, colheitas e insumos usam o armazém único; o inventário permite consulta remota, não transferência remota. Substituído modelo de baú por pequeno galpão de madeira com placa e colisão, próximo à área agrícola em ponto livre; localização e dimensões provisórias sujeitas à validação visual. Mesma chave de save e mesmo ledger warehouse, sem migração destrutiva. Testes de bloqueio remoto, transferência local e ausência do baú; CI pendente. Baús decorativos futuros não devem duplicar armazenamento. Não alterar gate de publicação.
+
+
+## Decisão atualizada — armazém construído pelo jogador
+Não gerar armazém ou baú automaticamente. A feira permanece. Modelo do armazém mantido como função não invocada, ledger e operações atômicas preservados; nenhuma transferência no jogo antes de existir construção válida. Consulta remota da mochila explica o bloqueio. Na frente de construção (lote 2), integrar armazém ao catálogo do martelo com posicionamento livre, confirmação, colisão e persistência; só então ativar interação/transferências por proximidade. Não presumir que o catálogo já constrói o armazém. Testes de ausência de modelo/colisor, bloqueio da ação mesmo se chamado o handler, conservação e regressão de feira. Testes unitários de transferências permanecem. CI pendente. Gate RC inalterado.
