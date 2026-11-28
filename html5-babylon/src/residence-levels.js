@@ -11,6 +11,11 @@ export function treadHeight(v,flight=1){const start=flight===1?s.lo:R,base=fligh
 // Smooth step-offset support, independent of frame rate, using the same rise/run as the physical treads.
 export function walkHeight(v,flight=1){const start=flight===1?s.lo:R,base=flight===1?s.ground:LANDING_Y,t=Math.max(0,Math.min(s.steps,(v-start)/.4)),k=Math.floor(t),u=t-k;return base+s.rise*(k+u*u*(3-2*u));}
 export function stairHeight(p){const z=stairZone(p);return z==='first'?walkHeight(p.z):z==='landing'?LANDING_Y:z==='second'?walkHeight(p.x,2):null;}
+// A short level apron belongs to the staircase motion regime, not to its hole.
+export function upperStairTransition(p,y){return Number.isFinite(y)&&y>=UPPER_Y-.25&&p.x>=s.exit-.40&&p.x<=s.exit+.65&&Math.abs(p.z-s.mid)<=s.half-s.radius+e;}
+export function stairMotionLimited(p,y){const support=stairHeight(p);return support!==null&&Math.abs(y-support)<=.04||upperStairTransition(p,y);}
+export function upperFloorVisible(previous,inside,y){return !!inside&&y>=UPPER_Y-(previous?.36:.24);}
+export function upperRailBlend(p,y){if(!upperStairTransition(p,y)||p.x<s.exit)return 1;const t=Math.max(0,Math.min(1,(p.x-s.exit)/.24));return 1-t*t*(3-2*t);}
 export function residenceStep(from,to,y,w,d){
  const inside=p=>Math.abs(p.x)<=w/2-.42&&Math.abs(p.z)<=d/2-.42,zone=stairZone(from),dest=stairZone(to),on=!!zone&&Math.abs(y-stairHeight(from))<=.04,upper=!on&&inside(from)&&y>=UPPER_Y-.08,deny={blocked:true,height:y};
  const groundGate=p=>p.z<=s.lo+e&&Math.abs(p.x-s.x)<=s.half-s.radius+e;

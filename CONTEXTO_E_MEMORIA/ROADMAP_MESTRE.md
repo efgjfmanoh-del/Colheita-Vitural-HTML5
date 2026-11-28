@@ -112,3 +112,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210 publicada (run 46093328889, 4/4). QA 211 avança 02.02: armazenamento doméstico persistente de ingredientes e transferência presencial na geladeira, com testes de conservação, capacidade, save legado e acesso. CI e validação física pendentes; sofá/radio/lareira e demais frentes abertas.
 
 - QA 211 publicada (run 46095838701). QA 212 avança 02.02 com sofá físico utilizável e regressão de assento, saída e restrição de andar. Rádio/lareira e decoração pendentes. CI e revisão visual/física obrigatórias.
+
+- QA 212 publicada (run 46097050549). QA 213 prioriza feedback físico: animação e corrimão aprovados; pequena falha no desembarque superior, suavizar velocidade/mão/oclusão sem alterar geometria. Próxima prioridade estrutural: escada junto à parede esquerda, circulação dos dois pisos, varanda superior externa real com estrutura visível e câmera de aproximação/retorno. Rádio/lareira adiados. CI e validação física pendentes.

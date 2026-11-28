@@ -1,6 +1,6 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer,Frustum} from '@babylonjs/core';
 import layout from '../layout.json';
-import {STAIR,UPPER_Y,LANDING_Y,STAIR_HOLES,STAIR_RAILS,stairZone,stairHeight,railTargets,treadHeight,residenceStep,GROUND_DIVIDER,groundWallSegments,groundDividerBlocked,UPPER_WALLS,INTERIOR_DOORS,upperWallBlocked,doorLeaf,doorLeafBlocked,fixtureBlocked,BALCONY,balconyRailBlocked,gardenGrowth,waterGardenCrop,KITCHEN_FIXTURES,kitchenAccessDistance,kitchenAccessNearby} from './residence-levels.js';
+import {STAIR,UPPER_Y,LANDING_Y,STAIR_HOLES,STAIR_RAILS,stairZone,stairHeight,upperStairTransition,stairMotionLimited,upperFloorVisible,upperRailBlend,railTargets,treadHeight,residenceStep,GROUND_DIVIDER,groundWallSegments,groundDividerBlocked,UPPER_WALLS,INTERIOR_DOORS,upperWallBlocked,doorLeaf,doorLeafBlocked,fixtureBlocked,BALCONY,balconyRailBlocked,gardenGrowth,waterGardenCrop,KITCHEN_FIXTURES,kitchenAccessDistance,kitchenAccessNearby} from './residence-levels.js';
 import {FRUITS,MAX_ORCHARD,freshOrchard,validOrchard,upgradeOrchard,buyFruitSeed,plantFruit,harvestFruit,sellFruit,orchardStage} from './orchard.js';
 import {GOODS,RECIPES,freshHome,validHome,craftGood,wash,sellGood,recipeLabel,queueGood,collectGood,WORKSHOP_MINUTES,kitchenStock,fridgeStock,transferFridge,FRIDGE_CAPACITY} from './household.js';
 import {spatialIndex,boundsVisible,prefetchBounds,createResidency} from './world-stream.js';
@@ -763,7 +763,7 @@ function updateChimneySmoke(dt,visible=!entry.inside){
 
 // The rendered architectural surfaces and the movement surfaces share local coordinates.
 const homeLocal=(x,z)=>{const dx=x-home.x,dz=z-home.z,c=Math.cos(home.angle),s=Math.sin(home.angle);return {x:dx*c-dz*s,z:dx*s+dz*c};};
-const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false,action:null,lastAction:null};
+const entry={open:false,door:0,mode:'exterior',blend:0,cameraWeight:0,previous:null,inside:false,upperVisible:false,action:null,lastAction:null};
 // Porch fixtures share their dimensions with physical collision volumes.
 const porchFront=-home.d/2-2.75-porchExtension,porchHalf=(home.w*HOUSE.porchRatio/2);
 const porchFixtures=[],porchRails=[],benches=[];
@@ -1392,7 +1392,7 @@ function handPose(world,blend,shoulderPoint=shoulder,restPoint=restingHand,side=
 }
 function releaseHand(){for(const m of reachMeshes)m.setEnabled(false);bodyParts[3].setEnabled(true);bodyParts[4].setEnabled(true);}
 const stairGripQA={frames:0,maxError:0,maxReach:0,zone:null};let stairGripActive=false;
-function syncStairGrip(){const p=homeLocal(avatar.position.x,avatar.position.z),zone=stairZone(p),y=avatar.position.y-home.y;stairGripQA.zone=zone;if(!zone||y<=STAIR.ground+.10||entry.action||seating.phase!=='idle'){if(stairGripActive){releaseHand();stairGripActive=false;}return;}avatar.computeWorldMatrix(true);const inv=Matrix.Invert(avatar.getWorldMatrix());let best=null;for(const r of railTargets(p)){const world=home.C(r.x,r.y,r.z),local=Vector3.TransformCoordinates(world,inv);const side=local.x<0?-1:1,sh=V(side*.29,1.19,0),reach=Vector3.Distance(sh,local);if(reach<=.64&&(!best||reach<best.reach))best={world,sh,side,reach};}if(!best){if(stairGripActive){releaseHand();stairGripActive=false;}return;}const q=handPose(best.world,1,best.sh,V(best.side*.29,.69,0),best.side);stairGripActive=true;stairGripQA.frames++;stairGripQA.maxError=Math.max(stairGripQA.maxError,q.error);stairGripQA.maxReach=Math.max(stairGripQA.maxReach,q.reach);}
+function syncStairGrip(){const p=homeLocal(avatar.position.x,avatar.position.z),zone=stairZone(p),y=avatar.position.y-home.y;stairGripQA.zone=zone;if((!zone&&!upperStairTransition(p,y))||y<=STAIR.ground+.10||entry.action||seating.phase!=='idle'){if(stairGripActive){releaseHand();stairGripActive=false;}return;}avatar.computeWorldMatrix(true);const inv=Matrix.Invert(avatar.getWorldMatrix());let best=null;for(const r of railTargets(p)){const world=home.C(r.x,r.y,r.z),local=Vector3.TransformCoordinates(world,inv);const side=local.x<0?-1:1,sh=V(side*.29,1.19,0),reach=Vector3.Distance(sh,local);if(reach<=.64&&(!best||reach<best.reach))best={world,sh,side,reach};}const blend=upperRailBlend(p,y);if(!best||blend<=.001){if(stairGripActive){releaseHand();stairGripActive=false;}return;}const q=handPose(best.world,blend,best.sh,V(best.side*.29,.69,0),best.side);stairGripActive=true;if(blend>=.999){stairGripQA.frames++;stairGripQA.maxError=Math.max(stairGripQA.maxError,q.error);stairGripQA.maxReach=Math.max(stairGripQA.maxReach,q.reach);}}
 // Pose the actual 3D limbs around hip and shoulder pivots, driven by distance walked.
 const gait={phase:0,distance:0,moving:false,stride:0};
 const WALK_SPEED=5,RUN_SPEED=8.4;
@@ -1849,7 +1849,7 @@ function updateEntry(dt){
  const exterior=zone?.exterior||null,weight=zone?.weight||0;entry.cameraWeight=weight;entry.cameraSide=exterior?.side||(zone?.kind==='front'?'front':null);entry.cameraBuilding=exterior?.id||(zone?.kind==='front'?'house':null);
  if(weight>.001&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
  if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
- entry.inside=inside;setHouseGroup('house-upper-floor',!inside||avatar.position.y>=home.y+UPPER_Y-.24);setHouseGroup('house-ground-divider',!inside||avatar.position.y<home.y+UPPER_Y-.24);const showUpper=!inside||avatar.position.y>=home.y+UPPER_Y-.24;setHouseGroup('house-upper-rooms',showUpper);setHouseGroup('house-upper-balcony',showUpper);for(const p of planters)if(p.floor===2&&p.mesh.isEnabled()!==!!(showUpper&&p.crop))p.mesh.setEnabled(!!(showUpper&&p.crop));for(const f of ruralFixtures)setHouseGroup('interior '+f.id,f.floor===2?showUpper:!inside||!showUpper);for(const d of interiorDoors)setHouseGroup('interior-door '+d.id,d.floor===2?showUpper:!inside||!showUpper);updateChimneySmoke(dt,!inside);
+ entry.inside=inside;entry.upperVisible=upperFloorVisible(entry.upperVisible,inside,avatar.position.y-home.y);const showUpper=!inside||entry.upperVisible;setHouseGroup('house-upper-floor',showUpper);setHouseGroup('house-ground-divider',!inside||!entry.upperVisible);setHouseGroup('house-upper-rooms',showUpper);setHouseGroup('house-upper-balcony',showUpper);for(const p of planters)if(p.floor===2&&p.mesh.isEnabled()!==!!(showUpper&&p.crop))p.mesh.setEnabled(!!(showUpper&&p.crop));for(const f of ruralFixtures)setHouseGroup('interior '+f.id,f.floor===2?showUpper:!inside||!showUpper);for(const d of interiorDoors)setHouseGroup('interior-door '+d.id,d.floor===2?showUpper:!inside||!showUpper);updateChimneySmoke(dt,!inside);
  const nearDoor=seating.phase==='idle'&&(doorNearby()||!!entry.action),doorLabel=entry.action?(entry.action.target?'Abrindo…':'Fechando…'):(entry.door>.5?'Fechar porta':'Abrir porta');
  if(doorAction.disabled!==!!entry.action)doorAction.disabled=!!entry.action;
  if(doorAction.hidden===nearDoor)doorAction.hidden=!nearDoor;
@@ -1921,7 +1921,7 @@ function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
  const localStart=homeLocal(oldX,oldZ),localTarget=homeLocal(oldX+dx,oldZ+dz),startHeight=stairHeight(localStart),onStair=startHeight!==null&&Math.abs(avatar.position.y-home.y-startHeight)<=.04;let floor=(onStair||avatar.position.y>home.y+STAIR.ground+.10&&Math.abs(localStart.x)<home.w/2&&Math.abs(localStart.z)<home.d/2)?avatar.position.y:surfaceHeight(oldX,oldZ);
- if(!interacting&&(onStair||stairZone(localTarget))){const length=Math.hypot(dx,dz),limit=2.25*Math.max(0,dt);if(length>limit){dx*=limit/length;dz*=limit/length;}}
+ if(!interacting&&(stairMotionLimited(localStart,avatar.position.y-home.y)||stairZone(localTarget)||upperStairTransition(localTarget,avatar.position.y-home.y))){const length=Math.hypot(dx,dz),limit=2.25*Math.max(0,dt);if(length>limit){dx*=limit/length;dz*=limit/length;}}
  const attempt=(x,z)=>{
   const from={x:avatar.position.x,z:avatar.position.z};const level=residenceStep(homeLocal(from.x,from.z),homeLocal(x,z),floor-home.y,home.w,home.d);if(level?.blocked)return false;if(!level&&(blocked(x,z,interacting,from)||petBodyBlocked(x,z,from)||livestockBodyBlocked(x,z,from)))return false;
   const next=level?home.y+level.height:surfaceHeight(x,z);if(level&&next>=home.y+UPPER_Y-.08&&upperResidenceBlocked(x,z))return false;if(!terrainMotionAllowed(avatar.position.x,avatar.position.z,x,z,floor,next))return false;
@@ -1959,7 +1959,7 @@ function updateLocomotion(x,z,rawDt,held=sprint.held||keys.has('shift')){
  const dt=Math.max(0,Math.min(.12,rawDt)),len=Math.hypot(x,z),moving=len>1e-5;
  if(titleMode||photoMode||regionalOpen||inventoryDialog.open||progressDialog.open||ruralDialog.open||seating.phase!=='idle'||!farmCenter.hidden||!controlsMenu.hidden||!playerMenu.hidden)return 0;
  if(entry.action||!gardenPanel.hidden){resetSprint();walkPose(0,Math.min(.05,dt));return 0;}
- const local=homeLocal(avatar.position.x,avatar.position.z),support=stairHeight(local),onStairs=support!==null&&Math.abs(avatar.position.y-home.y-support)<=.04;if(onStairs){sprint.brake=0;sprint.coast=false;}
+ const local=homeLocal(avatar.position.x,avatar.position.z),onStairs=stairMotionLimited(local,avatar.position.y-home.y);if(onStairs){sprint.brake=0;sprint.coast=false;sprint.wasRunning=false;sprint.speed=Math.min(sprint.speed,WALK_SPEED);}
  const running=held&&moving&&!onStairs;
  if(running){sprint.brake=0;sprint.coast=false;}
  else if(!onStairs&&sprint.wasRunning&&sprint.active&&sprint.speed>WALK_SPEED+.65){
