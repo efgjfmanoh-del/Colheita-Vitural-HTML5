@@ -1441,25 +1441,26 @@ const seatLegs=[-.13,.13].map(x=>{
 });
 const seatButton=$('seat-action');
 function nearbyBench(){
- if(entry.action||entry.inside||!gardenPanel.hidden)return null;
- return allBenches.flatMap(b=>(b.kind==='backless-bench'?[-1,1]:[-1]).map(side=>{const p=seatStand(b,side);return {b:{...b,seatSide:side},d:Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z),dy:Math.abs(avatar.position.y-p.y),free:!blocked(p.x,p.z)};})).filter(x=>x.free&&x.d<1.12&&x.dy<.65).sort((a,b)=>a.d-b.d)[0]?.b||null;
+ if(entry.action||!gardenPanel.hidden)return null;
+ const local=homeLocal(avatar.position.x,avatar.position.z),inside=Math.abs(local.x)<home.w/2-.12&&local.z>-home.d/2+.12&&local.z<home.d/2-.12;
+ return allBenches.filter(b=>b.kind==='sofa'?inside&&Math.abs(avatar.position.y-home.y-STAIR.ground)<.22:!inside).flatMap(b=>(b.kind==='backless-bench'?[-1,1]:[-1]).map(side=>{const p=seatStand(b,side);return {b:{...b,seatSide:side},d:Math.hypot(avatar.position.x-p.x,avatar.position.z-p.z),dy:Math.abs(avatar.position.y-p.y),free:!blocked(p.x,p.z)};})).filter(x=>x.free&&x.d<1.12&&x.dy<.65).sort((a,b)=>a.d-b.d)[0]?.b||null;
 }
 function setSeatPose(blend,lean=0){
  seating.blend=blend;
- const drop=.10*blend;
+ const drop=(seating.bench?.kind==='sofa'?0:.10)*blend;
  bodyParts[0].position.copyFromFloats(0,.97-drop,.04*blend);
  bodyParts[0].rotation.x=lean;
  head.position.copyFromFloats(0,1.50-drop,.09*blend);hat.position.copyFromFloats(0,1.72-drop,.09*blend);hatTop.position.copyFromFloats(0,1.82-drop,.09*blend);
  for(let i=3;i<5;i++){const m=bodyParts[i],r=limbRest[i];m.position.copyFromFloats(r.x,r.y-drop,.12*blend);m.rotation.x=-.65*blend+lean;}
  for(let i=0;i<seatLegs.length;i++){
   const l=seatLegs[i],x=l.x;
-  const hip=V(x,.68-.10*blend,0),knee=V(x,.37+.17*blend,.39*blend),ankle=V(x,.075,.43*blend);
+  const hip=V(x,.68-drop,0),knee=V(x,.37+.17*blend,.39*blend),ankle=V(x,.075,.43*blend);
   for(const m of [l.thigh,l.shin,l.foot])m.setEnabled(blend>0);
   bodyParts[i+1].setEnabled(blend===0);bodyParts[i+1].rotation.x=0;bodyParts[i+1].position.copyFrom(limbRest[i+1]);
   poseSegment(l.thigh,hip,knee);poseSegment(l.shin,knee,ankle);l.foot.position.copyFromFloats(x,.06,.075+.43*blend);
  }
 }
-function seatStand(b,side=b.seatSide??-1){if(!b.world)return home.C(b.x,.53,b.z-.77);const p=V(b.x+Math.sin(b.angle)*.73*side,0,b.z+Math.cos(b.angle)*.73*side);p.y=surfaceHeight(p.x,p.z);return p;}
+function seatStand(b,side=b.seatSide??-1){if(!b.world)return home.C(b.x,.53,b.z-(b.kind==='sofa'?.91:.77));const p=V(b.x+Math.sin(b.angle)*.73*side,0,b.z+Math.cos(b.angle)*.73*side);p.y=surfaceHeight(p.x,p.z);return p;}
 function seatTarget(b){const side=b.seatSide??-1;return b.world?V(b.x+Math.sin(b.angle)*.11*side,b.y+.025,b.z+Math.cos(b.angle)*.11*side):home.C(b.x,.53,b.z-.13);}
 const seatYaw=b=>(b.world?b.angle:home.angle)+((b.seatSide??-1)<0?Math.PI:0);
 function seatIcon(b){return b?.kind==='backless-bench'?'backless-bench':b?.kind==='bench'?'bench':'chair';}
@@ -2785,7 +2786,8 @@ function roomFixture(id,label,icon,x,z,hx,hz,craft,floor=1){
 const bedFixture=roomFixture('bed','Dormir','🌙',5.7,3.05,.85,1.1,B=>{B('timber frame',0,.24,0,1.66,.36,2.12,M.woodDark);B('mattress',0,.51,0,1.52,.22,1.96,M.plaster);B('quilt',0,.65,-.28,1.50,.07,1.3,M.leaf2);B('pillow',0,.69,.69,.70,.16,.38,M.white);B('headboard',0,.72,1.03,1.7,1.0,.13,M.wood);},2);
 const wardrobeFixture=roomFixture('wardrobe','Guarda-roupa','👕',5.8,1.40,.62,.48,B=>{B('cabinet',0,1.05,0,1.16,2.10,.9,M.wood);for(const d of [-1,1]){B('door',d*.29,1.05,-.47,.56,1.98,.06,M.woodLight);B('handle',d*.10,1.05,-.52,.045,.17,.05,M.black);}},2);
 roomFixture('kitchen','Cozinha','🍳',KITCHEN_FIXTURES.kitchen.x,KITCHEN_FIXTURES.kitchen.z,KITCHEN_FIXTURES.kitchen.hx,KITCHEN_FIXTURES.kitchen.hz,B=>{B('counter',0,.45,0,2.65,.90,1.06,M.wood);B('stone worktop',0,.95,0,2.75,.14,1.13,M.stoneLight);B('stove',-.78,1.06,0,.83,.08,.78,M.black);for(const d of [-1,1])B('burner',-.78+d*.18,1.12,0,.20,.035,.20,M.stone);B('sink',.73,1.05,0,.80,.08,.62,M.stone);});
-roomFixture('sofa','Sofá','🪑',5.5,-.6,1.05,.55,B=>{B('base',0,.27,0,2.1,.40,1.05,M.woodDark);B('seat',0,.56,-.05,1.8,.24,.86,M.leaf);B('back',0,.85,.44,2.1,.72,.22,M.leaf);for(const d of [-1,1])B('armrest',d*.94,.72,0,.22,.38,.98,M.leaf);});
+const sofaFixture=roomFixture('sofa','Sofá','🪑',5.5,-.6,1.05,.55,B=>{B('base',0,.27,0,2.1,.40,1.05,M.woodDark);B('seat',0,.56,-.05,1.8,.24,.86,M.leaf);B('back',0,.85,.44,2.1,.72,.22,M.leaf);for(const d of [-1,1])B('armrest',d*.94,.72,0,.22,.38,.98,M.leaf);});
+allBenches.push({kind:'sofa',id:sofaFixture.id,x:sofaFixture.local.x,z:sofaFixture.local.z,hx:sofaFixture.hx,hz:sofaFixture.hz,world:false});
 roomFixture('bath','Banheiro','💧',5.5,-3.2,.64,.65,B=>{B('vanity',0,.45,0,1.16,.90,1.13,M.woodLight);B('basin',0,.96,0,.93,.16,.73,M.white);B('tap',0,1.14,.27,.10,.34,.10,M.stone);},2);
 // Complementary furniture uses real floor-aware footprints, not scenery-only decals.
 roomFixture('shower','Chuveiro','🚿',4.15,-3.35,.46,.62,B=>{B('ceramic tray',0,.065,0,.90,.13,1.22,M.white);B('back tiled panel',0,1.05,-.55,.90,2.10,.09,M.white);B('side tile panel',-.41,1.02,0,.08,2.04,1.12,M.plaster);B('metal shower pipe',0,1.47,-.45,.065,.94,.065,M.stone);B('shower arm',0,1.94,-.27,.065,.065,.38,M.stone);B('shower head',0,1.87,-.09,.24,.075,.24,M.stoneLight);B('drain',0,.145,0,.16,.025,.16,M.black);},2);

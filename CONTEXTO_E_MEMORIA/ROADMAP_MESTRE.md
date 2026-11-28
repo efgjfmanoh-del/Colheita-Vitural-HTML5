@@ -110,3 +110,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - Distribuição incremental QA autorizada pelo proprietário: cada incremento funcional após build/regressão/APK assinado e integridade deve ser publicado no atualizador, antes de avançar versão. Sem publicação oficial. QA 210 revalidação do gate pendente; run 46070720326 aprovou conteúdo técnico. Não marcar lote 02 concluído.
 
 - QA 210 publicada (run 46093328889, 4/4). QA 211 avança 02.02: armazenamento doméstico persistente de ingredientes e transferência presencial na geladeira, com testes de conservação, capacidade, save legado e acesso. CI e validação física pendentes; sofá/radio/lareira e demais frentes abertas.
+
+- QA 211 publicada (run 46095838701). QA 212 avança 02.02 com sofá físico utilizável e regressão de assento, saída e restrição de andar. Rádio/lareira e decoração pendentes. CI e revisão visual/física obrigatórias.
