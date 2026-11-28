@@ -1,7 +1,7 @@
 name: Colheita Babylon - Etapa 1 residencial
 on:
   push:
-    branches: [main, 'qa/0.1.52', 'qa/lote-final-025', 'qa/residencia-integrada-214']
+    branches: [main, 'qa/0.1.52', 'qa/lote-final-025', 'qa/residencia-integrada-214', 'qa/funcionarios-vida-217']
     paths: ['html5-babylon/**', 'android-test/**', '.github/workflows/babylon-residence.yml']
   workflow_dispatch:
 permissions:
