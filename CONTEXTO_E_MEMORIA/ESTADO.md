@@ -617,3 +617,6 @@ QA217 publicada run 46120498688. Capturas físicas mostram ausência de ponte em
 
 ### QA 218 — recuperação 46121751899
 Build e APK assinado aprovados em paralelo; regressão falhou em hydrology.samples.every: teste legado exigia bloqueio em todos os pontos dos canais, inclusive novas travessias. Hipótese de conflito de expectativa: manter bloqueio obrigatório fora de decks e permitir exceção apenas com deck físico registrado, altura acima da água e rainSurface deck. Teste de lagos e teste independente de corrimão permanecem. Nova CI integral necessária; publicação anterior pulada. Sem confirmação física ou artística.
+
+### QA 218 — recuperação 46125803585
+Build e APK aprovados; regressão avançou além da hidrologia e falhou no teste físico de centro do deck: north_middle e staff-direct bloqueados, northeast livre; três corrimãos aprovados. Objeto específico ainda não identificado. Hipótese: geometria de obstáculos preexistentes intercepta o traçado. Agora sondar corredor e acessos com blocked real antes de criar malhas, procurar deslocamentos laterais limitados e alternativas ordenadas por proximidade do alojamento, sem desativar colisores. Gate exige as três travessias nomeadas, não aceita omissão silenciosa. CI integral pendente, posição visual e trajetos completos ainda não comprovados.

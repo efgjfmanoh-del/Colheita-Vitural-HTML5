@@ -130,3 +130,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 218: feedback físico da 217, ponte/rotas, margem de colisão da kitnet e mural de candidatos persistentes. Paralelizar APK e regressão após checkpoint; gate final inalterado.
 
 - QA 218 recuperação: preservar bloqueio hídrico fora de travessias físicas e validar altura/contato de deck nas exceções; CI integral no mesmo versionCode.
+
+- QA 218 recuperação: sondagem física de decks e acessos antes de construir, alternativas locais sem suprimir colisores, gate exige north_middle, northeast e staff-direct. Run 46125803585 falhou em dois decks bloqueados; publicação permanece bloqueada.
