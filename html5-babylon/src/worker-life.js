@@ -2,7 +2,16 @@ import {calendarAt,REAL_MS_PER_GAME_MINUTE as MINUTE} from './world-calendar.js'
 export const ROOM_COUNT=24;
 export const roomGender=slot=>slot<12?'male':'female';
 export function assignRooms(items){const used=new Set(),out=[];for(const w of items){let slot=w.room;if(!Number.isInteger(slot)||slot<0||slot>=24||used.has(slot)){const start=w.id%2?12:0;slot=Array.from({length:24},(_,i)=>(start+i)%24).find(i=>!used.has(i));}if(slot===undefined)throw Error('no free room');used.add(slot);out.push({...w,room:slot});}return out;}
-export function roomPlan(slot){if(!Number.isInteger(slot)||slot<0||slot>=24)return null;const i=slot%12;return {slot,floor:Math.floor(slot/12),gender:roomGender(slot),x:-6.75+(i%6)*2.7,z:i<6?-2.7:2.7,side:i<6?-1:1};}
+export const KITNET={w:26.4,d:13.2,h:2.85,corridor:2.2,pitch:4.4,depth:5.5};
+export function roomPlan(slot){if(!Number.isInteger(slot)||slot<0||slot>=24)return null;const i=slot%12,side=i<6?-1:1;return {slot,floor:Math.floor(slot/12),gender:roomGender(slot),x:-11+(i%6)*4.4,z:side*3.85,side};}
+// All footprints in metres from room centre/entrance, used by render and collision.
+export const KIT_FIXTURES=Object.freeze([
+ {id:'bed',x:-1.38,v:3.94,w:1.12,d:2.05},{id:'wardrobe',x:-1.71,v:2.0,w:.66,d:.88},{id:'stove',x:-1.57,v:.57,w:.77,d:.69},{id:'fridge',x:-1.57,v:1.24,w:.77,d:.62},{id:'table',x:1.53,v:1.94,w:.75,d:.85},{id:'planter',x:1.68,v:.53,w:.48,d:.48},{id:'toilet',x:1.60,v:4.04,w:.62,d:.66},{id:'sink',x:.58,v:4.88,w:.58,d:.48},{id:'shower',x:1.65,v:5.04,w:.76,d:.75},
+ {id:'bath-wall-side',x:.05,v:4.35,w:.13,d:2.30},{id:'bath-wall-left',x:.28,v:3.20,w:.59,d:.12},{id:'bath-wall-right',x:1.86,v:3.20,w:.69,d:.12}
+]);
+export const KIT_STANDS=Object.freeze({sleep:{x:-.43,v:3.94},eat:{x:-.66,v:.65},drink:{x:-.66,v:1.25},toilet:{x:1.05,v:4.04},plant:{x:.93,v:.53}});
+export const kitBlocked=(x,v,r=.20)=>KIT_FIXTURES.some(f=>Math.abs(x-f.x)<f.w/2+r&&Math.abs(v-f.v)<f.d/2+r);
+export function kitPath(goal){const p=KIT_STANDS[goal];if(!p)return [];const entry={x:0,v:.30};if(goal==='toilet')return [entry,{x:.85,v:2.65},{x:.85,v:3.50},p];if(goal==='sleep')return [entry,{x:-.43,v:2.8},p];return [entry,p];}
 const clamp=n=>Math.max(0,Math.min(1,n));
 export const freshLife=now=>({at:Math.floor(now),hunger:.10,thirst:.10,bladder:.05,energy:.9,goal:'work'});
 export const validLife=s=>s&&Number.isSafeInteger(s.at)&&s.at>=0&&['hunger','thirst','bladder','energy'].every(k=>Number.isFinite(s[k])&&s[k]>=0&&s[k]<=1)&&['work','sleep','eat','drink','toilet','idle'].includes(s.goal);

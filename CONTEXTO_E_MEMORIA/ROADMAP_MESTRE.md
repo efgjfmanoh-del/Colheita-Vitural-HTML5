@@ -122,3 +122,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 215 publicada (46116886372). QA 216: lote integrado refino de recintos, lago, animações domésticas e contratos NPC agrícolas/pecuária/comércio, sem crédito em missão, alertas e salários mensais; gate completo e validação física/artística pendentes. Não iniciar outras etapas antes de concluir este lote.
 
 - QA 217 staging: alojamento 24 quartos, IA de necessidades, identidade e 120 interações de conversa por funcionário, marcha compartilhada e olhos maiores. Integração somente após QA 216 estável e staging aprovado; validação física/artística pendente.
+
+- QA 217: substituir dormitórios coletivos por 24 kitnets completas e vasos cultiváveis. Recuperar regressão de articulação do cachorro, validar dimensões, colisões/rotas e mobiliário por unidade; staging qa/funcionarios-quartos-217, não publicar até gates.
