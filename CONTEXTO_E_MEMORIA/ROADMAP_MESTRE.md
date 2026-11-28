@@ -128,3 +128,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 217: run 46119421277 falhou por mistura de vasos da varanda e kitnets no teste legado; recuperação mantém teste original contextualizado e adiciona teste individual de 24 vasos e colisões, separa batching por piso e alinha desembarque superior ao corredor.
 
 - QA 218: feedback físico da 217, ponte/rotas, margem de colisão da kitnet e mural de candidatos persistentes. Paralelizar APK e regressão após checkpoint; gate final inalterado.
+
+- QA 218 recuperação: preservar bloqueio hídrico fora de travessias físicas e validar altura/contato de deck nas exceções; CI integral no mesmo versionCode.
