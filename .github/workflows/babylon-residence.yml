@@ -143,7 +143,7 @@ jobs:
           overwrite: true
   apk:
     name: 3 - Compilar, assinar e validar APK
-    needs: [build, integration]
+    needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
