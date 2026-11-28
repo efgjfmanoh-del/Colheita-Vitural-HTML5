@@ -244,7 +244,10 @@ jobs:
           version=$(jq -er '.versionName' update.json)
           case "$GITHUB_REF" in
             refs/heads/qa/0.1.52) [[ "$code" == 152 && "$version" == "0.1.52" ]] ;;
-            refs/heads/qa/lote-final-025) [[ "$code" == 205 && "$version" == "0.2.5" || "$code" == 206 && "$version" == "0.2.6" || "$code" == 207 && "$version" == "0.2.7" || "$code" == 208 && "$version" == "0.2.8" || "$code" == 209 && "$version" == "0.2.9" ]] ;;
+            refs/heads/qa/lote-final-025)
+              [[ "$code" =~ ^[0-9]+$ ]]
+              [[ "$code" -ge 205 && "$code" -le 299 && "$version" == "0.2.$((code-200))" ]]
+              ;;
             refs/heads/main) [[ "$code" == 200 && "$version" == "0.2.0" || "$code" == 201 && "$version" == "0.2.1" || "$code" == 202 && "$version" == "0.2.2" || "$code" == 203 && "$version" == "0.2.3" || "$code" == 204 && "$version" == "0.2.4" ]] ;;
             *) exit 1 ;;
           esac
@@ -260,6 +263,10 @@ jobs:
             cmp ColheitaVitural-QA.apk existing/ColheitaVitural-QA.apk
             echo "Versão QA já publicada com conteúdo idêntico."
           else
+            if [[ "$GITHUB_REF" == refs/heads/qa/lote-final-025 ]]; then
+              latest=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == true and (.tag_name | test("^qa-v[0-9]+$"))) | .tag_name | sub("^qa-v";"") | tonumber' | sort -n | tail -1)
+              [[ -z "$latest" || "$code" -gt "$latest" ]] || { echo 'Versão QA não crescente; publicação bloqueada.'; exit 1; }
+            fi
             gh release create "$tag" --target "$GITHUB_SHA" --prerelease --draft --title "Colheita Vitural QA $version" --notes "Canal experimental. Não substitui a versão oficial." update.json ColheitaVitural-QA.apk SHA256SUMS.txt
             gh release edit "$tag" --draft=false --prerelease
           fi

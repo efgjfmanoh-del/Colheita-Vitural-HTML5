@@ -68,4 +68,14 @@ elif ref=='refs/heads/qa/lote-final-025' and (name,code)==('0.2.9',209):
                (root/'qa-209-authorization.json').read_text().strip()=='{"version":209,"channel":"qa","scope":"master-roadmap-lot02-first-functional-slice"}')
     except (OSError,subprocess.CalledProcessError):
         ready=False
+elif ref=='refs/heads/qa/lote-final-025' and 210<=code<=299 and name==f'0.2.{code-200}':
+    # Standing owner authorization, QA only; every release still requires all CI jobs.
+    try:
+        policy=(root/'qa-incremental-authorization.json').read_text().strip()
+        base='c7aac6bd9856a1a58e7c5cf480d7ab2292db3174'
+        ready=(policy=='{"schema":1,"channel":"qa","branch":"qa/lote-final-025","firstVersionCode":210,"lastVersionCode":299,"scope":"incremental-roadmap","publishAfter":"full-ci-signed-apk"}' and
+               subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],cwd=root.parent,stderr=subprocess.DEVNULL).returncode==0 and
+               subprocess.run(['git','diff','--quiet','HEAD','--'],cwd=root.parent,stderr=subprocess.DEVNULL).returncode==0)
+    except (OSError,subprocess.CalledProcessError):
+        ready=False
 print('ready='+str(ready).lower())

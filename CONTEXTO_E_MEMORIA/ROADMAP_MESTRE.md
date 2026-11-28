@@ -106,3 +106,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 210: run 46057405633 aprovou varanda e rega. 02.01/02.02 avançam com seis móveis complementares, higiene persistente no chuveiro/vaso e geladeira como consulta do estoque real. Nova regressão pendente; armazenamento dedicado, demais interações, acabamento e aprovação física ainda abertos.
 
 - Recuperação QA 210: run 46059290882 falhou por sobreposição de acesso geladeira/cozinha. Reposicionamento e áreas frontais específicas implementados, teste original preservado e regressão antirreincidência adicionada. Nova CI obrigatória; mobiliário ainda não aprovado.
+
+- Distribuição incremental QA autorizada pelo proprietário: cada incremento funcional após build/regressão/APK assinado e integridade deve ser publicado no atualizador, antes de avançar versão. Sem publicação oficial. QA 210 revalidação do gate pendente; run 46070720326 aprovou conteúdo técnico. Não marcar lote 02 concluído.

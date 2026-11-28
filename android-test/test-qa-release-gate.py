@@ -31,6 +31,31 @@ class Gate(unittest.TestCase):
             self.assertEqual(run('refs/heads/main'),'ready=false')
             grad.write_text(actual)
             js.write_bytes(original)
+    def test_incremental_qa_scope(self):
+        grad=(root/'app/build.gradle').read_text()
+        code=int(re.search(r'versionCode\s+(\d+)',grad).group(1))
+        if not 210<=code<=299: self.skipTest('Not incremental QA')
+        env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}
+        gate=root/'rc-release-gate.py'
+        def run(ref):
+            return subprocess.check_output(['python3',str(gate)],env={**env,'GITHUB_REF':ref},text=True).strip()
+        self.assertEqual(run('refs/heads/qa/lote-final-025'),'ready=true')
+        self.assertEqual(run('refs/heads/main'),'ready=false')
+        self.assertEqual(run('refs/heads/feature/test'),'ready=false')
+        # Detached fixture must fail even with the right policy and version.
+        with tempfile.TemporaryDirectory() as tmp:
+            p=pathlib.Path(tmp)
+            shutil.copytree(root,p/'android-test')
+            fixture=p/'android-test/rc-release-gate.py'
+            self.assertEqual(subprocess.check_output(['python3',str(fixture)],env=env,text=True).strip(),'ready=false')
+        # Changed tracked policy, bad version/name or dirty tree cannot publish.
+        policy=root/'qa-incremental-authorization.json'
+        original=policy.read_bytes()
+        try:
+            policy.write_bytes(original+b'\n# invalid\n')
+            self.assertEqual(run('refs/heads/qa/lote-final-025'),'ready=false')
+        finally:
+            policy.write_bytes(original)
     def test_209_qa_scope(self):
         if "versionCode 209" not in (root/'app/build.gradle').read_text(): self.skipTest('Not 209')
         env={**os.environ,'GITHUB_REF':'refs/heads/qa/lote-final-025'}
