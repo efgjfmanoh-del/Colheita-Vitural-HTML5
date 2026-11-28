@@ -124,3 +124,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 217 staging: alojamento 24 quartos, IA de necessidades, identidade e 120 interações de conversa por funcionário, marcha compartilhada e olhos maiores. Integração somente após QA 216 estável e staging aprovado; validação física/artística pendente.
 
 - QA 217: substituir dormitórios coletivos por 24 kitnets completas e vasos cultiváveis. Recuperar regressão de articulação do cachorro, validar dimensões, colisões/rotas e mobiliário por unidade; staging qa/funcionarios-quartos-217, não publicar até gates.
+
+- QA 217: run 46119421277 falhou por mistura de vasos da varanda e kitnets no teste legado; recuperação mantém teste original contextualizado e adiciona teste individual de 24 vasos e colisões, separa batching por piso e alinha desembarque superior ao corredor.
