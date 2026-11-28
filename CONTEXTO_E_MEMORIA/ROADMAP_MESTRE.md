@@ -118,3 +118,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - EFG Lote Integrado residência QA 214: escada lateral, circulação central, varanda projetada, estrutura visível, câmera suave, mantendo correção 213 e dados. Staging qa/residencia-integrada-214 não publica; integrar na branch QA após 213 e revalidar. Inspeção física/artística pendente. Rádio/lareira depois.
 
 - QA 214 publicada (46098791554). QA 215 lote único pecuária/fauna autorizado: todos os cinco animais ativos, sete instalações prontas, expansão de recintos, aves/insetos ambientais e visita às flores; preservação de saves/hub. CI integral e revisão física/artística pendentes; não publicar partes isoladas. Rádio/lareira adiados por mudança de prioridade.
+
+- QA 215 publicada (46116886372). QA 216: lote integrado refino de recintos, lago, animações domésticas e contratos NPC agrícolas/pecuária/comércio, sem crédito em missão, alertas e salários mensais; gate completo e validação física/artística pendentes. Não iniciar outras etapas antes de concluir este lote.
