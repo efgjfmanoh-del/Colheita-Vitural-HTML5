@@ -114,3 +114,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - QA 211 publicada (run 46095838701). QA 212 avança 02.02 com sofá físico utilizável e regressão de assento, saída e restrição de andar. Rádio/lareira e decoração pendentes. CI e revisão visual/física obrigatórias.
 
 - QA 212 publicada (run 46097050549). QA 213 prioriza feedback físico: animação e corrimão aprovados; pequena falha no desembarque superior, suavizar velocidade/mão/oclusão sem alterar geometria. Próxima prioridade estrutural: escada junto à parede esquerda, circulação dos dois pisos, varanda superior externa real com estrutura visível e câmera de aproximação/retorno. Rádio/lareira adiados. CI e validação física pendentes.
+
+- EFG Lote Integrado residência QA 214: escada lateral, circulação central, varanda projetada, estrutura visível, câmera suave, mantendo correção 213 e dados. Staging qa/residencia-integrada-214 não publica; integrar na branch QA após 213 e revalidar. Inspeção física/artística pendente. Rádio/lareira depois.

@@ -1,6 +1,6 @@
 import {Engine,Scene,ArcRotateCamera,Vector3,Color3,Color4,Mesh,MeshBuilder,StandardMaterial,HemisphericLight,DirectionalLight,PointLight,ShadowGenerator,VertexData,Quaternion,Matrix,DynamicTexture,Texture,VertexBuffer,Frustum} from '@babylonjs/core';
 import layout from '../layout.json';
-import {STAIR,UPPER_Y,LANDING_Y,STAIR_HOLES,STAIR_RAILS,stairZone,stairHeight,upperStairTransition,stairMotionLimited,upperFloorVisible,upperRailBlend,railTargets,treadHeight,residenceStep,GROUND_DIVIDER,groundWallSegments,groundDividerBlocked,UPPER_WALLS,INTERIOR_DOORS,upperWallBlocked,doorLeaf,doorLeafBlocked,fixtureBlocked,BALCONY,balconyRailBlocked,gardenGrowth,waterGardenCrop,KITCHEN_FIXTURES,kitchenAccessDistance,kitchenAccessNearby} from './residence-levels.js';
+import {STAIR,UPPER_Y,LANDING_Y,STAIR_HOLES,STAIR_RAILS,stairZone,stairHeight,upperStairTransition,stairMotionLimited,upperFloorVisible,upperRailBlend,railTargets,treadHeight,residenceStep,GROUND_DIVIDER,groundWallSegments,groundDividerBlocked,UPPER_WALLS,INTERIOR_DOORS,upperWallBlocked,doorLeaf,doorLeafBlocked,fixtureBlocked,BALCONY,upperSupport,upperBalconyAt,balconyRailBlocked,gardenGrowth,waterGardenCrop,KITCHEN_FIXTURES,kitchenAccessDistance,kitchenAccessNearby} from './residence-levels.js';
 import {FRUITS,MAX_ORCHARD,freshOrchard,validOrchard,upgradeOrchard,buyFruitSeed,plantFruit,harvestFruit,sellFruit,orchardStage} from './orchard.js';
 import {GOODS,RECIPES,freshHome,validHome,craftGood,wash,sellGood,recipeLabel,queueGood,collectGood,WORKSHOP_MINUTES,kitchenStock,fridgeStock,transferFridge,FRIDGE_CAPACITY} from './household.js';
 import {spatialIndex,boundsVisible,prefetchBounds,createResidency} from './world-stream.js';
@@ -694,9 +694,11 @@ function house(id,u,v,w,d,h,angle,small=false){entity(id);const x=X(u),z=Z(v),y=
  entity(id);
  B('porch deck',0,.37,-d/2-(HOUSE.porchDepth+.1)/2,w*HOUSE.porchRatio,.32,HOUSE.porchDepth,M.woodLight);for(let j=0;j<20;j++)B('porch deck board seam',-w*HOUSE.porchRatio/2+.25+j*(w*HOUSE.porchRatio-.5)/19, .54,-d/2-(HOUSE.porchDepth+.1)/2,.035,.012,HOUSE.porchDepth-.1,M.woodDark);for(const k of [-1,1]){B('porch lantern bracket',k*w*.18,2.55,-d/2-.23,.12,.15,.42,M.woodDark);B('porch lantern',k*w*.18,2.35,-d/2-.49,.26,.36,.25,M.glass);B('porch lantern cap',k*w*.18,2.55,-d/2-.49,.34,.10,.34,M.black);}for(let s of [-1,1]){B('porch support',s*(w*HOUSE.porchRatio/2-.22),1.83,-d/2-2.4-porchExtension,.27,2.8,.27,M.woodDark);}
  entity('house-porch-roof');
- quad('porch roof',[C(-w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.65,-d/2),C(w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension),C(-w*(HOUSE.porchRatio/2+.035),3.12,-d/2-3-porchExtension)],M.roof,true);
- const porchRoofHalf=w*(HOUSE.porchRatio/2+.035);
- ceramicField('curved colonial veranda tiles',Math.hypot(3+porchExtension,.53),porchRoofHalf*2,(u,v)=>C(-porchRoofHalf+2*porchRoofHalf*v,3.65-.53*u,-d/2-(3+porchExtension)*u));
+ const porchRoofHalf=w*(HOUSE.porchRatio/2+.035),cut=BALCONY.half+.12;
+ for(const [left,right] of [[-porchRoofHalf,-cut],[cut,porchRoofHalf]]){
+  quad('porch roof side wing',[C(left,3.65,-d/2),C(right,3.65,-d/2),C(right,3.12,-d/2-3-porchExtension),C(left,3.12,-d/2-3-porchExtension)],M.roof,true);
+  ceramicField('curved colonial veranda side tiles',Math.hypot(3+porchExtension,.53),right-left,(u,v)=>C(left+(right-left)*v,3.65-.53*u,-d/2-(3+porchExtension)*u));
+ }
  entity(id);for(let i=0;i<3;i++){const top=[.18,.35,.53][i];B('stone entry step',0,top/2,-d/2-3.55-porchExtension+i*.35,2.2,top,.35,M.stoneLight);}
  entity('house-roof');B('chimney',w*.29,h+1.75,d*.26,.86,3.5,.86,M.stoneLight);for(let i=0;i<7;i++)B('chimney course',w*.29,h+.42+i*.48,d*.26,.89,.045,.89,M.stone);B('chimney cap',w*.29,h+3.55,d*.26,1.1,.20,1.1,M.woodDark);
  }else{B('doghouse name plaque',0,h*.84,-d/2-.11,.59,.24,.09,M.woodDark);for(let xx of [-.19,.19])B('paw mark',xx,h*.85,-d/2-.17,.07,.08,.035,M.woodLight)}
@@ -722,7 +724,15 @@ buildGroundDivider();
 const interiorDoors=[],upperFixtures=[];
 function buildUpperRooms(){entity('house-upper-rooms');const H=2.55,B=(n,x,y,z,w,h,d,mat)=>{const q=home.C(x,y,z);return box(n,q.x,q.y,q.z,w,h,d,mat,home.angle);};for(const w of UPPER_WALLS){const mid=(w.from+w.to)/2,len=w.to-w.from;B('upper room plaster wall',w.axis==='x'?mid:w.fixed,UPPER_Y+H/2,w.axis==='x'?w.fixed:mid,w.axis==='x'?len:.18,H,w.axis==='x'?.18:len,M.plaster);}for(const d of INTERIOR_DOORS.filter(d=>d.floor===2)){const mid=(d.from+d.to)/2,len=d.to-d.from;B('upper doorway lintel',d.fixed,UPPER_Y+2.39,mid,.18,.32,len,M.plaster);for(const z of [d.from-.035,d.to+.035])B('upper doorway timber jamb',d.fixed,UPPER_Y+1.125,z,.24,2.25,.07,M.wood);B('upper doorway timber header',d.fixed,UPPER_Y+2.30,mid,.24,.10,len+.14,M.wood);} }
 buildUpperRooms();
-function buildUpperBalcony(){const a=BALCONY,B=(n,x,y,z,w,h,d,mat)=>{const q=home.C(x,y,z);return box(n,q.x,q.y,q.z,w,h,d,mat,home.angle);};entity('house-upper-balcony');const n=Math.ceil(a.half*2/.42);for(let i=0;i<=n;i++)B('upper veranda timber baluster',-a.half+2*a.half*i/n,UPPER_Y+a.railHeight/2,a.railZ,.095,a.railHeight,.095,M.woodDark);B('upper veranda continuous guardrail',0,UPPER_Y+a.railHeight,a.railZ,a.half*2+.12,.13,.14,M.woodLight);for(const side of [-1,1])B('upper veranda frame column',side*(a.half-.075),UPPER_Y+a.openingHeight/2,a.front,.15,a.openingHeight,.20,M.woodDark);B('upper veranda opening header',0,UPPER_Y+a.openingHeight-.08,a.front,a.half*2,.16,.20,M.woodDark);}
+function buildUpperBalcony(){const a=BALCONY,B=(n,x,y,z,w,h,d,mat)=>{const q=home.C(x,y,z);return box(n,q.x,q.y,q.z,w,h,d,mat,home.angle);};entity('house-upper-balcony');
+ const mid=(a.front+a.back)/2,depth=a.back-a.front;
+ B('projecting upper veranda timber deck',0,UPPER_Y-.12,mid,a.half*2,.24,depth,M.woodLight);
+ B('upper veranda front fascia',0,UPPER_Y-.24,a.front+.10,a.half*2+.10,.28,.20,M.woodDark);
+ for(const k of [-1,1]){B('upper veranda side fascia',k*(a.half-.08),UPPER_Y-.24,mid,.20,.28,depth,M.woodDark);B('upper veranda underfloor beam',k*(a.half-.22),UPPER_Y-.34,mid,.25,.20,depth,M.woodDark);beam('upper veranda diagonal support',home.C(k*(a.half-.23),UPPER_Y-.31,a.front+.32),home.C(k*(a.half-.23),UPPER_Y-1.25,a.back-.05),.20,M.woodDark);}
+ for(let i=1;i<Math.ceil(a.half*2/.32);i++)B('upper veranda plank seam',-a.half+i*.32,UPPER_Y+.006,mid,.018,.012,depth-.05,M.woodDark);
+ const rail=(x,z,xx,zz)=>{const n=Math.ceil(Math.hypot(xx-x,zz-z)/.42);for(let i=0;i<=n;i++){const u=i/n;B('upper veranda timber baluster',x+(xx-x)*u,UPPER_Y+a.railHeight/2,z+(zz-z)*u,.095,a.railHeight,.095,M.woodDark);}beam('upper veranda continuous guardrail',home.C(x,UPPER_Y+a.railHeight,z),home.C(xx,UPPER_Y+a.railHeight,zz),.13,M.woodLight);};
+ rail(-a.half,a.railZ,a.half,a.railZ);for(const side of [-1,1]){rail(side*a.half,a.railZ,side*a.half,a.back);B('upper veranda frame column',side*(a.half-.075),UPPER_Y+a.openingHeight/2,a.back,.15,a.openingHeight,.20,M.woodDark);}B('upper veranda opening header',0,UPPER_Y+a.openingHeight-.08,a.back,a.half*2,.16,.20,M.woodDark);
+}
 buildUpperBalcony();
 function positionInteriorDoor(d){const leaf=doorLeaf(d,d.open),mid=(leaf.from+leaf.to)/2,base=d.floor===2?UPPER_Y:STAIR.ground;d.mesh.position.copyFrom(home.C(d.axis==='x'?mid:leaf.fixed,base+1.10,d.axis==='x'?leaf.fixed:mid));d.mesh.computeWorldMatrix(true);}
 for(const spec of INTERIOR_DOORS){const d={...spec,open:1,target:1,kind:'interior-door',icon:'🚪'},base=d.floor===2?UPPER_Y:STAIR.ground,mid=(d.from+d.to)/2,p=home.C(d.axis==='x'?mid:d.fixed,base,d.axis==='x'?d.fixed:mid);Object.assign(d,{x:p.x,y:p.y,z:p.z,hx:d.axis==='x'?(d.to-d.from)/2:.12,hz:d.axis==='x'?.12:(d.to-d.from)/2,yaw:home.angle});entity('interior-door '+d.id);d.mesh=box('sliding timber '+d.id,p.x,p.y+1.10,p.z,d.axis==='x'?d.to-d.from:.09,2.20,d.axis==='x'?.09:d.to-d.from,M.wood,home.angle);positionInteriorDoor(d);interiorDoors.push(d);}
@@ -859,7 +869,7 @@ function writeGarden(){
  const data={...gardenSave};for(const p of planters){if(p.crop)data[p.id]=p.crop;else delete data[p.id];}
  try{localStorage.setItem(SAVE_KEY,JSON.stringify(data));gardenSave=data;gardenError='';return true;}catch{gardenError='Não foi possível salvar as flores. Tente novamente.';return false;}
 }
-function nearbyPlanter(){const pos=homeLocal(avatar.position.x,avatar.position.z),height=avatar.position.y-home.y;if(entry.action||seating.phase!=='idle')return null;const upper=Math.abs(height-UPPER_Y)<.20&&Math.abs(pos.x)<BALCONY.half+.2&&pos.z<BALCONY.back+.3&&pos.z>BALCONY.front;const lower=Math.abs(height-STAIR.ground)<.20&&!entry.inside&&pos.z<=-home.d/2+.10&&pos.z>=porchFront-.12;if(!upper&&!lower)return null;return planters.filter(p=>p.floor===(upper?2:1)).map(p=>({p,dist:Math.hypot(pos.x-p.x,pos.z-p.z)})).filter(x=>x.dist<1.34).sort((a,b)=>a.dist-b.dist)[0]?.p||null;}
+function nearbyPlanter(){const pos=homeLocal(avatar.position.x,avatar.position.z),height=avatar.position.y-home.y;if(entry.action||seating.phase!=='idle')return null;const upper=upperBalconyAt(pos,height);const lower=Math.abs(height-STAIR.ground)<.20&&!entry.inside&&pos.z<=-home.d/2+.10&&pos.z>=porchFront-.12;if(!upper&&!lower)return null;return planters.filter(p=>p.floor===(upper?2:1)).map(p=>({p,dist:Math.hypot(pos.x-p.x,pos.z-p.z)})).filter(x=>x.dist<1.34).sort((a,b)=>a.dist-b.dist)[0]?.p||null;}
 let selectedPlanter=null,lastGardenTick=0;
 const gardenPanel=$('garden-panel'),gardenAction=$('garden-action');
 function renderGarden(){
@@ -1686,7 +1696,7 @@ function stance(side){
  const forward=V(Math.sin(yaw),0,Math.cos(yaw)),right=V(Math.cos(yaw),0,-Math.sin(yaw));
  const p=grip.subtract(right.scale(.29)).subtract(forward.scale(.46));p.y=surfaceHeight(p.x,p.z);return {p,yaw};
 }
-function doorNearby(){if(avatar.position.y>home.y+STAIR.ground+.10&&Math.abs(homeLocal(avatar.position.x,avatar.position.z).z)<home.d/2)return false;const p=homeLocal(avatar.position.x,avatar.position.z);return Math.abs(p.x)<2.25&&Math.abs(p.z+home.d/2)<2.55;}
+function doorNearby(){if(avatar.position.y>home.y+STAIR.ground+.10)return false;const p=homeLocal(avatar.position.x,avatar.position.z);return Math.abs(p.x)<2.25&&Math.abs(p.z+home.d/2)<2.55;}
 function toggleDoor(){
  if(entry.action||seating.phase!=='idle'||!doorNearby())return false;
  releaseRun();resetSprint();
@@ -1837,24 +1847,24 @@ function updateEntry(dt){
  updateDoorAction(dt);updateSeating(dt);tickInteriorDoors(dt);
  const steering=pointer!==null||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(k=>keys.has(k));
  const gesture=cameraGesture(dt,steering);
- const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2;
+ const p=homeLocal(avatar.position.x,avatar.position.z),f=-home.d/2,upperDeck=upperBalconyAt(p,avatar.position.y-home.y);
  const inside=Math.abs(p.x)<home.w/2-.12&&p.z>f+(entry.inside?.08:.34)&&p.z<home.d/2-.12;
  if(inside!==entry.inside)residenceShadowState.insideSwitches++;
- const porch=Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9-porchExtension&&p.z<=f+.25;
+ const porch=upperDeck||Math.abs(p.x)<(home.w*HOUSE.porchRatio/2)+.15&&p.z>=f-2.9-porchExtension&&p.z<=f+.25;
  const stairs=Math.abs(p.x)<1.25&&p.z>=f-3.95-porchExtension&&p.z<f-2.8-porchExtension;
  const near=inside||porch||stairs;
- const next=inside?'interior':near?'entrada':'exterior';
+ const next=upperDeck?'varanda-superior':inside?'interior':near?'entrada':'exterior';
  const frontWeight=entryInfluence(p,inside,porch);
  const zone=stableCameraZone(frontWeight,exteriorCameraZone(avatar.position.x,avatar.position.z),inside||porch,dt);
  const exterior=zone?.exterior||null,weight=zone?.weight||0;entry.cameraWeight=weight;entry.cameraSide=exterior?.side||(zone?.kind==='front'?'front':null);entry.cameraBuilding=exterior?.id||(zone?.kind==='front'?'house':null);
  if(weight>.001&&!entry.previous)entry.previous={alpha:camera.alpha,beta:camera.beta,span,target:camera.target.clone(),follow};
- if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
- entry.inside=inside;entry.upperVisible=upperFloorVisible(entry.upperVisible,inside,avatar.position.y-home.y);const showUpper=!inside||entry.upperVisible;setHouseGroup('house-upper-floor',showUpper);setHouseGroup('house-ground-divider',!inside||!entry.upperVisible);setHouseGroup('house-upper-rooms',showUpper);setHouseGroup('house-upper-balcony',showUpper);for(const p of planters)if(p.floor===2&&p.mesh.isEnabled()!==!!(showUpper&&p.crop))p.mesh.setEnabled(!!(showUpper&&p.crop));for(const f of ruralFixtures)setHouseGroup('interior '+f.id,f.floor===2?showUpper:!inside||!showUpper);for(const d of interiorDoors)setHouseGroup('interior-door '+d.id,d.floor===2?showUpper:!inside||!showUpper);updateChimneySmoke(dt,!inside);
+ if(next!==entry.mode){entry.mode=next;setHouseGroup('house-porch-roof',!near);setHouseGroup('house-roof',!inside&&!upperDeck);setHouseGroup('house-front',!inside);shadowMap.resetRefreshCounter();}
+ entry.inside=inside;entry.upperVisible=upperFloorVisible(entry.upperVisible,inside,avatar.position.y-home.y);const showUpper=!inside||entry.upperVisible;setHouseGroup('house-upper-floor',showUpper);setHouseGroup('house-ground-divider',!inside||!entry.upperVisible);setHouseGroup('house-upper-rooms',showUpper);const showBalcony=upperDeck||entry.upperVisible||(!inside&&!near);setHouseGroup('house-upper-balcony',showBalcony);for(const p of planters)if(p.floor===2&&p.mesh.isEnabled()!==!!(showBalcony&&p.crop))p.mesh.setEnabled(!!(showBalcony&&p.crop));for(const f of ruralFixtures)setHouseGroup('interior '+f.id,f.floor===2?showUpper:!inside||!showUpper);for(const d of interiorDoors)setHouseGroup('interior-door '+d.id,d.floor===2?showUpper:!inside||!showUpper);updateChimneySmoke(dt,!inside);
  const nearDoor=seating.phase==='idle'&&(doorNearby()||!!entry.action),doorLabel=entry.action?(entry.action.target?'Abrindo…':'Fechando…'):(entry.door>.5?'Fechar porta':'Abrir porta');
  if(doorAction.disabled!==!!entry.action)doorAction.disabled=!!entry.action;
  if(doorAction.hidden===nearDoor)doorAction.hidden=!nearDoor;
  if(doorAction.textContent!==doorLabel)doorAction.textContent=doorLabel;
- const status=$('entry-status'),statusText=inside?(avatar.position.y>=home.y+UPPER_Y-.08?'Segundo andar':avatar.position.y>home.y+STAIR.ground+.10?'Escada interna':'Interior'):near?'Entrada da casa':'';
+ const status=$('entry-status'),statusText=upperDeck?'Varanda superior':inside?(avatar.position.y>=home.y+UPPER_Y-.08?'Segundo andar':avatar.position.y>home.y+STAIR.ground+.10?'Escada interna':'Interior'):near?'Entrada da casa':'';
  if(status.textContent!==statusText)status.textContent=statusText;
  const factor=1-Math.exp(-dt*4);
  if(entry.previous){
@@ -1920,7 +1930,7 @@ function playerBlocked(x,z,from=null){return blocked(x,z,false,from)||petBodyBlo
 function moveAvatar(dx,dz,dt,interacting=false){
  if(Math.abs(dx)+Math.abs(dz)<1e-8){walkPose(0,dt);return 0;}
  const oldX=avatar.position.x,oldZ=avatar.position.z;
- const localStart=homeLocal(oldX,oldZ),localTarget=homeLocal(oldX+dx,oldZ+dz),startHeight=stairHeight(localStart),onStair=startHeight!==null&&Math.abs(avatar.position.y-home.y-startHeight)<=.04;let floor=(onStair||avatar.position.y>home.y+STAIR.ground+.10&&Math.abs(localStart.x)<home.w/2&&Math.abs(localStart.z)<home.d/2)?avatar.position.y:surfaceHeight(oldX,oldZ);
+ const localStart=homeLocal(oldX,oldZ),localTarget=homeLocal(oldX+dx,oldZ+dz),startHeight=stairHeight(localStart),onStair=startHeight!==null&&Math.abs(avatar.position.y-home.y-startHeight)<=.04;let floor=(onStair||avatar.position.y>home.y+STAIR.ground+.10&&upperSupport(localStart,home.w,home.d))?avatar.position.y:surfaceHeight(oldX,oldZ);
  if(!interacting&&(stairMotionLimited(localStart,avatar.position.y-home.y)||stairZone(localTarget)||upperStairTransition(localTarget,avatar.position.y-home.y))){const length=Math.hypot(dx,dz),limit=2.25*Math.max(0,dt);if(length>limit){dx*=limit/length;dz*=limit/length;}}
  const attempt=(x,z)=>{
   const from={x:avatar.position.x,z:avatar.position.z};const level=residenceStep(homeLocal(from.x,from.z),homeLocal(x,z),floor-home.y,home.w,home.d);if(level?.blocked)return false;if(!level&&(blocked(x,z,interacting,from)||petBodyBlocked(x,z,from)||livestockBodyBlocked(x,z,from)))return false;

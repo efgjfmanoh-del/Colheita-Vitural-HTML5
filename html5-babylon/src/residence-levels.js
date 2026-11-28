@@ -1,5 +1,5 @@
 // Quarter-turn stair: shared geometry, traversal and physical rails.
-export const STAIR=Object.freeze({x:-3.1,half:.8,lo:-1.5,turn:.9,mid:1.7,exit:.1,steps:6,ground:.53,rise:.235,radius:.20});
+export const STAIR=Object.freeze({x:-6.15,half:.8,lo:-1.5,turn:.9,mid:1.7,exit:-2.95,steps:6,ground:.53,rise:.235,radius:.20});
 const s=STAIR,L=s.x-s.half,R=s.x+s.half,Z=s.mid+s.half;
 export const LANDING_Y=s.ground+s.steps*s.rise,UPPER_Y=LANDING_Y+s.steps*s.rise;
 const e=1e-7,between=(v,a,b)=>v>=a-e&&v<=b+e;
@@ -17,7 +17,7 @@ export function stairMotionLimited(p,y){const support=stairHeight(p);return supp
 export function upperFloorVisible(previous,inside,y){return !!inside&&y>=UPPER_Y-(previous?.36:.24);}
 export function upperRailBlend(p,y){if(!upperStairTransition(p,y)||p.x<s.exit)return 1;const t=Math.max(0,Math.min(1,(p.x-s.exit)/.24));return 1-t*t*(3-2*t);}
 export function residenceStep(from,to,y,w,d){
- const inside=p=>Math.abs(p.x)<=w/2-.42&&Math.abs(p.z)<=d/2-.42,zone=stairZone(from),dest=stairZone(to),on=!!zone&&Math.abs(y-stairHeight(from))<=.04,upper=!on&&inside(from)&&y>=UPPER_Y-.08,deny={blocked:true,height:y};
+ const inside=p=>upperSupport(p,w,d),zone=stairZone(from),dest=stairZone(to),on=!!zone&&Math.abs(y-stairHeight(from))<=.04,upper=!on&&inside(from)&&y>=UPPER_Y-.08,deny={blocked:true,height:y};
  const groundGate=p=>p.z<=s.lo+e&&Math.abs(p.x-s.x)<=s.half-s.radius+e;
  const upperGate=p=>p.x>=s.exit-e&&Math.abs(p.z-s.mid)<=s.half-s.radius+e;
  if(on){
@@ -26,7 +26,7 @@ export function residenceStep(from,to,y,w,d){
   if(zone==='second'&&from.x>s.exit-.45&&upperGate(to)&&inside(to))return {blocked:false,height:UPPER_Y};
   return deny;
  }
- if(upper){if(!inside(to))return deny;if(dest)return upperGate(from)&&dest==='second'&&lane(to)&&Math.abs(stairHeight(to)-y)<=s.rise+.001?{blocked:false,height:stairHeight(to)}:deny;return {blocked:false,height:UPPER_Y};}
+ if(upper){if(!inside(to)||!upperBalconyPassage(from,to,d))return deny;if(dest)return upperGate(from)&&dest==='second'&&lane(to)&&Math.abs(stairHeight(to)-y)<=s.rise+.001?{blocked:false,height:stairHeight(to)}:deny;return {blocked:false,height:UPPER_Y};}
  if(dest)return groundGate(from)&&dest==='first'&&lane(to)&&Math.abs(stairHeight(to)-s.ground)<=s.rise+.001?{blocked:false,height:stairHeight(to)}:deny;
  return null;
 }
@@ -56,9 +56,12 @@ export function doorLeaf(d,open){const shift=(d.to-d.from)*Math.max(0,Math.min(1
 export function doorLeafBlocked(p,d,open,r=.2){return wallSegmentBlocked(p,doorLeaf(d,open),r);}
 export function fixtureBlocked(p,f,r=.18){return Math.abs(p.x-f.x)<f.hx+r&&Math.abs(p.z-f.z)<f.hz+r;}
 
-// Recessed upper veranda: inside the original roof footprint, with a real façade opening.
-export const BALCONY=Object.freeze({half:2.8,front:-4.39,back:-2.25,railZ:-4.12,railHeight:1.05,openingHeight:2.35,planters:[{id:'upper-ceramic',type:'ceramic',x:-1.95,z:-3.75,floor:2},{id:'upper-wooden',type:'wooden',x:1.85,z:-3.75,floor:2}]});
-export function balconyRailBlocked(p,r=.2){return Math.abs(p.z-BALCONY.railZ)<.065+r&&Math.abs(p.x)<BALCONY.half+r;}
+// Projecting veranda: shared structural footprint, physical guardrails and open façade passage.
+export const BALCONY=Object.freeze({half:2.8,front:-7.15,back:-4.28,railZ:-7.04,railHeight:1.05,openingHeight:2.35,planters:[{id:'upper-ceramic',type:'ceramic',x:-1.95,z:-6.25,floor:2},{id:'upper-wooden',type:'wooden',x:1.85,z:-6.25,floor:2}]});
+export function upperBalconyAt(p,y){return Math.abs(y-UPPER_Y)<.20&&Math.abs(p.x)<BALCONY.half+.02&&p.z>=BALCONY.front&&p.z<=-4.5+.10;}
+export function upperSupport(p,w,d){const wall=-d/2,interior=Math.abs(p.x)<=w/2-.42&&p.z>=wall+.42&&p.z<=d/2-.42;const opening=Math.abs(p.x)<=BALCONY.half-.22&&p.z>=BALCONY.front+.22&&p.z<=wall+.42;return interior||opening;}
+export function upperBalconyPassage(from,to,d){const wall=-d/2+.22;if((from.z<wall)!==(to.z<wall)){const t=(wall-from.z)/(to.z-from.z),x=from.x+(to.x-from.x)*t;return Math.abs(x)<=BALCONY.half-.22;}return true;}
+export function balconyRailBlocked(p,r=.2){const a=BALCONY;return Math.abs(p.z-a.railZ)<.065+r&&Math.abs(p.x)<a.half+r||Math.abs(Math.abs(p.x)-a.half)<.065+r&&p.z>=a.front-r&&p.z<=a.back;}
 export function gardenGrowth(crop,now,needsWater=false,duration=90000){if(!crop||!Number.isFinite(now)||!Number.isFinite(duration)||duration<=0)return 0;const start=needsWater?crop.wateredAt:crop.plantedAt;if(!Number.isFinite(start)||start<0||start<crop.plantedAt)return 0;return Math.max(0,Math.min(1,(now-start)/duration));}
 export function waterGardenCrop(crop,now){if(!crop||!Number.isFinite(now)||now<crop.plantedAt||Number.isFinite(crop.wateredAt))return null;return {...crop,wateredAt:now};}
 
