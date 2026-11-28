@@ -108,3 +108,5 @@ Primeiro recorte do lote 02: 02.02 cozinha/pia, 02.03 detalhes opcionais de apar
 - Recuperação QA 210: run 46059290882 falhou por sobreposição de acesso geladeira/cozinha. Reposicionamento e áreas frontais específicas implementados, teste original preservado e regressão antirreincidência adicionada. Nova CI obrigatória; mobiliário ainda não aprovado.
 
 - Distribuição incremental QA autorizada pelo proprietário: cada incremento funcional após build/regressão/APK assinado e integridade deve ser publicado no atualizador, antes de avançar versão. Sem publicação oficial. QA 210 revalidação do gate pendente; run 46070720326 aprovou conteúdo técnico. Não marcar lote 02 concluído.
+
+- QA 210 publicada (run 46093328889, 4/4). QA 211 avança 02.02: armazenamento doméstico persistente de ingredientes e transferência presencial na geladeira, com testes de conservação, capacidade, save legado e acesso. CI e validação física pendentes; sofá/radio/lareira e demais frentes abertas.
